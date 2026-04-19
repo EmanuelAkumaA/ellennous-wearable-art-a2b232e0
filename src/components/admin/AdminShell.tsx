@@ -1,5 +1,4 @@
 import { ReactNode, useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminProfile } from "@/hooks/useAdminProfile";
 import { Button } from "@/components/ui/button";
