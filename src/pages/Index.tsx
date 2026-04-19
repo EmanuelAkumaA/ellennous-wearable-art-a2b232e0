@@ -9,12 +9,10 @@ import { ForWhom } from "@/components/sections/ForWhom";
 import { FinalCTA } from "@/components/sections/FinalCTA";
 import { Footer } from "@/components/sections/Footer";
 import { FloatingWhatsApp } from "@/components/FloatingWhatsApp";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Index = () => {
   return (
     <main className="relative">
-      <ThemeToggle />
       <Hero />
       <Positioning />
       <Manifesto />

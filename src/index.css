@@ -4,74 +4,45 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ELLENNOUS — Premium Wearable Art Design System
-   All colors HSL. Supports dark (default) + light premium mode.
-*/
+/* ============================================================
+   ELLENNOUS — Premium Wearable Art Design System
+   Dark mode only. All colors HSL.
+   ============================================================ */
+
+/* Butler (oficial da marca) — arquivos em /public/fonts.
+   Enquanto não forem subidos, o navegador usa o fallback Cormorant. */
+@font-face {
+  font-family: 'Butler';
+  src: url('/fonts/Butler-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Butler';
+  src: url('/fonts/Butler-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Butler';
+  src: url('/fonts/Butler-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Butler';
+  src: url('/fonts/Butler-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 @layer base {
   :root {
-    /* LIGHT PREMIUM — ivory + deep purple/wine accents */
-    --background: 36 30% 96%;
-    --foreground: 240 25% 8%;
-
-    --card: 36 30% 99%;
-    --card-foreground: 240 25% 8%;
-
-    --popover: 36 30% 99%;
-    --popover-foreground: 240 25% 8%;
-
-    --primary: 274 76% 45%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 274 80% 55%;
-
-    --accent-red: 357 84% 48%;
-    --wine: 348 52% 28%;
-    --deep-blue: 230 36% 24%;
-    --ice-blue: 187 60% 55%;
-
-    --secondary: 36 25% 90%;
-    --secondary-foreground: 240 25% 8%;
-
-    --muted: 36 20% 88%;
-    --muted-foreground: 240 8% 35%;
-
-    --accent: 274 76% 45%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 357 84% 48%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 36 15% 82%;
-    --input: 36 15% 88%;
-    --ring: 274 76% 45%;
-
-    --radius: 0.25rem;
-
-    --gradient-hero: radial-gradient(ellipse at top, hsl(274 76% 80% / 0.4) 0%, hsl(36 30% 96%) 60%);
-    --gradient-purple-wine: linear-gradient(135deg, hsl(274 76% 45%) 0%, hsl(348 52% 28%) 100%);
-    --gradient-glow: radial-gradient(circle, hsl(274 80% 55% / 0.25) 0%, transparent 70%);
-    --gradient-text: linear-gradient(135deg, hsl(240 25% 8%) 0%, hsl(274 76% 45%) 100%);
-    --gradient-overlay: linear-gradient(180deg, transparent 0%, hsl(36 30% 96% / 0.95) 100%);
-
-    --shadow-glow: 0 0 60px hsl(274 80% 55% / 0.25);
-    --shadow-red-glow: 0 0 40px hsl(357 84% 48% / 0.25);
-    --shadow-elegant: 0 30px 80px -20px hsl(240 30% 30% / 0.25);
-
-    --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
-    --transition-smooth: all 0.7s var(--ease-smooth);
-
-    --sidebar-background: 36 30% 99%;
-    --sidebar-foreground: 240 25% 8%;
-    --sidebar-primary: 274 76% 45%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 36 20% 90%;
-    --sidebar-accent-foreground: 240 25% 8%;
-    --sidebar-border: 36 15% 82%;
-    --sidebar-ring: 274 76% 45%;
-  }
-
-  .dark {
-    /* DARK — original Ellennous palette */
+    /* DARK — Ellennous palette (single theme) */
     --background: 240 20% 4%;
     --foreground: 0 0% 96%;
 
@@ -106,6 +77,8 @@
     --input: 240 12% 14%;
     --ring: 274 76% 53%;
 
+    --radius: 0.25rem;
+
     --gradient-hero: radial-gradient(ellipse at top, hsl(274 76% 25% / 0.4) 0%, hsl(240 20% 4%) 60%);
     --gradient-purple-wine: linear-gradient(135deg, hsl(274 76% 35%) 0%, hsl(348 52% 23%) 100%);
     --gradient-glow: radial-gradient(circle, hsl(274 90% 65% / 0.35) 0%, transparent 70%);
@@ -115,6 +88,9 @@
     --shadow-glow: 0 0 60px hsl(274 90% 65% / 0.35);
     --shadow-red-glow: 0 0 40px hsl(357 84% 51% / 0.3);
     --shadow-elegant: 0 30px 80px -20px hsl(240 30% 0% / 0.8);
+
+    --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-smooth: all 0.7s var(--ease-smooth);
 
     --sidebar-background: 240 18% 7%;
     --sidebar-foreground: 0 0% 96%;
@@ -143,11 +119,10 @@
       radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.12), transparent),
       radial-gradient(ellipse 60% 50% at 90% 80%, hsl(var(--accent-red) / 0.06), transparent);
     background-attachment: fixed;
-    transition: background-color 0.5s var(--ease-smooth), color 0.5s var(--ease-smooth);
   }
 
   h1, h2, h3, h4 {
-    font-family: 'Cormorant Garamond', 'Butler', Garamond, serif;
+    font-family: 'Butler', 'Cormorant Garamond', Garamond, serif;
     letter-spacing: 0.01em;
     font-weight: 600;
   }
@@ -171,7 +146,7 @@
 
 @layer utilities {
   .font-display {
-    font-family: 'Cormorant Garamond', 'Butler', Garamond, serif;
+    font-family: 'Butler', 'Cormorant Garamond', Garamond, serif;
   }
 
   .font-body {
