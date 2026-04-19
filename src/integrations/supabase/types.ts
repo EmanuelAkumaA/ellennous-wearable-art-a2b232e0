@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_profile: {
+        Row: {
+          avatar_storage_path: string | null
+          avatar_url: string | null
+          display_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_storage_path?: string | null
+          avatar_url?: string | null
+          display_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_storage_path?: string | null
+          avatar_url?: string | null
+          display_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       gallery_categories: {
         Row: {
           created_at: string
