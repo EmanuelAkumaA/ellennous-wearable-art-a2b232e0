@@ -7,7 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminProfile } from "@/hooks/useAdminProfile";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
-import { Shield, KeyRound, ShieldCheck, ShieldAlert, Save, Loader2 } from "lucide-react";
+import { Shield, KeyRound, ShieldCheck, ShieldAlert, Save, Loader2, Trash2, Palette, RotateCcw } from "lucide-react";
 
 const scorePassword = (pwd: string): number => {
   if (!pwd) return 0;
@@ -31,14 +31,21 @@ const STRENGTH = [
 const BUCKET = "gallery";
 const FOLDER = "admin-avatars";
 
+// Hex defaults aproximando os tokens de marca (necessário para input[type=color])
+const DEFAULT_HEX = ["#8A2AE3", "#B47CFF", "#E11D48", "#1E3A8A", "#F5C518"];
+const DOT_LABELS = ["Tinta 1", "Tinta 2", "Tinta 3", "Tinta 4", "Tinta 5"];
+
 export const UserSettings = () => {
   const { user } = useAuth();
   const { profile, refresh } = useAdminProfile();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState("");
+  const [paletteHex, setPaletteHex] = useState<string[]>(DEFAULT_HEX);
+  const [paletteCustomized, setPaletteCustomized] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const [pwd, setPwd] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -48,6 +55,16 @@ export const UserSettings = () => {
     setDisplayName(profile.display_name ?? "");
   }, [profile.display_name]);
 
+  useEffect(() => {
+    if (profile.palette_colors && profile.palette_colors.length === 5) {
+      setPaletteHex(profile.palette_colors);
+      setPaletteCustomized(true);
+    } else {
+      setPaletteHex(DEFAULT_HEX);
+      setPaletteCustomized(false);
+    }
+  }, [profile.palette_colors]);
+
   const score = useMemo(() => scorePassword(pwd), [pwd]);
   const strength = STRENGTH[score];
   const initials = useMemo(
@@ -55,15 +72,24 @@ export const UserSettings = () => {
     [displayName, user]
   );
 
-  const upsertProfile = async (patch: Partial<{ display_name: string; avatar_url: string | null; avatar_storage_path: string | null }>) => {
+  const upsertProfile = async (
+    patch: Partial<{
+      display_name: string | null;
+      avatar_url: string | null;
+      avatar_storage_path: string | null;
+      palette_colors: string[] | null;
+    }>
+  ) => {
     if (!user) return { error: new Error("no user") };
     return supabase.from("admin_profile").upsert(
       {
         user_id: user.id,
-        display_name: patch.display_name ?? profile.display_name,
+        display_name: patch.display_name !== undefined ? patch.display_name : profile.display_name,
         avatar_url: patch.avatar_url !== undefined ? patch.avatar_url : profile.avatar_url,
         avatar_storage_path:
           patch.avatar_storage_path !== undefined ? patch.avatar_storage_path : profile.avatar_storage_path,
+        palette_colors:
+          patch.palette_colors !== undefined ? (patch.palette_colors as any) : (profile.palette_colors as any),
       },
       { onConflict: "user_id" }
     );
@@ -84,27 +110,21 @@ export const UserSettings = () => {
 
     setUploading(true);
     try {
-      // Remove avatar antigo se houver
       if (profile.avatar_storage_path) {
         await supabase.storage.from(BUCKET).remove([profile.avatar_storage_path]);
       }
-
       const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `${FOLDER}/${user.id}-${Date.now()}.${ext}`;
-
       const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
         cacheControl: "3600",
         upsert: true,
         contentType: file.type,
       });
       if (upErr) throw upErr;
-
       const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
       const url = `${pub.publicUrl}?t=${Date.now()}`;
-
       const { error: dbErr } = await upsertProfile({ avatar_url: url, avatar_storage_path: path });
       if (dbErr) throw dbErr;
-
       await refresh();
       toast({ title: "Foto atualizada" });
     } catch (err: any) {
@@ -114,11 +134,46 @@ export const UserSettings = () => {
     }
   };
 
+  const handleRemovePhoto = async () => {
+    if (!user || !profile.avatar_url) return;
+    setRemoving(true);
+    try {
+      if (profile.avatar_storage_path) {
+        await supabase.storage.from(BUCKET).remove([profile.avatar_storage_path]);
+      }
+      const { error } = await upsertProfile({ avatar_url: null, avatar_storage_path: null });
+      if (error) throw error;
+      await refresh();
+      toast({ title: "Foto removida" });
+    } catch (err: any) {
+      toast({ title: "Erro ao remover", description: err.message, variant: "destructive" });
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const handleColorChange = (i: number, value: string) => {
+    setPaletteHex((prev) => {
+      const next = [...prev];
+      next[i] = value;
+      return next;
+    });
+    setPaletteCustomized(true);
+  };
+
+  const handleResetPalette = () => {
+    setPaletteHex(DEFAULT_HEX);
+    setPaletteCustomized(false);
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setSavingProfile(true);
-    const { error } = await upsertProfile({ display_name: displayName.trim() || null as any });
+    const { error } = await upsertProfile({
+      display_name: displayName.trim() || null,
+      palette_colors: paletteCustomized ? paletteHex : null,
+    });
     setSavingProfile(false);
     if (error) {
       return toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
@@ -146,15 +201,18 @@ export const UserSettings = () => {
     toast({ title: "Senha atualizada" });
   };
 
+  // Cores usadas na pré-visualização da paleta (ao vivo, antes de salvar)
+  const previewColors = paletteCustomized ? paletteHex : null;
+
   return (
     <div className="space-y-6 max-w-2xl">
-      {/* Account card — palette top-left */}
+      {/* Account card */}
       <form onSubmit={handleSaveProfile} className="glass-panel p-6 sm:p-8 relative overflow-hidden">
         <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-primary/20 blur-[80px] pointer-events-none" />
 
         <div className="relative flex flex-col sm:flex-row gap-6">
           {/* Palette photo (top-left) */}
-          <div className="shrink-0 flex flex-col items-start gap-2">
+          <div className="shrink-0 flex flex-col items-start gap-3">
             <div className="relative">
               <PalettePhoto
                 size="lg"
@@ -162,6 +220,7 @@ export const UserSettings = () => {
                 initials={initials}
                 editable
                 onPick={handlePickFile}
+                colors={previewColors}
               />
               {uploading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-full">
@@ -179,6 +238,23 @@ export const UserSettings = () => {
             <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground">
               Paleta · clique para trocar
             </p>
+            {profile.avatar_url && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleRemovePhoto}
+                disabled={removing}
+                className="h-7 px-2 -ml-1 rounded-none font-accent text-[10px] tracking-[0.25em] uppercase text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                {removing ? (
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3 w-3 mr-1.5" />
+                )}
+                Remover foto
+              </Button>
+            )}
           </div>
 
           {/* Form */}
@@ -219,6 +295,55 @@ export const UserSettings = () => {
                 disabled
                 className="bg-secondary/20 border-border/30"
               />
+            </div>
+
+            {/* Palette color pickers */}
+            <div className="space-y-3 pt-2 border-t border-border/30">
+              <div className="flex items-center justify-between gap-2 pt-3">
+                <Label className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground flex items-center gap-1.5">
+                  <Palette className="h-3 w-3 text-primary-glow" /> Cores da paleta
+                </Label>
+                {paletteCustomized && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetPalette}
+                    className="h-7 px-2 rounded-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-primary-glow"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1.5" /> Padrão
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {paletteHex.map((hex, i) => (
+                  <label
+                    key={i}
+                    className="flex flex-col items-center gap-1.5 cursor-pointer group"
+                    title={DOT_LABELS[i]}
+                  >
+                    <span
+                      className="relative h-9 w-9 rounded-full ring-2 ring-border/40 group-hover:ring-primary-glow/60 transition-all shadow-[0_4px_12px_rgba(0,0,0,0.3)] overflow-hidden"
+                      style={{ backgroundColor: hex }}
+                    >
+                      <span
+                        className="absolute top-1 left-1.5 h-1.5 w-1.5 rounded-full bg-white/60"
+                        aria-hidden
+                      />
+                      <input
+                        type="color"
+                        value={hex}
+                        onChange={(e) => handleColorChange(i, e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        aria-label={DOT_LABELS[i]}
+                      />
+                    </span>
+                    <span className="font-accent text-[8px] tracking-[0.2em] uppercase text-muted-foreground">
+                      {i + 1}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <Button
