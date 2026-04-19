@@ -706,11 +706,15 @@ export const PiecesManager = () => {
           onDragEnd={handlePieceDragEnd}
           onDragCancel={() => setActivePieceId(null)}
         >
-          <SortableContext items={pieces.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={filteredPieces.map((p) => p.id)} strategy={verticalListSortingStrategy} disabled={isFiltering}>
             <div className="border border-border/50 bg-card divide-y divide-border/50">
-              {pieces.map((p) => (
-                <SortablePieceRow key={p.id} piece={p} onEdit={openEdit} onDelete={handleDelete} />
-              ))}
+              {filteredPieces.length === 0 ? (
+                <div className="p-6 text-sm text-muted-foreground">Nenhuma obra encontrada.</div>
+              ) : (
+                filteredPieces.map((p) => (
+                  <SortablePieceRow key={p.id} piece={p} onEdit={openEdit} onDelete={handleDelete} disabled={isFiltering} />
+                ))
+              )}
             </div>
           </SortableContext>
           <DragOverlay>
