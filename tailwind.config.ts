@@ -14,9 +14,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Butler', '"Cormorant Garamond"', 'Garamond', 'serif'],
-        sans: ['"EB Garamond"', 'Garamond', 'Times New Roman', 'serif'],
-        body: ['"EB Garamond"', 'Garamond', 'serif'],
+        display: ['"Playfair Display"', 'Georgia', 'serif'],
+        accent: ['"Bebas Neue"', 'Impact', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        body: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
