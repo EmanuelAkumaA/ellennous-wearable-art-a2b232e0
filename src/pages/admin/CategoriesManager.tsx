@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Check, X, GripVertical } from "lucide-react";
+import { Pencil, Trash2, Plus, Check, X, GripVertical, Tags } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -34,6 +34,7 @@ interface Category {
 
 const SortableCategoryRow = ({
   cat,
+  index,
   editing,
   editName,
   setEditName,
@@ -43,6 +44,7 @@ const SortableCategoryRow = ({
   onDelete,
 }: {
   cat: Category;
+  index: number;
   editing: boolean;
   editName: string;
   setEditName: (v: string) => void;
@@ -61,32 +63,59 @@ const SortableCategoryRow = ({
     <li
       ref={setNodeRef}
       style={style}
-      className={`p-4 flex items-center gap-3 touch-none bg-card relative ${
-        isOver && !isDragging ? "before:content-[''] before:absolute before:left-0 before:right-0 before:-top-px before:h-0.5 before:bg-primary" : ""
+      className={`group glass-card p-4 flex items-center gap-3 touch-none transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_25px_-10px_hsl(var(--primary-glow)/0.5)] relative ${
+        isOver && !isDragging
+          ? "before:content-[''] before:absolute before:left-0 before:right-0 before:-top-1 before:h-0.5 before:bg-primary before:shadow-[0_0_12px_hsl(var(--primary-glow))]"
+          : ""
       }`}
     >
       <button
         type="button"
         {...attributes}
         {...listeners}
-        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1"
+        className="flex-shrink-0 h-8 w-8 rounded-md bg-secondary/40 flex items-center justify-center text-muted-foreground hover:text-primary-glow hover:bg-secondary/70 cursor-grab active:cursor-grabbing transition-colors"
         title="Arrastar para reordenar"
       >
         <GripVertical className="h-4 w-4" />
       </button>
+
+      <span className="font-accent text-[10px] tracking-[0.2em] text-muted-foreground/60 w-8 tabular-nums">
+        {String(index + 1).padStart(2, "0")}
+      </span>
+
       {editing ? (
         <>
-          <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="flex-1" maxLength={60} />
-          <Button size="icon" variant="ghost" onClick={() => onSaveEdit(cat.id)}><Check className="h-4 w-4" /></Button>
-          <Button size="icon" variant="ghost" onClick={onCancelEdit}><X className="h-4 w-4" /></Button>
+          <Input
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            className="flex-1 bg-secondary/40 border-border/40 focus-visible:border-primary-glow"
+            maxLength={60}
+            autoFocus
+          />
+          <Button size="icon" variant="ghost" onClick={() => onSaveEdit(cat.id)} className="hover:bg-primary/15 hover:text-primary-glow">
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={onCancelEdit}>
+            <X className="h-4 w-4" />
+          </Button>
         </>
       ) : (
         <>
-          <span className="flex-1">{cat.nome}</span>
-          <Button size="icon" variant="ghost" onClick={() => onStartEdit(cat)}>
+          <span className="flex-1 font-display text-base truncate">{cat.nome}</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onStartEdit(cat)}
+            className="opacity-60 group-hover:opacity-100 hover:bg-primary/15 hover:text-primary-glow transition-opacity"
+          >
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button size="icon" variant="ghost" onClick={() => onDelete(cat.id)}>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onDelete(cat.id)}
+            className="opacity-60 group-hover:opacity-100 hover:bg-destructive/15 hover:text-destructive transition-opacity"
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         </>
@@ -179,32 +208,70 @@ export const CategoriesManager = () => {
   const activeCat = activeId ? items.find((c) => c.id === activeId) : null;
 
   return (
-    <div className="space-y-8">
-      <div className="border border-border/50 bg-card p-6 space-y-4">
-        <h3 className="font-display text-xl">Nova categoria</h3>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
-          <div>
-            <Label htmlFor="cat-name" className="text-xs uppercase tracking-wider">Nome</Label>
-            <Input
-              id="cat-name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              maxLength={60}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
-            />
+    <div className="space-y-8 max-w-3xl">
+      {/* New category panel */}
+      <div className="glass-panel p-6 sm:p-7 relative overflow-hidden">
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-primary/15 blur-[60px] pointer-events-none" />
+        <div className="relative space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-md bg-gradient-purple-wine flex items-center justify-center shadow-glow">
+              <Plus className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h3 className="font-display text-lg">Nova categoria</h3>
+              <p className="text-xs text-muted-foreground">A ordem é controlada arrastando os cards abaixo</p>
+            </div>
           </div>
-          <Button onClick={handleAdd} className="self-end rounded-none font-accent tracking-[0.15em] uppercase text-xs">
-            <Plus className="h-4 w-4 mr-1" /> Adicionar
-          </Button>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+            <div>
+              <Label htmlFor="cat-name" className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
+                Nome
+              </Label>
+              <Input
+                id="cat-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                maxLength={60}
+                placeholder="Ex.: Cardigans, Joias…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAdd();
+                  }
+                }}
+                className="bg-secondary/40 border-border/40 focus-visible:border-primary-glow mt-1"
+              />
+            </div>
+            <Button
+              onClick={handleAdd}
+              className="self-end rounded-none font-accent tracking-[0.2em] uppercase text-xs h-10 px-5 bg-gradient-purple-wine hover:opacity-90 shadow-glow"
+            >
+              <Plus className="h-4 w-4 mr-1" /> Adicionar
+            </Button>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">A ordem é controlada arrastando as categorias na lista abaixo.</p>
       </div>
 
-      <div className="border border-border/50 bg-card">
+      {/* List */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Tags className="h-4 w-4 text-primary-glow" />
+          <h3 className="font-accent text-sm tracking-[0.25em] uppercase text-muted-foreground">
+            Coleções · {items.length}
+          </h3>
+        </div>
+
         {loading ? (
-          <div className="p-6 text-muted-foreground text-sm">Carregando…</div>
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-16 shimmer rounded-md" />
+            ))}
+          </div>
         ) : items.length === 0 ? (
-          <div className="p-6 text-muted-foreground text-sm">Nenhuma categoria.</div>
+          <div className="glass-card p-10 text-center">
+            <Tags className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">Nenhuma categoria ainda.</p>
+          </div>
         ) : (
           <DndContext
             sensors={sensors}
@@ -214,15 +281,19 @@ export const CategoriesManager = () => {
             onDragCancel={() => setActiveId(null)}
           >
             <SortableContext items={items.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-              <ul className="divide-y divide-border/50">
-                {items.map((c) => (
+              <ul className="space-y-2">
+                {items.map((c, idx) => (
                   <SortableCategoryRow
                     key={c.id}
                     cat={c}
+                    index={idx}
                     editing={editing === c.id}
                     editName={editName}
                     setEditName={setEditName}
-                    onStartEdit={(cat) => { setEditing(cat.id); setEditName(cat.nome); }}
+                    onStartEdit={(cat) => {
+                      setEditing(cat.id);
+                      setEditName(cat.nome);
+                    }}
                     onSaveEdit={handleSaveEdit}
                     onCancelEdit={() => setEditing(null)}
                     onDelete={handleDelete}
@@ -232,9 +303,9 @@ export const CategoriesManager = () => {
             </SortableContext>
             <DragOverlay>
               {activeCat ? (
-                <div className="p-4 flex items-center gap-3 bg-card border border-primary/60 shadow-2xl">
-                  <GripVertical className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1">{activeCat.nome}</span>
+                <div className="glass-panel p-4 flex items-center gap-3 glow-ring-primary">
+                  <GripVertical className="h-4 w-4 text-primary-glow" />
+                  <span className="font-display">{activeCat.nome}</span>
                 </div>
               ) : null}
             </DragOverlay>
