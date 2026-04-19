@@ -1,5 +1,6 @@
+import { useRef } from "react";
+import Autoplay from "embla-carousel-autoplay";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
-import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
 import { Quote } from "lucide-react";
 import t1 from "@/assets/testimonial-1.jpg";
