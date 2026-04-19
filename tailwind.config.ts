@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['Cinzel', 'serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -22,6 +26,13 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          glow: "hsl(var(--primary-glow))",
+        },
+        brand: {
+          red: "hsl(var(--accent-red))",
+          wine: "hsl(var(--wine))",
+          deepblue: "hsl(var(--deep-blue))",
+          ice: "hsl(var(--ice-blue))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
