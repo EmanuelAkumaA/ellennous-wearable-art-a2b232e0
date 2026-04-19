@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,10 +114,38 @@ const CATEGORIES: Category[] = ["Todas", "Anime / Geek", "Realismo", "Floral", "
 export const Gallery = () => {
   const [filter, setFilter] = useState<Category>("Todas");
   const [selected, setSelected] = useState<Piece | null>(null);
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [zoomedImages, setZoomedImages] = useState<string[] | null>(null);
+  const [zoomedIndex, setZoomedIndex] = useState(0);
   const ref = useReveal();
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
+
+  const closeZoom = () => setZoomedImages(null);
+  const prevZoom = () => {
+    if (!zoomedImages) return;
+    setZoomedIndex((i) => (i - 1 + zoomedImages.length) % zoomedImages.length);
+  };
+  const nextZoom = () => {
+    if (!zoomedImages) return;
+    setZoomedIndex((i) => (i + 1) % zoomedImages.length);
+  };
+
+  // Keyboard: ESC closes, arrows navigate
+  useEffect(() => {
+    if (!zoomedImages) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeZoom();
+      else if (e.key === "ArrowLeft") prevZoom();
+      else if (e.key === "ArrowRight") nextZoom();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomedImages]);
+
+  const openZoom = (images: string[], index: number) => {
+    setZoomedImages(images);
+    setZoomedIndex(index);
+  };
 
   return (
     <section id="galeria" ref={ref} className="relative py-32 px-6 overflow-hidden">
@@ -195,7 +224,12 @@ export const Gallery = () => {
           {selected && (
             <div className="grid md:grid-cols-2 gap-0">
               <div className="relative aspect-square md:aspect-auto bg-secondary/30">
-                <PieceCarousel images={selected.imagens} alt={selected.nome} onZoom={setZoomedImage} />
+                <PieceCarousel
+                  key={selected.id}
+                  images={selected.imagens}
+                  alt={selected.nome}
+                  onZoom={openZoom}
+                />
               </div>
               <div className="p-8 flex flex-col">
                 <p className="font-accent text-xs tracking-[0.3em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
@@ -233,25 +267,65 @@ export const Gallery = () => {
       </Dialog>
 
       {/* Zoom overlay */}
-      {zoomedImage && (
+      {zoomedImages && (
         <div
-          onClick={() => setZoomedImage(null)}
+          onClick={closeZoom}
           className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex items-center justify-center p-6 md:p-12 cursor-zoom-out animate-fade-in"
           role="dialog"
           aria-label="Imagem ampliada"
         >
           <img
-            src={zoomedImage}
-            alt="Visualização ampliada"
+            src={zoomedImages[zoomedIndex]}
+            alt={`Visualização ampliada ${zoomedIndex + 1} de ${zoomedImages.length}`}
             onClick={(e) => e.stopPropagation()}
             className="max-w-full max-h-full object-contain shadow-2xl border border-primary/20"
           />
+
+          {/* Prev/Next buttons */}
+          {zoomedImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  prevZoom();
+                }}
+                aria-label="Imagem anterior"
+                className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-[110] h-12 w-12 rounded-full bg-background/40 backdrop-blur-sm border border-border/40 hover:border-primary-glow/60 text-foreground/80 hover:text-primary-glow transition-all flex items-center justify-center"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  nextZoom();
+                }}
+                aria-label="Próxima imagem"
+                className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-[110] h-12 w-12 rounded-full bg-background/40 backdrop-blur-sm border border-border/40 hover:border-primary-glow/60 text-foreground/80 hover:text-primary-glow transition-all flex items-center justify-center"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+
+              {/* Counter */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] font-accent text-xs tracking-[0.3em] uppercase text-foreground/70 bg-background/40 backdrop-blur-sm px-3 py-1.5 border border-border/40">
+                {zoomedIndex + 1} / {zoomedImages.length}
+              </div>
+            </>
+          )}
+
+          {/* Close button */}
           <button
-            onClick={() => setZoomedImage(null)}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeZoom();
+            }}
             aria-label="Fechar visualização"
-            className="absolute top-6 right-6 font-accent text-xs tracking-[0.3em] uppercase text-foreground/70 hover:text-primary-glow transition-colors px-4 py-2 border border-border/40 hover:border-primary-glow/60 bg-background/40"
+            className="absolute top-4 right-4 md:top-6 md:right-6 z-[110] min-h-[44px] min-w-[44px] flex items-center justify-center gap-2 font-accent text-xs tracking-[0.3em] uppercase text-foreground/80 hover:text-primary-glow transition-colors px-4 py-2 border border-border/40 hover:border-primary-glow/60 bg-background/60 backdrop-blur-sm"
           >
-            Fechar ✕
+            <span className="hidden sm:inline">Fechar</span>
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
@@ -262,12 +336,12 @@ export const Gallery = () => {
 interface PieceCarouselProps {
   images: string[];
   alt: string;
-  onZoom?: (src: string) => void;
+  onZoom?: (images: string[], index: number) => void;
 }
 
 const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
   const autoplay = useRef(
-    Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })
+    Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true, playOnInit: true })
   );
   const [api, setApi] = useState<CarouselApi>();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -282,7 +356,16 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     update();
     api.on("select", update);
     api.on("reInit", update);
+
+    // Ensure autoplay actually starts after the dialog finishes mounting
+    const startTimer = window.setTimeout(() => {
+      api.reInit();
+      autoplay.current?.reset?.();
+      autoplay.current?.play?.();
+    }, 100);
+
     return () => {
+      window.clearTimeout(startTimer);
       api.off("select", update);
       api.off("reInit", update);
     };
@@ -294,7 +377,7 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         src={images[0]}
         alt={alt}
         loading="lazy"
-        onClick={() => onZoom?.(images[0])}
+        onClick={() => onZoom?.(images, 0)}
         className="w-full h-full object-cover cursor-zoom-in"
       />
     );
@@ -314,7 +397,7 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
               src={src}
               alt={`${alt} — imagem ${i + 1}`}
               loading="lazy"
-              onClick={() => onZoom?.(src)}
+              onClick={() => onZoom?.(images, i)}
               className="w-full h-full object-cover aspect-square md:aspect-auto cursor-zoom-in"
             />
           </CarouselItem>
