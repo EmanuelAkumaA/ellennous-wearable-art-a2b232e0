@@ -22,6 +22,8 @@ export const Gallery = () => {
   const isMobile = useIsMobile();
   const ref = useReveal();
   const fifthItemRef = useRef<HTMLButtonElement | null>(null);
+  const previousCountRef = useRef(MOBILE_STEP);
+  const animateFromRef = useRef(0);
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
   const sorted = [...filtered].sort((a, b) => rankPiece(a) - rankPiece(b));
@@ -31,19 +33,28 @@ export const Gallery = () => {
 
   const handleFilter = (cat: Category) => {
     setFilter(cat);
+    animateFromRef.current = 0;
+    previousCountRef.current = MOBILE_STEP;
     setVisibleCount(MOBILE_STEP);
   };
 
   const handleShowMore = () => {
+    animateFromRef.current = visibleCount;
     setVisibleCount((c) => Math.min(c + MOBILE_STEP, sorted.length));
   };
 
   const handleClose = () => {
+    animateFromRef.current = 0;
+    previousCountRef.current = MOBILE_STEP;
     setVisibleCount(MOBILE_STEP);
     requestAnimationFrame(() => {
       fifthItemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   };
+
+  useEffect(() => {
+    previousCountRef.current = visibleCount;
+  }, [visibleCount]);
 
   const closeZoom = () => setZoomedImages(null);
   const prevZoom = () => {
