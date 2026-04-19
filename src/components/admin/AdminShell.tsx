@@ -137,7 +137,8 @@ const SidebarBody = ({
       </Button>
     </div>
   </div>
-);
+  );
+};
 
 interface AdminShellProps {
   active: AdminTab;
@@ -148,6 +149,7 @@ interface AdminShellProps {
 
 export const AdminShell = ({ active, onSelect, headerAction, children }: AdminShellProps) => {
   const { user, signOut } = useAuth();
+  const { profile } = useAdminProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const current = NAV.find((n) => n.key === active) ?? NAV[0];
   const Icon = current.icon;
