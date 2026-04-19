@@ -19,6 +19,7 @@ export type Database = {
           avatar_storage_path: string | null
           avatar_url: string | null
           display_name: string | null
+          palette_colors: Json | null
           updated_at: string
           user_id: string
         }
@@ -26,6 +27,7 @@ export type Database = {
           avatar_storage_path?: string | null
           avatar_url?: string | null
           display_name?: string | null
+          palette_colors?: Json | null
           updated_at?: string
           user_id: string
         }
@@ -33,6 +35,7 @@ export type Database = {
           avatar_storage_path?: string | null
           avatar_url?: string | null
           display_name?: string | null
+          palette_colors?: Json | null
           updated_at?: string
           user_id?: string
         }
