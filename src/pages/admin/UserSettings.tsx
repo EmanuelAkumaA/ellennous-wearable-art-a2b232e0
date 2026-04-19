@@ -449,6 +449,13 @@ export const UserSettings = () => {
           {savingPwd ? "Salvando…" : "Atualizar senha"}
         </Button>
       </form>
+
+      <AvatarCropDialog
+        open={!!cropSrc}
+        imageSrc={cropSrc}
+        onCancel={closeCrop}
+        onApply={handleCropApply}
+      />
     </div>
   );
 };
