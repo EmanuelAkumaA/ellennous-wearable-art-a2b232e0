@@ -12,7 +12,7 @@ export const Footer = () => (
           src={logoEllennous}
           alt="ELLENNOUS — arte vestível"
           loading="lazy"
-          className="h-16 sm:h-20 md:h-24 w-auto object-contain"
+          className="h-16 sm:h-20 md:h-24 w-auto object-contain text-center"
         />
         <p className="text-[11px] sm:text-xs text-muted-foreground tracking-[0.25em] uppercase max-w-xs">
           Arte vestível · Peças únicas feitas à mão
