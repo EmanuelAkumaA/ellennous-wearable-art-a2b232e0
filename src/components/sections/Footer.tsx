@@ -1,7 +1,7 @@
 import { Instagram } from "lucide-react";
 import { buildWhatsAppLink, INSTAGRAM_URL } from "@/components/FloatingWhatsApp";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
-import logoEllennous from "@/assets/logo-ellennous.svg";
+import logoEllennous from "@/assets/logo-ellennous.png";
 
 export const Footer = () => (
   <footer className="relative border-t border-border/40 pt-14 pb-28 md:pb-14 px-6">
