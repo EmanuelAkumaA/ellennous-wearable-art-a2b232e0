@@ -292,4 +292,30 @@
     background-size: 200% 100%;
     animation: shimmer-pass 1.6s linear infinite;
   }
+
+  /* ===== Palette photo: animated rotating gradient border ===== */
+  @property --angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes palette-spin {
+    to { --angle: 360deg; }
+  }
+
+  /* Fallback for browsers without @property: rotate the whole layer */
+  @keyframes palette-spin-fallback {
+    to { transform: rotate(360deg); }
+  }
+
+  .animate-palette-spin {
+    animation: palette-spin 8s linear infinite;
+  }
+
+  @supports not (background: conic-gradient(from var(--angle), red, blue)) {
+    .animate-palette-spin {
+      animation: palette-spin-fallback 8s linear infinite;
+    }
+  }
 }

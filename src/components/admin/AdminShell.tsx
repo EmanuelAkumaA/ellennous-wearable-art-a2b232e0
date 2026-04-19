@@ -125,9 +125,13 @@ const SidebarBody = ({
         size="sm"
         className="w-full justify-start rounded-none font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-secondary/60"
       >
-        <Link to="/">
+        <a
+          href="https://ellennous-wearable-art.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <ExternalLink className="h-3.5 w-3.5 mr-2" /> Ver site público
-        </Link>
+        </a>
       </Button>
       <Button
         onClick={onSignOut}
