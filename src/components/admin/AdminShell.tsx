@@ -1,10 +1,11 @@
 import { ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminProfile } from "@/hooks/useAdminProfile";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles } from "lucide-react";
-import logo from "@/assets/logo-ellennous.svg";
+import { PalettePhoto } from "@/components/admin/PalettePhoto";
 
 export type AdminTab = "pieces" | "categories" | "stats" | "user";
 
@@ -79,23 +80,27 @@ const SidebarBody = ({
   active,
   onSelect,
   email,
+  displayName,
+  avatarUrl,
   onSignOut,
 }: {
   active: AdminTab;
   onSelect: (k: AdminTab) => void;
   email?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
   onSignOut: () => void;
-}) => (
+}) => {
+  const fallback = displayName?.trim() || "Ellennous";
+  const initials = (displayName?.trim() || email || "EL").slice(0, 2).toUpperCase();
+  return (
   <div className="flex flex-col h-full">
     <div className="px-6 pt-8 pb-6 border-b border-border/40">
       <div className="flex items-center gap-3">
-        <div className="relative">
-          <div className="absolute inset-0 rounded-full bg-primary/30 blur-xl animate-pulse-glow" />
-          <img src={logo} alt="Ellennous" className="relative h-10 w-10 rounded-full ring-1 ring-primary/30" />
-        </div>
-        <div>
-          <p className="font-display text-lg leading-none text-gradient-light">Ellennous</p>
-          <p className="font-accent text-[10px] tracking-[0.4em] text-primary-glow/70 uppercase mt-1">Atelier · Admin</p>
+        <PalettePhoto size="sm" src={avatarUrl ?? undefined} initials={initials} />
+        <div className="min-w-0">
+          <p className="font-display text-lg leading-none text-gradient-light truncate" title={fallback}>{fallback}</p>
+          <p className="font-accent text-[10px] tracking-[0.4em] text-primary-glow/70 uppercase mt-1">Atelier · Ellennous</p>
         </div>
       </div>
     </div>
