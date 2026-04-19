@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
+import { Pause } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Carousel,
@@ -28,17 +29,20 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [snapCount, setSnapCount] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const pauseTimeoutRef = useRef<number | null>(null);
 
   const pauseAutoplay = useCallback(() => {
     const ap = autoplay.current as unknown as { stop?: () => void; play?: () => void };
     ap.stop?.();
     setProgress(0);
+    setIsPaused(true);
     if (pauseTimeoutRef.current != null) {
       window.clearTimeout(pauseTimeoutRef.current);
     }
     pauseTimeoutRef.current = window.setTimeout(() => {
       setProgress(0);
+      setIsPaused(false);
       ap.play?.();
       pauseTimeoutRef.current = null;
     }, PAUSE_AFTER_INTERACTION);
@@ -152,6 +156,16 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         onClick={pauseAutoplay}
         className="right-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow"
       />
+
+      {/* Pause indicator */}
+      <div
+        className={`absolute top-2 right-2 z-20 flex items-center justify-center h-7 w-7 rounded-full bg-background/60 backdrop-blur-sm border border-primary/30 transition-opacity duration-300 ${
+          isPaused ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        aria-hidden={!isPaused}
+      >
+        <Pause className="h-3 w-3 text-primary-glow" fill="currentColor" />
+      </div>
 
       {/* Progress bar */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 z-10">
