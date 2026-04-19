@@ -1,44 +1,28 @@
 
 
-## Plano — Ajustes de tipografia e link no Footer
+## Plano — Ajustar espaçamento no Footer
 
-### Mudanças
+Na imagem, as linhas divisórias (acima do logo e entre o copyright/Kuma Tech) estão muito próximas dos textos/elementos. Reduzir o `tracking` (letter-spacing) excessivo dos textos e aumentar levemente o respiro vertical entre divisores e conteúdo.
 
-**1. Aumentar 10% títulos menores (H3/H4 — fonte Bebas Neue)**
+### Mudanças em `src/components/sections/Footer.tsx`
 
-Os "títulos menores" da imagem 1 são os textos em CAPS com tracking largo, estilo Bebas Neue (ex: "ELLENNOUS · ARTE VESTÍVEL"). Para aumentar 10% globalmente sem mexer em cada componente, ajusto a regra base de `h3, h4` em `src/index.css` adicionando `font-size: 1.1em` (herda do contexto e aplica +10%).
+**1. Tagline "ARTE VESTÍVEL · PEÇAS ÚNICAS FEITAS À MÃO"**
+- Reduzir `tracking-[0.3em]` → `tracking-[0.15em]` (diminui o "esticado" das letras).
 
-- Arquivo: `src/index.css`
-- Bloco: `h3, h4 { ... }` em `@layer base`
-- Adicionar: `font-size: 1.1em;`
+**2. Bottom bar (copyright + Kuma Tech)**
+- Reduzir `tracking-wider` (copyright) e `tracking-[0.2em]` (Kuma Tech) → `tracking-[0.1em]` em ambos, para coerência.
+- Aumentar `pt-6` → `pt-8` no divisor inferior, dando mais respiro entre a linha e o texto.
 
-Isso afeta todos os H3/H4 do site (que usam Bebas Neue), incluindo o tagline do Footer e títulos de seções como Process, ScarType, ForWhom, etc. — todos crescem proporcionalmente 10%.
+**3. Divisor superior (border-t do footer)**
+- Aumentar `pt-14` → `pt-16` para dar mais espaço entre a linha superior e o logo.
 
-**2. Footer — "Criado por Kuma Tech"**
-
-Estado atual em `Footer.tsx`:
-```tsx
-<a href="https://kumatech.com.br/" ... className="tracking-[0.2em] uppercase ...">
-  Criado por <span className="font-accent tracking-wider text-foreground/80">Kuma Tech</span>
-</a>
-```
-
-O link já envolve a frase toda (clique em "Criado por Kuma Tech" já funciona). O problema é só visual: "Kuma Tech" tem `font-accent` (Bebas Neue) diferente de "Criado por" (Inter, herdado).
-
-**Correção:** remover o `<span className="font-accent ...">` e deixar "Kuma Tech" com a mesma fonte de "Criado por". Mantenho um leve destaque de cor (`text-foreground/80` → `text-foreground`) para diferenciar sem mudar fonte.
-
-- Arquivo: `src/components/sections/Footer.tsx`
-- Resultado: `Criado por <span className="text-foreground">Kuma Tech</span>` — mesma fonte (Inter), mesmo tracking uppercase, link cobre a frase toda (já cobre).
-
-### Arquivos afetados
+### Arquivo afetado
 
 | Arquivo | Mudança |
 |---|---|
-| `src/index.css` | `h3, h4` ganha `font-size: 1.1em` |
-| `src/components/sections/Footer.tsx` | "Kuma Tech" usa mesma fonte de "Criado por" |
+| `src/components/sections/Footer.tsx` | reduzir tracking dos textos CAPS, aumentar padding vertical dos divisores |
 
 ### Pontos de atenção
-- O +10% em H3/H4 é global. Se algum H3/H4 específico ficar grande demais visualmente, ajusto pontualmente depois.
-- Link da Kuma Tech já funciona na frase toda — só ajuste visual de fonte.
-- **Dica:** mudanças de fonte/cor/texto em elementos estáticos podem ser feitas grátis via Visual Edits (botão Edit no canto inferior esquerdo do chat).
+- Sem mudança de fonte, cor ou tamanho — só espaçamento horizontal (letras) e vertical (divisores).
+- Mantém a hierarquia visual atual.
 
