@@ -7,8 +7,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Upload, X, GripVertical, ImageIcon, Star } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Plus,
+  Upload,
+  X,
+  GripVertical,
+  ImageIcon,
+  Star,
+  Search,
+  Sparkles,
+  Flame,
+} from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -81,7 +94,7 @@ const SortableImage = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative aspect-square bg-secondary/30 group touch-none ${
+      className={`relative aspect-square bg-secondary/30 group touch-none rounded-md overflow-hidden ${
         isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
       }`}
     >
@@ -90,7 +103,7 @@ const SortableImage = ({
         type="button"
         {...attributes}
         {...listeners}
-        className="absolute top-1 left-1 z-20 bg-background/80 hover:bg-background text-foreground p-1 cursor-grab active:cursor-grabbing"
+        className="absolute top-1.5 left-1.5 z-20 bg-background/80 hover:bg-background text-foreground p-1 cursor-grab active:cursor-grabbing rounded"
         title="Arrastar para reordenar"
       >
         <GripVertical className="h-4 w-4" />
@@ -107,8 +120,8 @@ const SortableImage = ({
   );
 };
 
-// Sortable piece row (in pieces list)
-const SortablePieceRow = ({
+// Sortable piece card (grid)
+const SortablePieceCard = ({
   piece,
   onEdit,
   onDelete,
@@ -129,54 +142,88 @@ const SortablePieceRow = ({
     opacity: isDragging ? 0.4 : 1,
   };
   const thumbUrl = piece.cover_url ?? piece.gallery_piece_images[0]?.url;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 flex items-stretch gap-3 touch-none bg-card relative ${
-        isOver && !isDragging ? "before:content-[''] before:absolute before:left-0 before:right-0 before:-top-px before:h-0.5 before:bg-primary before:z-10" : ""
+      className={`group glass-card overflow-hidden touch-none transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] ${
+        isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
       }`}
     >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        disabled={disabled}
-        className="flex-shrink-0 self-center text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 disabled:opacity-30 disabled:cursor-not-allowed"
-        title={disabled ? "Reordenação desativada com filtros" : "Arrastar para reordenar"}
-      >
-        <GripVertical className="h-5 w-5" />
-      </button>
-      <div className="flex-1 min-w-0 flex flex-col gap-2">
-        {/* Linha 1: thumb + nome */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-14 h-14 bg-secondary/30 flex-shrink-0">
-            {thumbUrl ? <img src={thumbUrl} alt={piece.nome} className="w-full h-full object-cover" /> : null}
+      {/* Cover */}
+      <div className="relative aspect-[4/3] bg-secondary/30 overflow-hidden">
+        {thumbUrl ? (
+          <img
+            src={thumbUrl}
+            alt={piece.nome}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
           </div>
-          <p className="font-display text-sm leading-tight flex-1 min-w-0 line-clamp-2">{piece.nome}</p>
-        </div>
-        {/* Linha 2: categoria + contagem */}
-        <p className="text-xs text-muted-foreground truncate">
-          {piece.gallery_categories?.nome ?? "—"} · {piece.gallery_piece_images.length} img
-        </p>
-        {/* Linha 3: tags + ações */}
-        <div className="flex items-center gap-2 flex-wrap">
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent opacity-90 pointer-events-none" />
+
+        {/* Drag handle pill */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          disabled={disabled}
+          className="absolute top-3 left-3 z-10 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center text-muted-foreground hover:text-primary-glow cursor-grab active:cursor-grabbing disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title={disabled ? "Reordenação desativada com filtros" : "Arrastar para reordenar"}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        {/* Tags top-right */}
+        <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
           {piece.novo && (
-            <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-primary/20 text-primary-glow px-2 py-1">
-              Novo
+            <span className="text-[9px] font-accent tracking-[0.2em] uppercase bg-primary/20 backdrop-blur text-primary-glow px-2 py-1 rounded shadow-[0_0_15px_hsl(var(--primary)/0.4)] flex items-center gap-1">
+              <Sparkles className="h-2.5 w-2.5" /> Novo
             </span>
           )}
           {piece.destaque && (
-            <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-brand-red/20 text-brand-red px-2 py-1">
-              Destaque
+            <span className="text-[9px] font-accent tracking-[0.2em] uppercase bg-brand-red/25 backdrop-blur text-brand-red px-2 py-1 rounded shadow-[0_0_15px_hsl(var(--accent-red)/0.3)] flex items-center gap-1">
+              <Flame className="h-2.5 w-2.5" /> Destaque
             </span>
           )}
-          <div className="ml-auto flex items-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => onEdit(piece)} title="Editar">
-              <Pencil className="h-4 w-4" />
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-4 space-y-3">
+        <div>
+          <p className="font-display text-base leading-tight line-clamp-2">{piece.nome}</p>
+          <p className="text-[11px] text-muted-foreground mt-1 font-accent tracking-[0.15em] uppercase">
+            {piece.gallery_categories?.nome ?? "Sem categoria"} · {piece.gallery_piece_images.length} img
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
+          <span className="text-[10px] font-accent tracking-[0.25em] uppercase text-muted-foreground/60">
+            #{String(piece.ordem + 1).padStart(2, "0")}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onEdit(piece)}
+              title="Editar"
+              className="h-8 w-8 hover:bg-primary/15 hover:text-primary-glow"
+            >
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => onDelete(piece.id)} title="Excluir">
-              <Trash2 className="h-4 w-4" />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onDelete(piece.id)}
+              title="Excluir"
+              className="h-8 w-8 hover:bg-destructive/15 hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
@@ -381,13 +428,11 @@ export const PiecesManager = () => {
     load();
   };
 
-  // Promote an image to be the cover. Demotes existing cover back to gallery images.
   const promoteToCover = async (img: Image) => {
     if (!editing) return;
     try {
-      // 1. If there's an existing cover, push it back into gallery_piece_images
       if (editing.cover_url && editing.cover_storage_path) {
-        const newOrdem = editing.gallery_piece_images.length; // place at end
+        const newOrdem = editing.gallery_piece_images.length;
         const { error: insErr } = await supabase.from("gallery_piece_images").insert({
           piece_id: editing.id,
           url: editing.cover_url,
@@ -396,10 +441,8 @@ export const PiecesManager = () => {
         });
         if (insErr) throw insErr;
       }
-      // 2. Remove the promoted image row (file stays in storage as cover)
       const { error: delErr } = await supabase.from("gallery_piece_images").delete().eq("id", img.id);
       if (delErr) throw delErr;
-      // 3. Update piece cover columns
       const { error: updErr } = await supabase
         .from("gallery_pieces")
         .update({ cover_url: img.url, cover_storage_path: img.storage_path })
@@ -508,217 +551,79 @@ export const PiecesManager = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="font-display text-xl">Obras ({pieces.length})</h3>
-        <Button onClick={openCreate} className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">
-          <Plus className="h-4 w-4 mr-1" /> Nova obra
+      {/* Top bar: count + new piece */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-baseline gap-3">
+          <h3 className="font-accent text-sm tracking-[0.25em] uppercase text-muted-foreground">Catálogo</h3>
+          <span className="font-display text-2xl text-gradient-light tabular-nums">{pieces.length}</span>
+          {isFiltering && (
+            <span className="text-[11px] text-muted-foreground">
+              · exibindo {filteredPieces.length}
+            </span>
+          )}
+        </div>
+        <Button
+          onClick={openCreate}
+          className="rounded-none font-accent tracking-[0.25em] uppercase text-xs h-10 px-5 bg-gradient-purple-wine hover:opacity-90 shadow-glow"
+        >
+          <Plus className="h-4 w-4 mr-1.5" /> Nova obra
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_auto] gap-3 items-end">
-        <div>
-          <Label className="text-xs uppercase tracking-wider">Buscar por nome</Label>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Digite o nome…" />
+      {/* Filter bar — pill style */}
+      <div className="glass-card rounded-full p-1.5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome…"
+            className="pl-11 rounded-full border-0 bg-transparent h-10 focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
         </div>
-        <div>
-          <Label className="text-xs uppercase tracking-wider">Categoria</Label>
-          <Select value={filterCat} onValueChange={setFilterCat}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => { setSearch(""); setFilterCat("all"); }}
-          disabled={!isFiltering}
-          className="rounded-none font-accent tracking-[0.15em] uppercase text-xs"
-        >
-          Limpar
-        </Button>
+        <Select value={filterCat} onValueChange={setFilterCat}>
+          <SelectTrigger className="rounded-full border-border/40 bg-secondary/40 h-10 w-full sm:w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as categorias</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isFiltering && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setSearch(""); setFilterCat("all"); }}
+            className="rounded-full font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-destructive/10 hover:text-destructive"
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Limpar
+          </Button>
+        )}
       </div>
+
       {isFiltering && (
-        <p className="text-xs text-muted-foreground">
-          Mostrando {filteredPieces.length} de {pieces.length} · Reordenação desativada com filtros ativos
+        <p className="text-[11px] text-muted-foreground -mt-2 px-2">
+          Reordenação desativada enquanto há filtros ativos.
         </p>
       )}
 
-      {creating && (
-        <div className="border border-primary/40 bg-card p-6 space-y-4">
-          <div className="flex justify-between items-center">
-            <h4 className="font-display text-lg">{editing ? "Editar" : "Nova"} obra</h4>
-            <Button variant="ghost" size="icon" onClick={closeForm}><X className="h-4 w-4" /></Button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Nome</Label>
-              <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} maxLength={100} />
-            </div>
-            <div>
-              <Label>Categoria</Label>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Select value={form.categoria_id} onValueChange={(v) => setForm({ ...form, categoria_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Popover open={categoryPopoverOpen} onOpenChange={setCategoryPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" size="icon" title="Nova categoria">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 space-y-3">
-                    <Label>Nova categoria</Label>
-                    <Input
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="Nome"
-                      maxLength={60}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddCategoryInline(); } }}
-                    />
-                    <Button
-                      onClick={handleAddCategoryInline}
-                      disabled={savingCategory}
-                      className="w-full rounded-none font-accent tracking-[0.15em] uppercase text-xs"
-                    >
-                      {savingCategory ? "Salvando…" : "Salvar"}
-                    </Button>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <Label>Tempo de produção</Label>
-              <Input value={form.tempo} onChange={(e) => setForm({ ...form, tempo: e.target.value })} maxLength={60} />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Descrição</Label>
-              <Textarea value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} maxLength={500} rows={2} />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Conceito</Label>
-              <Textarea value={form.conceito} onChange={(e) => setForm({ ...form, conceito: e.target.value })} maxLength={1000} rows={3} />
-            </div>
-            <div className="md:col-span-2">
-              <Label>História</Label>
-              <Textarea value={form.historia} onChange={(e) => setForm({ ...form, historia: e.target.value })} maxLength={2000} rows={4} />
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch checked={form.destaque} onCheckedChange={(v) => setForm({ ...form, destaque: v })} />
-              <Label>Destaque</Label>
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch checked={form.novo} onCheckedChange={(v) => setForm({ ...form, novo: v })} />
-              <Label>Novo</Label>
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button onClick={handleSave} disabled={saving} className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">
-              {saving ? "Salvando…" : editing ? "Salvar" : "Criar e gerenciar imagens"}
-            </Button>
-            <Button variant="outline" onClick={closeForm} className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">Cancelar</Button>
-          </div>
-
-          {editing && (
-            <>
-              {/* Cover image block */}
-              <div className="pt-6 border-t border-border/50 space-y-3">
-                <h5 className="font-accent text-sm tracking-[0.15em] uppercase">Imagem capa</h5>
-                <p className="text-xs text-muted-foreground">
-                  Esta imagem aparece como destaque nos cards da galeria. Você pode enviar uma capa dedicada ou clicar na estrela em uma imagem da obra para promovê-la.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 items-start">
-                  <div className="w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40">
-                    {editing.cover_url ? (
-                      <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <input
-                      ref={coverRef}
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      onChange={(e) => handleCoverUpload(e.target.files)}
-                    />
-                    <Button
-                      onClick={() => coverRef.current?.click()}
-                      disabled={coverUploading}
-                      className="rounded-none font-accent tracking-[0.15em] uppercase text-xs"
-                    >
-                      <Upload className="h-4 w-4 mr-1" />
-                      {coverUploading ? "Enviando…" : editing.cover_url ? "Trocar capa" : "Enviar capa"}
-                    </Button>
-                    {editing.cover_url && (
-                      <Button
-                        variant="outline"
-                        onClick={removeCover}
-                        className="rounded-none font-accent tracking-[0.15em] uppercase text-xs"
-                      >
-                        <Trash2 className="h-4 w-4 mr-1" /> Remover capa
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Gallery images (sortable) */}
-              <div className="pt-6 border-t border-border/50 space-y-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h5 className="font-accent text-sm tracking-[0.15em] uppercase">Imagens da obra</h5>
-                    <p className="text-xs text-muted-foreground mt-1">Arraste para reordenar · Clique na estrela para definir como capa</p>
-                  </div>
-                  <div>
-                    <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleUpload(e.target.files)} />
-                    <Button onClick={() => fileRef.current?.click()} disabled={uploading} className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">
-                      <Upload className="h-4 w-4 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
-                    </Button>
-                  </div>
-                </div>
-                {editing.gallery_piece_images.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhuma imagem ainda.</p>
-                ) : (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragStart={handleImageDragStart}
-                    onDragEnd={handleImageDragEnd}
-                    onDragCancel={() => setActiveImageId(null)}
-                  >
-                    <SortableContext items={editing.gallery_piece_images.map((i) => i.id)} strategy={rectSortingStrategy}>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {editing.gallery_piece_images.map((img) => (
-                          <SortableImage key={img.id} img={img} onRemove={removeImage} onPromote={promoteToCover} />
-                        ))}
-                      </div>
-                    </SortableContext>
-                    <DragOverlay>
-                      {activeImage ? (
-                        <div className="aspect-square w-32 shadow-2xl ring-2 ring-primary/60">
-                          <img src={activeImage.url} alt="" className="w-full h-full object-cover" />
-                        </div>
-                      ) : null}
-                    </DragOverlay>
-                  </DndContext>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
+      {/* Grid */}
       {loading ? (
-        <div className="text-muted-foreground text-sm">Carregando…</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="aspect-[4/3] shimmer rounded-md" />
+          ))}
+        </div>
+      ) : filteredPieces.length === 0 ? (
+        <div className="glass-card p-12 text-center">
+          <ImageIcon className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          <p className="text-sm text-muted-foreground">Nenhuma obra encontrada.</p>
+        </div>
       ) : (
         <DndContext
           sensors={sensors}
@@ -727,22 +632,27 @@ export const PiecesManager = () => {
           onDragEnd={handlePieceDragEnd}
           onDragCancel={() => setActivePieceId(null)}
         >
-          <SortableContext items={filteredPieces.map((p) => p.id)} strategy={verticalListSortingStrategy} disabled={isFiltering}>
-            <div className="border border-border/50 bg-card divide-y divide-border/50">
-              {filteredPieces.length === 0 ? (
-                <div className="p-6 text-sm text-muted-foreground">Nenhuma obra encontrada.</div>
-              ) : (
-                filteredPieces.map((p) => (
-                  <SortablePieceRow key={p.id} piece={p} onEdit={openEdit} onDelete={handleDelete} disabled={isFiltering} />
-                ))
-              )}
+          <SortableContext
+            items={filteredPieces.map((p) => p.id)}
+            strategy={verticalListSortingStrategy}
+            disabled={isFiltering}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredPieces.map((p) => (
+                <SortablePieceCard
+                  key={p.id}
+                  piece={p}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  disabled={isFiltering}
+                />
+              ))}
             </div>
           </SortableContext>
           <DragOverlay>
             {activePiece ? (
-              <div className="p-4 flex items-center gap-4 bg-card border border-primary/60 shadow-2xl">
-                <GripVertical className="h-4 w-4 text-muted-foreground" />
-                <div className="w-16 h-16 bg-secondary/30 flex-shrink-0">
+              <div className="glass-panel p-3 flex items-center gap-3 glow-ring-primary max-w-xs">
+                <div className="w-14 h-14 bg-secondary/30 flex-shrink-0 rounded overflow-hidden">
                   {(activePiece.cover_url ?? activePiece.gallery_piece_images[0]?.url) ? (
                     <img
                       src={activePiece.cover_url ?? activePiece.gallery_piece_images[0]?.url}
@@ -757,6 +667,290 @@ export const PiecesManager = () => {
           </DragOverlay>
         </DndContext>
       )}
+
+      {/* Editor Sheet */}
+      <Sheet open={creating} onOpenChange={(o) => { if (!o) closeForm(); }}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-2xl p-0 bg-card/95 backdrop-blur-xl border-l border-border/40 overflow-y-auto"
+        >
+          {/* Header */}
+          <SheetHeader className="sticky top-0 z-10 px-6 sm:px-8 py-5 bg-gradient-purple-wine border-b border-primary/30">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-accent text-[10px] tracking-[0.4em] uppercase text-white/70 mb-1">
+                  {editing ? "Editar obra" : "Nova obra"}
+                </p>
+                <SheetTitle className="font-display text-xl text-white truncate">
+                  {editing?.nome || form.nome || "Sem nome"}
+                </SheetTitle>
+              </div>
+            </div>
+          </SheetHeader>
+
+          <div className="p-6 sm:p-8 space-y-8">
+            {/* Identidade */}
+            <section className="space-y-4">
+              <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                <span className="h-px w-6 bg-primary-glow" /> Identidade
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">Nome</Label>
+                  <Input
+                    value={form.nome}
+                    onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                    maxLength={100}
+                    className="bg-secondary/40 border-border/40 focus-visible:border-primary-glow mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">Categoria</Label>
+                  <div className="flex gap-2 mt-1">
+                    <div className="flex-1">
+                      <Select value={form.categoria_id} onValueChange={(v) => setForm({ ...form, categoria_id: v })}>
+                        <SelectTrigger className="bg-secondary/40 border-border/40">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Popover open={categoryPopoverOpen} onOpenChange={setCategoryPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" size="icon" title="Nova categoria" className="border-border/40">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 space-y-3 glass-panel">
+                        <Label>Nova categoria</Label>
+                        <Input
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          placeholder="Nome"
+                          maxLength={60}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddCategoryInline();
+                            }
+                          }}
+                        />
+                        <Button
+                          onClick={handleAddCategoryInline}
+                          disabled={savingCategory}
+                          className="w-full rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                        >
+                          {savingCategory ? "Salvando…" : "Salvar"}
+                        </Button>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
+                    Tempo de produção
+                  </Label>
+                  <Input
+                    value={form.tempo}
+                    onChange={(e) => setForm({ ...form, tempo: e.target.value })}
+                    maxLength={60}
+                    className="bg-secondary/40 border-border/40 focus-visible:border-primary-glow mt-1"
+                  />
+                </div>
+                <div className="flex items-center gap-3 glass-card p-3 rounded-md">
+                  <Switch checked={form.novo} onCheckedChange={(v) => setForm({ ...form, novo: v })} />
+                  <div>
+                    <Label className="cursor-pointer">Novo</Label>
+                    <p className="text-[10px] text-muted-foreground">Marca a obra como recém-adicionada</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 glass-card p-3 rounded-md">
+                  <Switch checked={form.destaque} onCheckedChange={(v) => setForm({ ...form, destaque: v })} />
+                  <div>
+                    <Label className="cursor-pointer">Destaque</Label>
+                    <p className="text-[10px] text-muted-foreground">Aparece em posição especial</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Conteúdo */}
+            <section className="space-y-4">
+              <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                <span className="h-px w-6 bg-primary-glow" /> Conteúdo
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <Label className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">Descrição</Label>
+                  <Textarea
+                    value={form.descricao}
+                    onChange={(e) => setForm({ ...form, descricao: e.target.value })}
+                    maxLength={500}
+                    rows={2}
+                    className="bg-secondary/40 border-border/40 focus-visible:border-primary-glow mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">Conceito</Label>
+                  <Textarea
+                    value={form.conceito}
+                    onChange={(e) => setForm({ ...form, conceito: e.target.value })}
+                    maxLength={1000}
+                    rows={3}
+                    className="bg-secondary/40 border-border/40 focus-visible:border-primary-glow mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">História</Label>
+                  <Textarea
+                    value={form.historia}
+                    onChange={(e) => setForm({ ...form, historia: e.target.value })}
+                    maxLength={2000}
+                    rows={4}
+                    className="bg-secondary/40 border-border/40 focus-visible:border-primary-glow mt-1"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {editing && (
+              <>
+                {/* Capa */}
+                <section className="space-y-4">
+                  <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                    <span className="h-px w-6 bg-primary-glow" /> Capa
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Imagem usada como destaque nos cards. Você pode enviar uma capa dedicada ou clicar na ⭐ em uma
+                    imagem da galeria para promovê-la.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    <div className="w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40 rounded overflow-hidden">
+                      {editing.cover_url ? (
+                        <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <input
+                        ref={coverRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => handleCoverUpload(e.target.files)}
+                      />
+                      <Button
+                        onClick={() => coverRef.current?.click()}
+                        disabled={coverUploading}
+                        className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                      >
+                        <Upload className="h-4 w-4 mr-1" />
+                        {coverUploading ? "Enviando…" : editing.cover_url ? "Trocar capa" : "Enviar capa"}
+                      </Button>
+                      {editing.cover_url && (
+                        <Button
+                          variant="outline"
+                          onClick={removeCover}
+                          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" /> Remover capa
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {/* Galeria */}
+                <section className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                      <span className="h-px w-6 bg-primary-glow" /> Galeria
+                    </h4>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      hidden
+                      onChange={(e) => handleUpload(e.target.files)}
+                    />
+                    <Button
+                      onClick={() => fileRef.current?.click()}
+                      disabled={uploading}
+                      size="sm"
+                      className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Arraste para reordenar · Clique na estrela para definir como capa
+                  </p>
+                  {editing.gallery_piece_images.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">Nenhuma imagem ainda.</p>
+                  ) : (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragStart={handleImageDragStart}
+                      onDragEnd={handleImageDragEnd}
+                      onDragCancel={() => setActiveImageId(null)}
+                    >
+                      <SortableContext
+                        items={editing.gallery_piece_images.map((i) => i.id)}
+                        strategy={rectSortingStrategy}
+                      >
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {editing.gallery_piece_images.map((img) => (
+                            <SortableImage
+                              key={img.id}
+                              img={img}
+                              onRemove={removeImage}
+                              onPromote={promoteToCover}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                      <DragOverlay>
+                        {activeImage ? (
+                          <div className="aspect-square w-32 shadow-2xl ring-2 ring-primary/60 rounded">
+                            <img src={activeImage.url} alt="" className="w-full h-full object-cover" />
+                          </div>
+                        ) : null}
+                      </DragOverlay>
+                    </DndContext>
+                  )}
+                </section>
+              </>
+            )}
+          </div>
+
+          {/* Sticky save bar */}
+          <div className="sticky bottom-0 z-10 px-6 sm:px-8 py-4 bg-card/95 backdrop-blur-xl border-t border-border/40 flex items-center justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={closeForm}
+              className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-none font-accent tracking-[0.2em] uppercase text-xs px-6 bg-gradient-purple-wine hover:opacity-90 shadow-glow"
+            >
+              {saving ? "Salvando…" : editing ? "Salvar alterações" : "Criar e gerenciar imagens"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
