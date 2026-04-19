@@ -3,7 +3,7 @@ import Autoplay from "embla-carousel-autoplay";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
-import { Quote } from "lucide-react";
+import { Quote, Instagram } from "lucide-react";
 import t1 from "@/assets/testimonial-1.jpg";
 import t2 from "@/assets/testimonial-2.jpg";
 import t3 from "@/assets/testimonial-3.jpg";
@@ -124,7 +124,16 @@ export const Testimonials = () => {
                           <p className="font-accent text-lg text-foreground tracking-wide">{t.name}</p>
                           <p className="text-xs text-muted-foreground tracking-wider">{t.city}</p>
                         </div>
-                        <p className="text-xs text-primary-glow/70 tracking-widest">{t.handle}</p>
+                        <a
+                          href={`https://instagram.com/${t.handle.replace(/^@/, "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Instagram de ${t.name} (${t.handle})`}
+                          className="inline-flex items-center gap-1.5 text-xs text-primary-glow/70 hover:text-foreground tracking-widest transition-colors duration-300"
+                        >
+                          <Instagram className="w-3.5 h-3.5" strokeWidth={1.5} />
+                          {t.handle}
+                        </a>
                       </div>
                     </div>
                   </article>
