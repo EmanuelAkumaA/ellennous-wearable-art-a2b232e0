@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   Carousel,
+  CarouselApi,
   CarouselContent,
   CarouselItem,
   CarouselNext,
@@ -13,9 +14,13 @@ import { useReveal } from "@/hooks/use-reveal";
 import { buildWhatsAppLink } from "@/components/FloatingWhatsApp";
 import { Dragon } from "@/components/Dragon";
 import animeImg from "@/assets/gallery-anime.jpg";
+import animeDetailImg from "@/assets/gallery-anime-detail.jpg";
+import animeBackImg from "@/assets/gallery-anime-back.jpg";
 import anime2Img from "@/assets/gallery-anime2.jpg";
 import realismoImg from "@/assets/gallery-realismo.jpg";
 import realismo2Img from "@/assets/gallery-realismo2.jpg";
+import realismo2CloseImg from "@/assets/gallery-realismo2-close.jpg";
+import realismo2SideImg from "@/assets/gallery-realismo2-side.jpg";
 import floralImg from "@/assets/gallery-floral.jpg";
 import scartypeImg from "@/assets/gallery-scartype.jpg";
 import exclusivaImg from "@/assets/gallery-exclusiva.jpg";
@@ -38,7 +43,7 @@ const PIECES: Piece[] = [
     id: "1",
     nome: "Sombra do Monarca",
     categoria: "Anime / Geek",
-    imagens: [animeImg],
+    imagens: [animeImg, animeBackImg, animeDetailImg],
     descricao: "Jaqueta de couro pintada à mão com cena inspirada em fantasia sombria.",
     conceito: "Uma homenagem ao herói que carrega o peso da escuridão. Roxo profundo e respingos de sangue como narrativa visual.",
     tempo: "38 dias",
@@ -66,7 +71,7 @@ const PIECES: Piece[] = [
     id: "4",
     nome: "Tigre Soberano",
     categoria: "Realismo",
-    imagens: [realismo2Img],
+    imagens: [realismo2Img, realismo2CloseImg, realismo2SideImg],
     descricao: "Couro vinho com tigre realista pintado à mão.",
     conceito: "Força e elegância selvagem. Cada pelo desenhado com pincel fino.",
     tempo: "35 dias",
@@ -238,6 +243,24 @@ const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
   const autoplay = useRef(
     Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })
   );
+  const [api, setApi] = useState<CarouselApi>();
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [snapCount, setSnapCount] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const update = () => {
+      setSelectedIndex(api.selectedScrollSnap());
+      setSnapCount(api.scrollSnapList().length);
+    };
+    update();
+    api.on("select", update);
+    api.on("reInit", update);
+    return () => {
+      api.off("select", update);
+      api.off("reInit", update);
+    };
+  }, [api]);
 
   if (images.length <= 1) {
     return (
@@ -254,6 +277,7 @@ const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
     <Carousel
       opts={{ align: "start", loop: true }}
       plugins={[autoplay.current]}
+      setApi={setApi}
       className="w-full h-full"
     >
       <CarouselContent className="h-full">
@@ -270,6 +294,22 @@ const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
       </CarouselContent>
       <CarouselPrevious className="left-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
       <CarouselNext className="right-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
+
+      {/* Dots */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/40 backdrop-blur-sm">
+        {Array.from({ length: snapCount }).map((_, i) => (
+          <button
+            key={i}
+            onClick={() => api?.scrollTo(i)}
+            aria-label={`Ir para imagem ${i + 1}`}
+            className={`h-1.5 rounded-full transition-all duration-500 ${
+              i === selectedIndex
+                ? "w-6 bg-primary-glow"
+                : "w-1.5 bg-white/40 hover:bg-white/70"
+            }`}
+          />
+        ))}
+      </div>
     </Carousel>
   );
 };
