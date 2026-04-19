@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { CategoriesManager } from "./CategoriesManager";
 import { PiecesManager } from "./PiecesManager";
+import { UserSettings } from "./UserSettings";
+import { StatsManager } from "./StatsManager";
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -33,15 +35,23 @@ const AdminDashboard = () => {
         </header>
 
         <Tabs defaultValue="pieces" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 rounded-none">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4 rounded-none">
             <TabsTrigger value="pieces" className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">Obras</TabsTrigger>
             <TabsTrigger value="categories" className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">Categorias</TabsTrigger>
+            <TabsTrigger value="stats" className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">Estatísticas</TabsTrigger>
+            <TabsTrigger value="user" className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">Usuário</TabsTrigger>
           </TabsList>
           <TabsContent value="pieces" className="mt-8">
             <PiecesManager />
           </TabsContent>
           <TabsContent value="categories" className="mt-8">
             <CategoriesManager />
+          </TabsContent>
+          <TabsContent value="stats" className="mt-8">
+            <StatsManager />
+          </TabsContent>
+          <TabsContent value="user" className="mt-8">
+            <UserSettings />
           </TabsContent>
         </Tabs>
       </div>
