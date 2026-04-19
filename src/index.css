@@ -86,16 +86,23 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    line-height: 1.6;
+    line-height: 1.65;
+    letter-spacing: 0.01em;
     background-image:
       radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.12), transparent),
       radial-gradient(ellipse 60% 50% at 90% 80%, hsl(var(--accent-red) / 0.06), transparent);
     background-attachment: fixed;
   }
 
+  p {
+    letter-spacing: 0.012em;
+    line-height: 1.7;
+  }
+
   h1, h2 {
     font-family: 'Playfair Display', Georgia, serif;
-    letter-spacing: 0.005em;
+    letter-spacing: -0.005em;
+    line-height: 1.05;
     font-weight: 700;
   }
 

@@ -28,6 +28,7 @@ npm run bump major "redesign total"   # +1 major (zera minor + patch)
 | Versão | Mudanças |
 | ------ | -------- |
 | 0.1.0  | Versão inicial do site |
+| 0.1.1  | troca de tipografia para Playfair + Bebas Neue + Inter |
 
 ## Estrutura
 

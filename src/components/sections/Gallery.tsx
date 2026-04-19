@@ -1,6 +1,14 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Autoplay from "embla-carousel-autoplay";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { buildWhatsAppLink } from "@/components/FloatingWhatsApp";
 import { Dragon } from "@/components/Dragon";
@@ -18,7 +26,7 @@ interface Piece {
   id: string;
   nome: string;
   categoria: Exclude<Category, "Todas">;
-  imagem: string;
+  imagens: string[];
   descricao: string;
   conceito: string;
   tempo: string;
@@ -30,7 +38,7 @@ const PIECES: Piece[] = [
     id: "1",
     nome: "Sombra do Monarca",
     categoria: "Anime / Geek",
-    imagem: animeImg,
+    imagens: [animeImg],
     descricao: "Jaqueta de couro pintada à mão com cena inspirada em fantasia sombria.",
     conceito: "Uma homenagem ao herói que carrega o peso da escuridão. Roxo profundo e respingos de sangue como narrativa visual.",
     tempo: "38 dias",
@@ -40,7 +48,7 @@ const PIECES: Piece[] = [
     id: "2",
     nome: "Cavaleiro Violeta",
     categoria: "Anime / Geek",
-    imagem: anime2Img,
+    imagens: [anime2Img],
     descricao: "Bomber black com armadura roxa pintada e olhos vermelhos vivos.",
     conceito: "Presença imponente. A figura do guerreiro como símbolo de poder silencioso.",
     tempo: "32 dias",
@@ -49,7 +57,7 @@ const PIECES: Piece[] = [
     id: "3",
     nome: "Retrato em Carmim",
     categoria: "Realismo",
-    imagem: realismoImg,
+    imagens: [realismoImg],
     descricao: "Jaqueta jeans com retrato hiperrealista em tons de vinho.",
     conceito: "O olhar que não pede licença. Pintura a óleo direta no tecido.",
     tempo: "40 dias",
@@ -58,7 +66,7 @@ const PIECES: Piece[] = [
     id: "4",
     nome: "Tigre Soberano",
     categoria: "Realismo",
-    imagem: realismo2Img,
+    imagens: [realismo2Img],
     descricao: "Couro vinho com tigre realista pintado à mão.",
     conceito: "Força e elegância selvagem. Cada pelo desenhado com pincel fino.",
     tempo: "35 dias",
@@ -68,7 +76,7 @@ const PIECES: Piece[] = [
     id: "5",
     nome: "Jardim Noturno",
     categoria: "Floral",
-    imagem: floralImg,
+    imagens: [floralImg],
     descricao: "Bomber preto com rosas profundas em roxo e vermelho.",
     conceito: "A beleza que floresce no escuro. Botânica gótica em camadas de tinta.",
     tempo: "30 dias",
@@ -77,7 +85,7 @@ const PIECES: Piece[] = [
     id: "6",
     nome: "Costura Dilacerada",
     categoria: "ScarType",
-    imagem: scartypeImg,
+    imagens: [scartypeImg],
     descricao: "Peça desconstruída com fusão de tecidos vinho e azul elétrico.",
     conceito: "O método ScarType™ em sua expressão mais pura. Cada cicatriz é um traço autoral.",
     tempo: "40 dias",
@@ -87,7 +95,7 @@ const PIECES: Piece[] = [
     id: "7",
     nome: "Dragão Imperial",
     categoria: "Exclusivas",
-    imagem: exclusivaImg,
+    imagens: [exclusivaImg],
     descricao: "Couro metálico com dragão oriental em roxo e carmim.",
     conceito: "Peça única de status. Numerada, registrada, irrepetível.",
     tempo: "45 dias",
@@ -148,7 +156,7 @@ export const Gallery = () => {
               className="group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left animate-fade-up"
             >
               <img
-                src={piece.imagem}
+                src={piece.imagens[0]}
                 alt={`${piece.nome} — ${piece.categoria}`}
                 loading="lazy"
                 width={1024}
@@ -180,8 +188,8 @@ export const Gallery = () => {
         <DialogContent className="max-w-4xl bg-card border-primary/30 p-0 overflow-hidden">
           {selected && (
             <div className="grid md:grid-cols-2 gap-0">
-              <div className="aspect-square md:aspect-auto bg-secondary/30">
-                <img src={selected.imagem} alt={selected.nome} className="w-full h-full object-cover" />
+              <div className="relative aspect-square md:aspect-auto bg-secondary/30">
+                <PieceCarousel images={selected.imagens} alt={selected.nome} />
               </div>
               <div className="p-8 flex flex-col">
                 <p className="font-accent text-xs tracking-[0.3em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
@@ -218,5 +226,50 @@ export const Gallery = () => {
         </DialogContent>
       </Dialog>
     </section>
+  );
+};
+
+interface PieceCarouselProps {
+  images: string[];
+  alt: string;
+}
+
+const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
+  const autoplay = useRef(
+    Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })
+  );
+
+  if (images.length <= 1) {
+    return (
+      <img
+        src={images[0]}
+        alt={alt}
+        loading="lazy"
+        className="w-full h-full object-cover"
+      />
+    );
+  }
+
+  return (
+    <Carousel
+      opts={{ align: "start", loop: true }}
+      plugins={[autoplay.current]}
+      className="w-full h-full"
+    >
+      <CarouselContent className="h-full">
+        {images.map((src, i) => (
+          <CarouselItem key={i} className="h-full">
+            <img
+              src={src}
+              alt={`${alt} — imagem ${i + 1}`}
+              loading="lazy"
+              className="w-full h-full object-cover aspect-square md:aspect-auto"
+            />
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      <CarouselPrevious className="left-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
+      <CarouselNext className="right-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
+    </Carousel>
   );
 };
