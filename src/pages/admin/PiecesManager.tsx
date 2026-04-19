@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Upload, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Pencil, Trash2, Plus, Upload, X, ChevronUp, ChevronDown, Star } from "lucide-react";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
@@ -22,6 +22,7 @@ interface Piece {
   destaque: boolean;
   novo: boolean;
   ordem: number;
+  cover_image_id?: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Image[];
 }
@@ -201,6 +202,19 @@ export const PiecesManager = () => {
     setEditing({ ...editing, gallery_piece_images: fresh });
   };
 
+  const setCover = async (img: Image) => {
+    if (!editing) return;
+    const { error } = await supabase
+      .from("gallery_pieces")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update({ cover_image_id: img.id } as any)
+      .eq("id", editing.id);
+    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
+    setEditing({ ...editing, cover_image_id: img.id });
+    toast({ title: "Capa definida" });
+    load();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -282,16 +296,30 @@ export const PiecesManager = () => {
                 <p className="text-sm text-muted-foreground">Nenhuma imagem ainda.</p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {editing.gallery_piece_images.map((img, idx) => (
-                    <div key={img.id} className="relative aspect-square bg-secondary/30 group">
-                      <img src={img.url} alt="" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <Button size="icon" variant="ghost" disabled={idx === 0} onClick={() => moveImage(img, -1)}><ChevronUp className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" disabled={idx === editing.gallery_piece_images.length - 1} onClick={() => moveImage(img, 1)}><ChevronDown className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => removeImage(img)}><Trash2 className="h-4 w-4" /></Button>
+                  {editing.gallery_piece_images.map((img, idx) => {
+                    const isCover = editing.cover_image_id === img.id;
+                    return (
+                      <div
+                        key={img.id}
+                        className={`relative aspect-square bg-secondary/30 group ${isCover ? "ring-2 ring-primary-glow" : ""}`}
+                      >
+                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        {isCover && (
+                          <span className="absolute top-1 left-1 z-10 bg-primary text-primary-foreground text-[10px] font-accent tracking-[0.15em] uppercase px-1.5 py-0.5">
+                            Capa
+                          </span>
+                        )}
+                        <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 flex-wrap">
+                          <Button size="icon" variant="ghost" disabled={isCover} onClick={() => setCover(img)} title="Definir como capa">
+                            <Star className={`h-4 w-4 ${isCover ? "fill-current" : ""}`} />
+                          </Button>
+                          <Button size="icon" variant="ghost" disabled={idx === 0} onClick={() => moveImage(img, -1)}><ChevronUp className="h-4 w-4" /></Button>
+                          <Button size="icon" variant="ghost" disabled={idx === editing.gallery_piece_images.length - 1} onClick={() => moveImage(img, 1)}><ChevronDown className="h-4 w-4" /></Button>
+                          <Button size="icon" variant="ghost" onClick={() => removeImage(img)}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -306,7 +334,13 @@ export const PiecesManager = () => {
           {pieces.map((p) => (
             <div key={p.id} className="p-4 flex items-center gap-4">
               <div className="w-16 h-16 bg-secondary/30 flex-shrink-0">
-                {p.gallery_piece_images[0] && <img src={p.gallery_piece_images[0].url} alt={p.nome} className="w-full h-full object-cover" />}
+                {(() => {
+                  const cover = p.cover_image_id
+                    ? p.gallery_piece_images.find((i) => i.id === p.cover_image_id)
+                    : undefined;
+                  const thumb = cover ?? p.gallery_piece_images[0];
+                  return thumb ? <img src={thumb.url} alt={p.nome} className="w-full h-full object-cover" /> : null;
+                })()}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-display truncate">{p.nome}</p>
