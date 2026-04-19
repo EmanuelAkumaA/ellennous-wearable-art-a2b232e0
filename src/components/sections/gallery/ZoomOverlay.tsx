@@ -52,7 +52,7 @@ export const ZoomOverlay = ({ images, index, onClose, onPrev, onNext }: ZoomOver
       />
 
       {images.length > 1 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] font-accent text-xs tracking-[0.3em] uppercase text-foreground/70 bg-background/40 backdrop-blur-sm px-3 py-1.5 border border-border/40">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] font-accent text-xs tracking-[0.15em] uppercase text-foreground/70 bg-background/40 backdrop-blur-sm px-3 py-1.5 border border-border/40">
           {index + 1} / {images.length}
         </div>
       )}
@@ -64,7 +64,7 @@ export const ZoomOverlay = ({ images, index, onClose, onPrev, onNext }: ZoomOver
           onClose();
         }}
         aria-label="Fechar visualização"
-        className="absolute top-4 right-4 md:top-6 md:right-6 z-[110] min-h-[44px] min-w-[44px] flex items-center justify-center gap-2 font-accent text-xs tracking-[0.3em] uppercase text-foreground/80 hover:text-primary-glow transition-colors px-4 py-2 border border-border/40 hover:border-primary-glow/60 bg-background/60 backdrop-blur-sm"
+        className="absolute top-4 right-4 md:top-6 md:right-6 z-[110] min-h-[44px] min-w-[44px] flex items-center justify-center gap-2 font-accent text-xs tracking-[0.15em] uppercase text-foreground/80 hover:text-primary-glow transition-colors px-4 py-2 border border-border/40 hover:border-primary-glow/60 bg-background/60 backdrop-blur-sm"
       >
         <span className="hidden sm:inline">Fechar</span>
         <X className="h-4 w-4" />

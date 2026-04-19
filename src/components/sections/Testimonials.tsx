@@ -109,7 +109,7 @@ export const Testimonials = () => {
                         className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
-                      <span className="font-accent absolute top-4 left-4 inline-block px-3 py-1 text-xs tracking-[0.3em] uppercase bg-primary/20 backdrop-blur border border-primary-glow/30 text-primary-glow">
+                      <span className="font-accent absolute top-4 left-4 inline-block px-3 py-1 text-xs tracking-[0.15em] uppercase bg-primary/20 backdrop-blur border border-primary-glow/30 text-primary-glow">
                         {t.category}
                       </span>
                     </div>

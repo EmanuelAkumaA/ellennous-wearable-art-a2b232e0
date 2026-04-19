@@ -62,7 +62,7 @@ export const Hero = () => (
     </div>
 
     {/* Scroll cue */}
-    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-muted-foreground text-xs tracking-[0.3em] uppercase opacity-60 font-accent">
+    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-muted-foreground text-xs tracking-[0.15em] uppercase opacity-60 font-accent">
       <div className="flex flex-col items-center gap-2">
         <span>Role</span>
         <div className="w-px h-10 bg-gradient-to-b from-foreground/40 to-transparent" />

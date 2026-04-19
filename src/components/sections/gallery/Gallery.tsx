@@ -85,12 +85,12 @@ export const Gallery = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
               {piece.destaque && (
-                <span className="font-accent absolute top-4 right-4 text-xs tracking-[0.3em] uppercase bg-brand-red/90 text-white px-3 py-1">
+                <span className="font-accent absolute top-4 right-4 text-xs tracking-[0.15em] uppercase bg-brand-red/90 text-white px-3 py-1">
                   Destaque
                 </span>
               )}
               <div className="absolute bottom-0 left-0 right-0 p-6">
-                <p className="font-accent text-xs tracking-[0.3em] uppercase text-primary-glow mb-2">{piece.categoria}</p>
+                <p className="font-accent text-xs tracking-[0.15em] uppercase text-primary-glow mb-2">{piece.categoria}</p>
                 <h3 className="font-display text-2xl text-foreground group-hover:text-gradient-brand transition-colors">
                   {piece.nome}
                 </h3>
@@ -117,7 +117,7 @@ export const Gallery = () => {
                 />
               </div>
               <div className="p-8 flex flex-col">
-                <p className="font-accent text-xs tracking-[0.3em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
+                <p className="font-accent text-xs tracking-[0.15em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
                 <h3 className="font-display text-3xl md:text-4xl mb-6 text-foreground">{selected.nome}</h3>
                 <div className="space-y-5 text-sm">
                   <div>
