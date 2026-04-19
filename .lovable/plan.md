@@ -1,43 +1,66 @@
 
 
-## Plano — Stagger maior + paginação "Ver mais / Fechar" também no desktop
+## Plano — Mini sistema admin para gerenciar a Galeria
 
-### 1. Stagger 80ms → 150ms
+### Stack
+- **Lovable Cloud** (Supabase gerenciado): auth + banco + storage de imagens.
+- Sem cadastro público — primeiro usuário a se registrar vira admin (via trigger), depois o signup é bloqueado.
 
-Em `Gallery.tsx`, alterar o cálculo `(idx - animateFromRef.current) * 80` para `* 150`. Cascata mais arejada.
+### 1. Botão discreto de acesso
 
-### 2. Paginação no desktop (a partir de 6 obras)
+Novo `FloatingAdmin.tsx`, fixo em `bottom-5 right-24` (à esquerda do WhatsApp), círculo `h-10 w-10`, ícone `Lock` (lucide), borda sutil sem glow. Clique → `/admin` (rota protegida que redireciona para `/admin/login` se não autenticado).
 
-Hoje a paginação só roda no mobile. Vamos torná-la **universal**, com tamanho de página diferente:
+### 2. Backend (Lovable Cloud)
 
-- **Mobile**: `MOBILE_STEP = 5` (mantém)
-- **Desktop**: `DESKTOP_STEP = 6` (3 colunas × 2 linhas — visualmente equilibrado no grid `lg:grid-cols-3`)
+**Tabelas:**
+- `gallery_categories` — `id`, `nome` (unique), `ordem`, `created_at`.
+- `gallery_pieces` — `id`, `nome`, `categoria_id` (fk), `descricao`, `conceito`, `historia` *(novo campo)*, `tempo`, `destaque`, `novo`, `ordem`, `created_at`.
+- `gallery_piece_images` — `id`, `piece_id` (fk cascade), `url`, `ordem`.
+- `user_roles` — padrão seguro (enum `app_role`, função `has_role()` security definer).
 
-Ajustes em `Gallery.tsx`:
-- Adicionar constante `DESKTOP_STEP = 6`.
-- Calcular `step = isMobile ? MOBILE_STEP : DESKTOP_STEP`.
-- Estado inicial `visibleCount = step` (re-sincronizar quando `isMobile` mudar via `useEffect`).
-- Trocar todas as ocorrências de `MOBILE_STEP` na lógica por `step`:
-  - `visible = sorted.slice(0, visibleCount)` (sem o `isMobile ?`)
-  - `hasMore = visibleCount < sorted.length`
-  - `canClose = visibleCount > step`
-  - `handleShowMore`: `+ step`
-  - `handleClose`: volta para `step`
-  - `handleFilter`: reset para `step`
-- Ref do "fechar" passa a apontar para o **último item da primeira página** (`idx === step - 1`), não fixo no 5º.
+**RLS:** SELECT público em todas as 3 tabelas da galeria; INSERT/UPDATE/DELETE só para `has_role(auth.uid(), 'admin')`.
 
-Comportamento resultante:
-- Categoria com ≤6 obras no desktop: nenhum botão.
-- Categoria com 7+ obras: aparece "Ver mais obras" → revela mais 6 → quando atinge o total, só "Fechar" → "Fechar" volta ao 6º card com scroll suave.
+**Storage:** bucket `gallery` público para leitura, upload restrito a admins via policy.
 
-### Arquivos afetados
+**Bootstrap admin:** trigger no `auth.users` insere role `admin` se for o primeiro usuário; signup desabilitado depois (ou só você cria via dashboard).
+
+### 3. Páginas admin
+
+- `/admin/login` — email + senha (shadcn Form + zod, validação trim/length).
+- `/admin` — layout protegido com 2 abas:
+  - **Categorias**: listar / adicionar / editar / remover (input + ordem).
+  - **Obras**: listar / criar / editar / remover. Form com nome, categoria (select), descrição, conceito, **história**, tempo, flags `destaque`/`novo`, e gerenciador de imagens (upload múltiplo, reordenar, remover).
+- `ProtectedRoute` que checa sessão + role admin.
+
+### 4. Refatoração da Galeria pública
+
+- Remover `pieces.ts` estático.
+- Novo hook `useGalleryData()` busca categorias + obras + imagens via Supabase.
+- Modal exibe novo campo **História** entre Conceito e Tempo.
+- Skeleton enquanto carrega.
+
+### 5. Seed inicial
+
+As 7 obras atuais (`gallery-*.jpg` em `src/assets`) serão migradas para o banco + storage automaticamente, mantendo a galeria funcional desde o primeiro deploy.
+
+### Arquivos
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/sections/gallery/Gallery.tsx` | stagger 150ms + step dinâmico (5 mobile / 6 desktop) + ref no último da 1ª página |
+| `src/components/FloatingAdmin.tsx` | novo — botão discreto |
+| `src/pages/Index.tsx` | renderiza `<FloatingAdmin />` |
+| `src/hooks/useAuth.ts` | novo — sessão + isAdmin |
+| `src/components/admin/ProtectedRoute.tsx` | novo |
+| `src/pages/admin/Login.tsx` | novo |
+| `src/pages/admin/Dashboard.tsx` | novo (abas) |
+| `src/pages/admin/CategoriesManager.tsx` | novo |
+| `src/pages/admin/PiecesManager.tsx` | novo (com upload) |
+| `src/components/sections/gallery/useGalleryData.ts` | novo — fetch Supabase |
+| `src/components/sections/gallery/Gallery.tsx` | usa hook + exibe história |
+| `src/components/sections/gallery/pieces.ts` | remover |
+| `src/App.tsx` | rotas `/admin/login` e `/admin` |
+| Migrações Cloud | tabelas + RLS + bucket + role + seed |
 
-### Pontos de atenção
-- "Todas" tem 7 peças → no desktop vai mostrar 6 + botão "Ver mais obras" revelando a 7ª → depois só "Fechar".
-- Categorias com poucas obras (ex.: Anime/Geek tem 2): nenhum botão, igual hoje.
-- Animação fade-up continua aplicada apenas nos cards revelados depois do clique.
+### Pergunta importante
+Para isso funcionar preciso habilitar o **Lovable Cloud** (banco + auth + storage gerenciados). Aprovando o plano, habilito automaticamente.
 
