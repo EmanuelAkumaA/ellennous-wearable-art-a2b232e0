@@ -70,7 +70,7 @@ export const Gallery = () => {
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
-              onClick={() => setFilter(cat)}
+              onClick={() => handleFilter(cat)}
               className={`font-accent px-4 md:px-5 py-2 text-sm md:text-base tracking-[0.15em] uppercase border transition-all duration-500 ${
                 filter === cat
                   ? "bg-primary text-primary-foreground border-primary shadow-glow"
@@ -84,7 +84,7 @@ export const Gallery = () => {
 
         {/* Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((piece) => (
+          {visible.map((piece) => (
             <button
               key={piece.id}
               onClick={() => setSelected(piece)}
