@@ -51,7 +51,7 @@ export const Footer = () => (
         rel="noopener noreferrer"
         className="tracking-[0.2em] uppercase hover:text-primary-glow transition-colors"
       >
-        Criado por <span className="font-accent tracking-wider text-foreground/80">Kuma Tech</span>
+        Criado por <span className="text-foreground">Kuma Tech</span>
       </a>
     </div>
   </footer>
