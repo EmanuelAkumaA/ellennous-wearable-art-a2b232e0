@@ -113,6 +113,7 @@ const CATEGORIES: Category[] = ["Todas", "Anime / Geek", "Realismo", "Floral", "
 export const Gallery = () => {
   const [filter, setFilter] = useState<Category>("Todas");
   const [selected, setSelected] = useState<Piece | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const ref = useReveal();
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
@@ -194,7 +195,7 @@ export const Gallery = () => {
           {selected && (
             <div className="grid md:grid-cols-2 gap-0">
               <div className="relative aspect-square md:aspect-auto bg-secondary/30">
-                <PieceCarousel images={selected.imagens} alt={selected.nome} />
+                <PieceCarousel images={selected.imagens} alt={selected.nome} onZoom={setZoomedImage} />
               </div>
               <div className="p-8 flex flex-col">
                 <p className="font-accent text-xs tracking-[0.3em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
@@ -230,6 +231,30 @@ export const Gallery = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Zoom overlay */}
+      {zoomedImage && (
+        <div
+          onClick={() => setZoomedImage(null)}
+          className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex items-center justify-center p-6 md:p-12 cursor-zoom-out animate-fade-in"
+          role="dialog"
+          aria-label="Imagem ampliada"
+        >
+          <img
+            src={zoomedImage}
+            alt="Visualização ampliada"
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-full object-contain shadow-2xl border border-primary/20"
+          />
+          <button
+            onClick={() => setZoomedImage(null)}
+            aria-label="Fechar visualização"
+            className="absolute top-6 right-6 font-accent text-xs tracking-[0.3em] uppercase text-foreground/70 hover:text-primary-glow transition-colors px-4 py-2 border border-border/40 hover:border-primary-glow/60 bg-background/40"
+          >
+            Fechar ✕
+          </button>
+        </div>
+      )}
     </section>
   );
 };
@@ -237,9 +262,10 @@ export const Gallery = () => {
 interface PieceCarouselProps {
   images: string[];
   alt: string;
+  onZoom?: (src: string) => void;
 }
 
-const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
+const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
   const autoplay = useRef(
     Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })
   );
@@ -268,7 +294,8 @@ const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
         src={images[0]}
         alt={alt}
         loading="lazy"
-        className="w-full h-full object-cover"
+        onClick={() => onZoom?.(images[0])}
+        className="w-full h-full object-cover cursor-zoom-in"
       />
     );
   }
@@ -287,7 +314,8 @@ const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
               src={src}
               alt={`${alt} — imagem ${i + 1}`}
               loading="lazy"
-              className="w-full h-full object-cover aspect-square md:aspect-auto"
+              onClick={() => onZoom?.(src)}
+              className="w-full h-full object-cover aspect-square md:aspect-auto cursor-zoom-in"
             />
           </CarouselItem>
         ))}
