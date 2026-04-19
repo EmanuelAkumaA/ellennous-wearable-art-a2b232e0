@@ -141,12 +141,11 @@ export const Gallery = () => {
 
         {/* Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((piece, i) => (
+          {filtered.map((piece) => (
             <button
               key={piece.id}
               onClick={() => setSelected(piece)}
-              className="reveal group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left"
-              style={{ transitionDelay: `${(i % 3) * 100}ms` }}
+              className="group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left animate-fade-up"
             >
               <img
                 src={piece.imagem}
