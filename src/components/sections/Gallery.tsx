@@ -294,7 +294,8 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         src={images[0]}
         alt={alt}
         loading="lazy"
-        className="w-full h-full object-cover"
+        onClick={() => onZoom?.(images[0])}
+        className="w-full h-full object-cover cursor-zoom-in"
       />
     );
   }
@@ -313,7 +314,8 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
               src={src}
               alt={`${alt} — imagem ${i + 1}`}
               loading="lazy"
-              className="w-full h-full object-cover aspect-square md:aspect-auto"
+              onClick={() => onZoom?.(src)}
+              className="w-full h-full object-cover aspect-square md:aspect-auto cursor-zoom-in"
             />
           </CarouselItem>
         ))}
