@@ -99,11 +99,18 @@ export const Gallery = () => {
                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
-              {piece.destaque && (
-                <span className="font-accent absolute top-4 right-4 text-xs tracking-[0.15em] uppercase bg-brand-red/90 text-white px-3 py-1">
-                  Destaque
-                </span>
-              )}
+              <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
+                {piece.novo && (
+                  <span className="font-accent text-xs tracking-[0.15em] uppercase bg-primary/90 text-primary-foreground px-3 py-1">
+                    Novo
+                  </span>
+                )}
+                {piece.destaque && (
+                  <span className="font-accent text-xs tracking-[0.15em] uppercase bg-brand-red/90 text-white px-3 py-1">
+                    Destaque
+                  </span>
+                )}
+              </div>
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <p className="font-accent text-xs tracking-[0.15em] uppercase text-primary-glow mb-2">{piece.categoria}</p>
                 <h3 className="font-display text-2xl text-foreground group-hover:text-gradient-brand transition-colors">
@@ -116,6 +123,17 @@ export const Gallery = () => {
             </button>
           ))}
         </div>
+
+        {showMoreButton && (
+          <div className="flex justify-center mt-10">
+            <button
+              onClick={() => setShowAll(true)}
+              className="font-accent px-6 py-3 text-sm tracking-[0.15em] uppercase border border-primary-glow/60 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-glow transition-all duration-500"
+            >
+              Ver mais obras
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
