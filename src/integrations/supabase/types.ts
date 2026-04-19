@@ -38,6 +38,33 @@ export type Database = {
         }
         Relationships: []
       }
+      gallery_piece_events: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          event_type: string
+          id: string
+          piece_id: string
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          event_type: string
+          id?: string
+          piece_id: string
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          event_type?: string
+          id?: string
+          piece_id?: string
+          session_id?: string
+        }
+        Relationships: []
+      }
       gallery_piece_images: {
         Row: {
           created_at: string
