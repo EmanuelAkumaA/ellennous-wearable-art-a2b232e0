@@ -188,8 +188,8 @@ export const Gallery = () => {
         <DialogContent className="max-w-4xl bg-card border-primary/30 p-0 overflow-hidden">
           {selected && (
             <div className="grid md:grid-cols-2 gap-0">
-              <div className="aspect-square md:aspect-auto bg-secondary/30">
-                <img src={selected.imagem} alt={selected.nome} className="w-full h-full object-cover" />
+              <div className="relative aspect-square md:aspect-auto bg-secondary/30">
+                <PieceCarousel images={selected.imagens} alt={selected.nome} />
               </div>
               <div className="p-8 flex flex-col">
                 <p className="font-accent text-xs tracking-[0.3em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
