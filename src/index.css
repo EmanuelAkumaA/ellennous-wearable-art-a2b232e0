@@ -102,6 +102,18 @@
     background: hsl(var(--primary) / 0.4);
     color: hsl(var(--foreground));
   }
+
+  /* Hide scrollbar but keep functionality */
+  ::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+
+  html {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+}
 }
 
 @layer utilities {
