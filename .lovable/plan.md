@@ -1,90 +1,80 @@
 
 
-## Plano — Repaginar admin com identidade premium imersiva
+## Plano — Perfil com avatar em paleta de pintor + nome customizado
 
-### Diretrizes visuais
-Manter o DNA dark Ellennous (purple #8A2AE3, accent red, ice blue) e elevar o admin com:
-- **Sidebar lateral** premium (substituindo Tabs horizontais) com ícones + labels, glow no item ativo.
-- **Header sticky** translúcido com blur, breadcrumbs, avatar/email do admin e botão sair com hover red.
-- **Background atmosférico**: gradient radial suave (purple→deep-blue) + grain sutil + orbe glow flutuante (animação `float-slow`).
-- **Cards** com `bg-card/60 backdrop-blur` + borda `border-primary/10` + hover ring `primary-glow/40`.
-- **Tipografia**: Playfair display em títulos com gradient text, Bebas Neue em labels uppercase tracking largo.
-- **Micro-interações**: fade-up nos painéis ao trocar de aba, shimmer no loading, badges com glow.
+### Conceito visual
+Substituir o avatar circular na sidebar e na aba Conta por uma **paleta de pintor estilizada** (forma orgânica com furo lateral para o polegar + 5 "tintas" coloridas no canto). Quando há foto, ela preenche o corpo da paleta; quando não, mostra iniciais. As tintas usam cores da identidade (purple, primary-glow, brand-red, ice blue, gold).
 
-### 1. Novo shell (`Dashboard.tsx`)
-- Layout `grid grid-cols-[260px_1fr]` em desktop / drawer em mobile.
-- **Sidebar**: 
-  - Topo: logo Ellennous + tag "Atelier".
-  - Items: Obras (`Image`), Categorias (`Tags`), Estatísticas (`BarChart3`), Usuário (`UserCog`).
-  - Item ativo: faixa lateral `bg-primary` 2px + bg `primary/10` + texto `primary-glow`.
-  - Rodapé: email + botão "Sair" com `text-destructive hover:bg-destructive/10`.
-- **Header sticky**: título da seção atual + descrição curta + ações contextuais (botão "Nova obra" só na aba obras).
-- **Background**: 
-  ```html
-  <div class="fixed inset-0 -z-10 grain">
-    <div class="absolute top-0 -left-40 w-[600px] h-[600px] rounded-full bg-primary/15 blur-[120px] animate-float-slow" />
-    <div class="absolute bottom-0 -right-40 w-[500px] h-[500px] rounded-full bg-brand-red/10 blur-[120px]" />
-  </div>
-  ```
+```text
+       ╭─────╮
+      │ ●●●  │  ← tintas (dots coloridos)
+   ╭──╯      ╰──╮
+  │   [foto]    │  ← paleta (clip-path orgânico)
+   ╲    ⊙    ╱   ← furo do polegar
+    ╲______╱
+```
 
-### 2. Cards de obra (`PiecesManager.tsx`)
-- Grid responsivo `md:grid-cols-2 xl:grid-cols-3` em vez de lista única (mantém 3 linhas internas).
-- Card: `bg-card/60 backdrop-blur border border-border/40 hover:border-primary-glow/40 hover:shadow-glow transition-all`.
-- Drag handle vira pill arredondada com `bg-secondary/60`.
-- Tags Novo/Destaque com glow: `bg-primary/15 text-primary-glow shadow-[0_0_15px_hsl(var(--primary)/0.3)]`.
-- Thumbnail com overlay gradient bottom-up.
-- Botão "Nova obra" flutuante no header com gradient purple→wine.
-- Filtros (busca + select) num "barra" pill `rounded-full bg-secondary/40 backdrop-blur` com ícone search.
+### 1. Backend — tabela `admin_profile`
+Nova migration: tabela 1-pra-1 com `auth.users` para guardar nome de exibição e avatar.
+```sql
+create table public.admin_profile (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  display_name text,
+  avatar_url text,
+  avatar_storage_path text,
+  updated_at timestamptz default now()
+);
+alter table public.admin_profile enable row level security;
+-- SELECT: qualquer admin lê (precisamos exibir na sidebar)
+create policy "admin reads profile" on public.admin_profile
+  for select to authenticated using (has_role(auth.uid(), 'admin'));
+-- UPDATE/INSERT: só o próprio dono
+create policy "owner upserts profile" on public.admin_profile
+  for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+```
+Storage: reusar bucket `gallery` numa pasta `admin-avatars/{user_id}.jpg` (já é público — perfeito pra exibir sem signed URL).
 
-### 3. Form de edição (modal/sheet imersivo)
-Trocar o painel inline por um **Sheet lateral** (`Sheet` do shadcn) full-height à direita com:
-- Header gradient `bg-gradient-purple-wine` com nome da obra + close.
-- Seções colapsáveis: Identidade · Capa · Galeria · Conteúdo (descrição/conceito/história).
-- Inputs com `bg-secondary/40 border-border/30 focus:border-primary-glow`.
-- Botão salvar fixo no rodapé com `shadow-glow`.
+### 2. Hook compartilhado `useAdminProfile`
+`src/hooks/useAdminProfile.ts` — busca/cacheia `display_name` e `avatar_url` do usuário logado. Expõe `profile`, `loading`, `refresh()`. Usado pela sidebar e pela aba Conta.
 
-### 4. Estatísticas (`StatsManager.tsx`)
-- 3 cards de KPI grandes com:
-  - Ícone circular gradient (`bg-gradient-purple-wine` ou `bg-brand-red/20`).
-  - Número Playfair gigante com `text-gradient-light`.
-  - Mini-trend label (ex: "↑ 12% vs período anterior" — só visual se sem dados).
-- Tabela: header `bg-secondary/30 uppercase tracking-wider`, linhas com hover `bg-primary/5`, barras inline mostrando proporção de aberturas (background bar `bg-primary/10` + fill `bg-primary-glow`).
-- Filtro de período como toggle group em vez de select.
+### 3. Componente `PalettePhoto`
+`src/components/admin/PalettePhoto.tsx` — SVG da paleta com:
+- `clipPath` orgânico (forma de paleta com furo) aplicado na imagem/iniciais.
+- 5 círculos de "tinta" no topo-direito com cores `--primary`, `--primary-glow`, `--brand-red`, `--brand-deepblue`, `--brand-gold`.
+- Props: `src?`, `initials`, `size` (sm 40px / md 64px / lg 120px), `editable?` (mostra overlay "trocar foto" no hover quando true).
+- Glow sutil ao redor com `drop-shadow`.
 
-### 5. Categorias (`CategoriesManager.tsx`)
-- Lista em cards individuais (não `divide-y`) com `bg-card/60` + hover `border-primary-glow/40`.
-- Drag handle + nome + contador de obras (futuro) + ações.
-- Form "Nova categoria" no topo com fundo gradient sutil.
+### 4. Sidebar (`AdminShell.tsx`)
+- Topo da sidebar: trocar `<img className="rounded-full">` pela `<PalettePhoto size="sm" src={profile.avatar_url} initials={...} />`.
+- Texto ao lado: linha 1 = `profile.display_name || "Ellennous"`; linha 2 = `ATELIER · ELLENNOUS` (mantém estilo accent uppercase).
+- No drawer mobile, mesmo tratamento.
 
-### 6. Usuário (`UserSettings.tsx`)
-- Card "Conta" com avatar circular grande gradient (iniciais do email) + email destacado.
-- Card "Segurança" com form de senha estilizado + indicador visual de força (barras coloridas).
+### 5. Aba Conta (`UserSettings.tsx`)
+Reorganizar o card "Conta" no canto superior esquerdo:
+- **Esquerda**: `PalettePhoto size="lg" editable` — clique abre input file. Upload pro Supabase Storage → atualiza `admin_profile.avatar_url` → refresh do hook (sidebar atualiza junto).
+- **Direita**: Form com:
+  - Input "Nome de exibição" (preenche `display_name`).
+  - Email (readonly, mostrando `user.email`).
+  - Botão "Salvar perfil" com `bg-gradient-purple-wine`.
+- Card de senha permanece abaixo, sem mudanças.
 
-### 7. Login (`Login.tsx`)
-- Background com orbes purple flutuantes + grain.
-- Card central com `bg-card/70 backdrop-blur-xl border-primary/20 shadow-glow`.
-- Logo Ellennous acima do título.
-- Inputs translúcidos.
+### 6. Login (`Login.tsx`)
+Sem alteração — login não tem perfil ainda.
 
 ### Arquivos afetados
 | Arquivo | Mudança |
 |---|---|
-| `src/pages/admin/Dashboard.tsx` | Novo shell sidebar + header + bg atmosférico |
-| `src/pages/admin/PiecesManager.tsx` | Cards grid premium, Sheet de edição, filtros pill |
-| `src/pages/admin/CategoriesManager.tsx` | Cards individuais com glow |
-| `src/pages/admin/StatsManager.tsx` | KPIs com ícones gradient + tabela com barras |
-| `src/pages/admin/UserSettings.tsx` | Avatar gradient + força de senha |
-| `src/pages/admin/Login.tsx` | Background imersivo + logo |
-| `src/index.css` | (se necessário) novos utilitários: `.shimmer`, `.glass-card` |
-| `src/components/admin/AdminShell.tsx` | NOVO — sidebar + header reutilizável |
-| `package.json` / `README.md` | bump versão 0.4.3 → 0.4.4 |
+| nova migration | tabela `admin_profile` + RLS |
+| `src/components/admin/PalettePhoto.tsx` | NOVO — SVG paleta |
+| `src/hooks/useAdminProfile.ts` | NOVO — fetch/update perfil |
+| `src/components/admin/AdminShell.tsx` | usar PalettePhoto + display_name |
+| `src/pages/admin/UserSettings.tsx` | upload avatar + form de nome |
 
 ### Validação
-1. `/admin/login` carrega com orbes animados e card glass.
-2. `/admin` mostra sidebar à esquerda em desktop; em mobile vira drawer (botão hambúrguer no header).
-3. Trocar de aba aplica `animate-fade-up` no conteúdo.
-4. Cards de obra com hover: borda glow + shadow purple.
-5. Editar obra abre Sheet lateral animado.
-6. Stats com KPIs grandes e barras inline na tabela.
-7. README na versão 0.4.4.
+1. Aba Conta → upload de foto → paleta exibe a foto (com furo do polegar e tintas no canto).
+2. Preencher "Nome de exibição" → salvar → sidebar atualiza imediatamente, mostrando nome novo no lugar de "Ellennous".
+3. Segunda linha continua "ATELIER · ELLENNOUS".
+4. Sem foto → paleta exibe iniciais.
+5. Recarregar `/admin` → perfil persiste.
 
