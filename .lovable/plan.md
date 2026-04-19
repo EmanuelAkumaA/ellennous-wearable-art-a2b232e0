@@ -1,55 +1,80 @@
 
 
-## Plano — Paginação incremental "Ver mais / Fechar" no mobile
+## Plano — Fade-in das obras + mini sistema admin (Lovable Cloud)
 
-### Comportamento (só mobile)
+### Parte 1 — Animação fade-in nas novas obras (Galeria)
 
-- Inicial: 5 obras visíveis.
-- Clicar **"Ver mais obras"**: revela +5 (10, 15, 20...).
-- Botão **"Fechar"** aparece a partir da 2ª leva (quando já clicou "Ver mais" pelo menos 1x).
-- **"Fechar"** sempre volta para as 5 primeiras e faz scroll até a **5ª obra** (última da leva inicial), pra página não ficar gigante.
-- Quando todas as obras já estiverem visíveis (chegou no fim), **só "Fechar"** aparece (sem "Ver mais").
-- No meio do caminho (já expandiu mas ainda tem mais): **ambos** os botões aparecem lado a lado.
-- Trocar de filtro reseta para 5 obras visíveis.
+- Adicionar keyframe `fade-up` no `tailwind.config.ts` (opacity 0→1 + translateY 20px→0, ~600ms).
+- Em `Gallery.tsx`, calcular `previousCount` (via `useRef`) para identificar quais cards são "novos" após clicar em "Ver mais obras".
+- Aplicar `animate-fade-up` apenas nos cards com índice `>= previousCount`. Os já visíveis não re-animam.
+- Pequeno `style={{ animationDelay: '${(idx - previousCount) * 80}ms' }}` para entrada em cascata sutil.
 
-### Estados em `Gallery.tsx`
+### Parte 2 — Mini sistema admin conectado ao Lovable Cloud
 
-Substituir `showAll: boolean` por:
-- `visibleCount: number` (inicial: 5).
-- Constante `MOBILE_STEP = 5`.
+#### Botão de acesso
+- Novo componente `FloatingAdmin.tsx`: ícone discreto (lucide `Lock` ou `Settings`), posicionado fixo no canto inferior direito **à esquerda do WhatsApp** (`bottom-5 right-24`).
+- Estilo discreto: círculo menor (h-10 w-10), borda sutil, sem glow chamativo.
+- Clicar → navega para `/admin` (se logado) ou `/admin/login`.
 
-Derivações:
-- `visible = isMobile ? sorted.slice(0, visibleCount) : sorted`.
-- `hasMore = isMobile && visibleCount < sorted.length`.
-- `canClose = isMobile && visibleCount > MOBILE_STEP` (já clicou "Ver mais" pelo menos 1x).
+#### Autenticação (Lovable Cloud / Supabase Auth)
+- Habilitar Lovable Cloud no projeto.
+- Apenas email + senha. Sem cadastro público — admin é criado manualmente pela dona via dashboard do Cloud (ou primeiro signup vira admin).
+- Tabela `user_roles` com enum `app_role` (`admin`) + função `has_role()` security definer (padrão seguro recomendado).
+- Hook `useAuth` para sessão + `onAuthStateChange`.
 
-Handlers:
-- `handleShowMore`: `setVisibleCount(c => Math.min(c + MOBILE_STEP, sorted.length))`.
-- `handleClose`: `setVisibleCount(MOBILE_STEP)` + scroll suave até a 5ª obra (ref no card de índice 4) com `scrollIntoView({ behavior: "smooth", block: "center" })`.
-- `handleFilter`: também reseta `visibleCount = MOBILE_STEP`.
+#### Tabelas no Supabase
+1. **`gallery_categories`**
+   - `id` (uuid), `nome` (text, unique), `ordem` (int), `created_at`.
+   - RLS: SELECT público; INSERT/UPDATE/DELETE só admin.
 
-### Scroll para a 5ª obra ao fechar
+2. **`gallery_pieces`**
+   - `id` (uuid), `nome`, `categoria_id` (fk), `descricao`, `conceito`, `historia`, `tempo`, `destaque` (bool), `novo` (bool), `ordem` (int), `created_at`.
+   - RLS: SELECT público; mutações só admin.
 
-- Criar `fifthItemRef = useRef<HTMLButtonElement | null>(null)`.
-- No `.map(visible, idx)`, atribuir `ref={idx === 4 ? fifthItemRef : undefined}` no botão da peça.
-- `handleClose` chama `fifthItemRef.current?.scrollIntoView(...)` após setar o estado (usar `setTimeout(..., 0)` ou `requestAnimationFrame` pra garantir que o DOM já recolheu antes do scroll).
+3. **`gallery_piece_images`**
+   - `id` (uuid), `piece_id` (fk, cascade), `url` (text), `ordem` (int).
+   - RLS: SELECT público; mutações só admin.
 
-### UI dos botões
+4. **Storage bucket `gallery`** (público para leitura, upload só admin via policy).
 
-Container abaixo do grid, `flex justify-center gap-3 mt-10`:
-- Renderiza `"Ver mais obras"` se `hasMore`.
-- Renderiza `"Fechar"` se `canClose`.
-- Mesma estética atual (font-accent, tracking-[0.15em], borda + hover glow). "Fechar" usa borda mais sutil (`border-border/60`) pra hierarquia visual com o primário.
+> **Nota:** o campo "história" é novo (atualmente só existe descrição/conceito/tempo). Será adicionado e exibido também no modal público da galeria.
 
-### Arquivo afetado
+#### Páginas admin
+- `/admin/login` — formulário email/senha (shadcn Form + zod).
+- `/admin` — layout protegido (redireciona se não logado/não admin), com 2 abas:
+  - **Categorias**: lista + adicionar/editar/remover (input simples + ordem).
+  - **Obras**: lista + botão "Nova obra" → modal/sheet com formulário:
+    - Nome, categoria (select), descrição, conceito, história, tempo, flags `destaque`/`novo`.
+    - Upload múltiplo de imagens (Supabase Storage), reordenar/remover imagens existentes.
+- Logout no header do admin.
+
+#### Refatoração da Galeria pública
+- `pieces.ts` (mock estático) → substituído por hook `useGalleryData()` que busca de `gallery_pieces` + `gallery_piece_images` + `gallery_categories` via Supabase.
+- Loading state simples (skeleton) e fallback de erro.
+- Tipos `Category` e `Piece` migrados para refletir schema do banco.
+- Modal exibe novo campo "história" entre conceito e tempo.
+
+### Arquivos afetados / novos
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/sections/gallery/Gallery.tsx` | trocar `showAll` por `visibleCount`, adicionar `fifthItemRef`, lógica de "Ver mais"/"Fechar" com scroll |
+| `tailwind.config.ts` | keyframe + animation `fade-up` |
+| `src/components/sections/gallery/Gallery.tsx` | animação cascata + ler dados do hook |
+| `src/components/sections/gallery/pieces.ts` | remover (ou deixar só types) |
+| `src/components/sections/gallery/useGalleryData.ts` | **novo** — fetch Supabase |
+| `src/components/FloatingAdmin.tsx` | **novo** — botão discreto |
+| `src/pages/Index.tsx` | renderizar `<FloatingAdmin />` |
+| `src/hooks/useAuth.ts` | **novo** — sessão + role admin |
+| `src/pages/admin/Login.tsx` | **novo** |
+| `src/pages/admin/Dashboard.tsx` | **novo** com abas Categorias/Obras |
+| `src/pages/admin/CategoriesManager.tsx` | **novo** |
+| `src/pages/admin/PiecesManager.tsx` | **novo** (com upload de imagens) |
+| `src/components/admin/ProtectedRoute.tsx` | **novo** — guarda rota |
+| `src/App.tsx` | rotas `/admin/login`, `/admin` |
+| Migrações Supabase | tabelas + RLS + bucket storage + role admin |
 
 ### Pontos de atenção
-- Desktop não muda (mostra tudo sempre).
-- Categorias com ≤5 obras: nenhum botão aparece.
-- Categorias com 6–10 obras: aparece "Ver mais" → depois só "Fechar".
-- Reset ao trocar filtro mantém UX previsível.
+- **Como criar o primeiro admin?** Após Lovable Cloud habilitado, você cria a conta no `/admin/login` (signup), e eu insiro manualmente sua role `admin` na tabela `user_roles` via migration ou orientação.
+- A galeria pública continuará funcionando sem login — só leitura.
+- Imagens atuais (`/src/assets/gallery-*.jpg`) viram a base — posso fazer um seed inicial migrando-as para o banco/storage, ou começar do zero (você re-cadastra via admin). **Pergunto isso abaixo.**
 
