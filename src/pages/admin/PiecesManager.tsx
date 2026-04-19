@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Upload, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Pencil, Trash2, Plus, Upload, X, ChevronUp, ChevronDown, Star } from "lucide-react";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
@@ -22,6 +22,7 @@ interface Piece {
   destaque: boolean;
   novo: boolean;
   ordem: number;
+  cover_image_id: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Image[];
 }
@@ -199,6 +200,19 @@ export const PiecesManager = () => {
     fresh[idx + dir] = { ...img, ordem: swap.ordem };
     fresh.sort((a, b) => a.ordem - b.ordem);
     setEditing({ ...editing, gallery_piece_images: fresh });
+  };
+
+  const setCover = async (img: Image) => {
+    if (!editing) return;
+    const { error } = await supabase
+      .from("gallery_pieces")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update({ cover_image_id: img.id } as any)
+      .eq("id", editing.id);
+    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
+    setEditing({ ...editing, cover_image_id: img.id });
+    toast({ title: "Capa definida" });
+    load();
   };
 
   return (
