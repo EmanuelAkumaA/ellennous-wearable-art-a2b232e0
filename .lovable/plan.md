@@ -1,40 +1,35 @@
 
+## Plano — Campo "Imagem capa" nas obras
 
-## Plano — Criar conta superadmin e validar backend
+### Objetivo
+Permitir que o admin defina explicitamente qual imagem é a capa da obra (mostrada nos cards da galeria e na lista do admin), em vez de sempre usar a primeira imagem por ordem.
 
-### Verificação do backend
-Sim, o backend é **Supabase** (via Lovable Cloud). Confirmado pela configuração ativa:
-- **Tabelas**: `gallery_categories`, `gallery_pieces`, `gallery_piece_images`, `user_roles` — todas com RLS habilitada.
-- **Auth**: GoTrue rodando (logs ativos às 21:39 UTC).
-- **Storage**: bucket `gallery` público.
-- **Funções**: `has_role()`, `handle_new_user_admin_bootstrap()`, `set_updated_at()` instaladas.
-- **Trigger bootstrap**: o primeiro usuário a se cadastrar recebe automaticamente o papel `admin`.
+### Mudanças no banco
+Adicionar coluna `cover_image_id` (uuid, nullable) em `gallery_pieces` referenciando uma imagem de `gallery_piece_images`. Sem FK rígida (pra evitar problemas de ordem de delete) — limpamos via trigger quando a imagem capa é removida.
 
-### Criação da conta superadmin
+- Migration:
+  - `ALTER TABLE gallery_pieces ADD COLUMN cover_image_id uuid;`
+  - Trigger `BEFORE DELETE` em `gallery_piece_images`: se a imagem deletada é capa de alguma peça, setar `cover_image_id = NULL`.
+  - Backfill: para peças existentes, setar `cover_image_id` = id da imagem com menor `ordem`.
 
-Vou criar a conta `ellennouss@gmail.com` com a senha `Singeki02@` diretamente no Supabase Auth via edge function administrativa (usando `SUPABASE_SERVICE_ROLE_KEY` que já está configurada como secret), com email já confirmado para login imediato.
+### Mudanças no admin (`src/pages/admin/PiecesManager.tsx`)
+- Incluir `cover_image_id` no `Piece`, `form` e payload de save.
+- Na grade de imagens (dentro do form de edição), em cada card adicionar um botão "Definir como capa" (ícone estrela). A imagem capa atual recebe um badge "CAPA" e borda destacada.
+- Ao clicar em "definir capa": update direto em `gallery_pieces.cover_image_id` + refresh local.
+- Ao remover imagem que é capa: trigger do banco já limpa; UI re-fetch.
+- Na listagem de obras, o thumbnail usa `cover_image_id` se existir, senão fallback pra primeira por ordem.
 
-**Passos:**
+### Mudanças na galeria pública (`src/components/sections/gallery/useGalleryData.ts`)
+- Selecionar `cover_image_id` e expor `capa: string` no `PieceData` (URL da imagem capa, ou primeira como fallback).
+- Verificar consumidores (`PieceCarousel`, `Gallery`) e usar `capa` no thumbnail/preview, mantendo `imagens[]` para o carrossel interno.
 
-1. **Edge function temporária `bootstrap-admin`** (deletada após uso):
-   - Usa `service_role` para criar usuário com `email_confirm: true`.
-   - Garante role `admin` na tabela `user_roles` (idempotente — se já existir alguém com admin, apenas adiciona role à nova conta).
-   - Protegida: só executa se nenhum admin existir OU se receber a chave secreta correta no header.
-
-2. **Invocação automática** da function logo após o deploy.
-
-3. **Confirmação**: query no `auth.users` + `user_roles` para validar que a conta existe, está confirmada e tem papel admin.
-
-4. **Limpeza**: remover a edge function após o uso para não deixar superfície de ataque.
-
-### Observação de segurança
-A senha foi compartilhada em texto puro neste chat. Recomendo trocá-la após o primeiro login (posso adicionar uma tela de "alterar senha" no admin se quiser).
-
-### Arquivos
-
+### Arquivos afetados
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/bootstrap-admin/index.ts` | novo (temporário) — cria usuário + role |
-| `supabase/config.toml` | bloco da function com `verify_jwt = false` |
-| (após uso) | deletar a edge function |
+| migration nova | adiciona coluna + trigger + backfill |
+| `src/pages/admin/PiecesManager.tsx` | UI "definir capa", thumb usa capa |
+| `src/components/sections/gallery/useGalleryData.ts` | expõe campo `capa` |
+| `src/components/sections/gallery/PieceCarousel.tsx` (e/ou `Gallery.tsx`) | usa `capa` no card |
 
+### Notas
+- Não é um campo de upload separado: a "capa" é uma das imagens já enviadas, marcada como capa. Isso evita duplicação de upload e mantém consistência. Se você quiser literalmente um upload separado e independente das outras imagens, me avise que eu mudo a abordagem (coluna `cover_url` + `cover_storage_path` próprios).
