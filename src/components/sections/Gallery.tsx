@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { X } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
