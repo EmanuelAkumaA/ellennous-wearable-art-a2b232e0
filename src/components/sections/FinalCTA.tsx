@@ -17,7 +17,7 @@ export const FinalCTA = () => {
 
       <div className="relative max-w-4xl mx-auto text-center">
         <div className="reveal">
-          <p className="font-accent text-xs sm:text-sm tracking-[0.35em] sm:tracking-[0.4em] text-brand-ice uppercase mb-6 sm:mb-8">— Última chamada —</p>
+          <p className="font-accent text-xs sm:text-sm tracking-[0.18em] sm:tracking-[0.2em] text-brand-ice uppercase mb-6 sm:mb-8">— Última chamada —</p>
           <h2 className="font-display text-[2.4rem] xs:text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[1] sm:leading-[0.95] mb-8 sm:mb-10 break-words [text-wrap:balance]">
             Se você entendeu,
             <br />
