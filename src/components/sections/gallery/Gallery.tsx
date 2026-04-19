@@ -138,14 +138,24 @@ export const Gallery = () => {
           ))}
         </div>
 
-        {showMoreButton && (
-          <div className="flex justify-center mt-10">
-            <button
-              onClick={() => setShowAll(true)}
-              className="font-accent px-6 py-3 text-sm tracking-[0.15em] uppercase border border-primary-glow/60 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-glow transition-all duration-500"
-            >
-              Ver mais obras
-            </button>
+        {(hasMore || canClose) && (
+          <div className="flex justify-center gap-3 mt-10">
+            {hasMore && (
+              <button
+                onClick={handleShowMore}
+                className="font-accent px-6 py-3 text-sm tracking-[0.15em] uppercase border border-primary-glow/60 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-glow transition-all duration-500"
+              >
+                Ver mais obras
+              </button>
+            )}
+            {canClose && (
+              <button
+                onClick={handleClose}
+                className="font-accent px-6 py-3 text-sm tracking-[0.15em] uppercase border border-border/60 text-muted-foreground hover:border-primary-glow hover:text-foreground transition-all duration-500"
+              >
+                Fechar
+              </button>
+            )}
           </div>
         )}
       </div>
