@@ -228,3 +228,48 @@ export const Gallery = () => {
     </section>
   );
 };
+
+interface PieceCarouselProps {
+  images: string[];
+  alt: string;
+}
+
+const PieceCarousel = ({ images, alt }: PieceCarouselProps) => {
+  const autoplay = useRef(
+    Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })
+  );
+
+  if (images.length <= 1) {
+    return (
+      <img
+        src={images[0]}
+        alt={alt}
+        loading="lazy"
+        className="w-full h-full object-cover"
+      />
+    );
+  }
+
+  return (
+    <Carousel
+      opts={{ align: "start", loop: true }}
+      plugins={[autoplay.current]}
+      className="w-full h-full"
+    >
+      <CarouselContent className="h-full">
+        {images.map((src, i) => (
+          <CarouselItem key={i} className="h-full">
+            <img
+              src={src}
+              alt={`${alt} — imagem ${i + 1}`}
+              loading="lazy"
+              className="w-full h-full object-cover aspect-square md:aspect-auto"
+            />
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      <CarouselPrevious className="left-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
+      <CarouselNext className="right-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
+    </Carousel>
+  );
+};
