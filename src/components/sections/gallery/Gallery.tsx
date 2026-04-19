@@ -29,6 +29,32 @@ export const Gallery = () => {
   const lastInitialItemRef = useRef<HTMLButtonElement | null>(null);
   const previousCountRef = useRef(step);
   const animateFromRef = useRef(0);
+  const modalOpenedAtRef = useRef<number | null>(null);
+  const trackedPieceRef = useRef<string | null>(null);
+
+  const handleSelectPiece = (piece: PieceData) => {
+    setSelected(piece);
+    modalOpenedAtRef.current = Date.now();
+    trackedPieceRef.current = piece.id;
+    void trackPieceEvent(piece.id, "modal_open");
+  };
+
+  const handleModalChange = (open: boolean) => {
+    if (!open) {
+      const pid = trackedPieceRef.current;
+      const openedAt = modalOpenedAtRef.current;
+      if (pid && openedAt) {
+        void trackPieceEvent(pid, "modal_close", Date.now() - openedAt);
+      }
+      modalOpenedAtRef.current = null;
+      trackedPieceRef.current = null;
+      setSelected(null);
+    }
+  };
+
+  const handleCtaClick = () => {
+    if (selected) void trackPieceEvent(selected.id, "cta_click");
+  };
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
   const sorted = [...filtered].sort((a, b) => rankPiece(a) - rankPiece(b));
