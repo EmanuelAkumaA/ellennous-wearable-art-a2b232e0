@@ -78,6 +78,8 @@ export type Database = {
           categoria_id: string
           conceito: string
           cover_image_id: string | null
+          cover_storage_path: string | null
+          cover_url: string | null
           created_at: string
           descricao: string
           destaque: boolean
@@ -93,6 +95,8 @@ export type Database = {
           categoria_id: string
           conceito?: string
           cover_image_id?: string | null
+          cover_storage_path?: string | null
+          cover_url?: string | null
           created_at?: string
           descricao?: string
           destaque?: boolean
@@ -108,6 +112,8 @@ export type Database = {
           categoria_id?: string
           conceito?: string
           cover_image_id?: string | null
+          cover_storage_path?: string | null
+          cover_url?: string | null
           created_at?: string
           descricao?: string
           destaque?: boolean
