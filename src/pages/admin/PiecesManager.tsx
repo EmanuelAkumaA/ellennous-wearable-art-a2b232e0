@@ -7,7 +7,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Upload, X, ChevronUp, ChevronDown, Star } from "lucide-react";
+import { Pencil, Trash2, Plus, Upload, X, GripVertical, ImageIcon } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  useSortable,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
@@ -22,7 +40,8 @@ interface Piece {
   destaque: boolean;
   novo: boolean;
   ordem: number;
-  cover_image_id?: string | null;
+  cover_url?: string | null;
+  cover_storage_path?: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Image[];
 }
@@ -39,6 +58,39 @@ const emptyForm = {
   ordem: 0,
 };
 
+// Sortable image card
+const SortableImage = ({ img, onRemove }: { img: Image; onRemove: (img: Image) => void }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: img.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="relative aspect-square bg-secondary/30 group touch-none"
+    >
+      <img src={img.url} alt="" className="w-full h-full object-cover pointer-events-none" />
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="absolute top-1 left-1 z-20 bg-background/80 hover:bg-background text-foreground p-1 cursor-grab active:cursor-grabbing"
+        title="Arrastar para reordenar"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <Button size="icon" variant="ghost" onClick={() => onRemove(img)} title="Remover">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const PiecesManager = () => {
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -48,7 +100,15 @@ export const PiecesManager = () => {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const coverRef = useRef<HTMLInputElement>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const load = async () => {
     setLoading(true);
@@ -72,6 +132,20 @@ export const PiecesManager = () => {
   };
 
   useEffect(() => { load(); }, []);
+
+  const refreshEditing = async (id: string) => {
+    const { data } = await supabase
+      .from("gallery_pieces")
+      .select("*, gallery_categories(nome), gallery_piece_images(id, url, storage_path, ordem)")
+      .eq("id", id)
+      .single();
+    if (data) {
+      setEditing({
+        ...data,
+        gallery_piece_images: [...data.gallery_piece_images].sort((a, b) => a.ordem - b.ordem),
+      } as Piece);
+    }
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -114,15 +188,7 @@ export const PiecesManager = () => {
     toast({ title: editing ? "Atualizada" : "Criada" });
     if (!editing) closeForm();
     load();
-    if (editing) {
-      // refresh editing with fresh data
-      const { data } = await supabase
-        .from("gallery_pieces")
-        .select("*, gallery_categories(nome), gallery_piece_images(id, url, storage_path, ordem)")
-        .eq("id", editing.id)
-        .single();
-      if (data) setEditing({ ...data, gallery_piece_images: [...data.gallery_piece_images].sort((a, b) => a.ordem - b.ordem) } as Piece);
-    }
+    if (editing) await refreshEditing(editing.id);
   };
 
   const handleDelete = async (id: string) => {
@@ -130,6 +196,7 @@ export const PiecesManager = () => {
     const piece = pieces.find((p) => p.id === id);
     if (piece) {
       const paths = piece.gallery_piece_images.map((i) => i.storage_path).filter(Boolean) as string[];
+      if (piece.cover_storage_path) paths.push(piece.cover_storage_path);
       if (paths.length) await supabase.storage.from("gallery").remove(paths);
     }
     const { error } = await supabase.from("gallery_pieces").delete().eq("id", id);
@@ -158,13 +225,7 @@ export const PiecesManager = () => {
         i++;
       }
       toast({ title: "Upload concluído" });
-      // refresh editing
-      const { data } = await supabase
-        .from("gallery_pieces")
-        .select("*, gallery_categories(nome), gallery_piece_images(id, url, storage_path, ordem)")
-        .eq("id", editing.id)
-        .single();
-      if (data) setEditing({ ...data, gallery_piece_images: [...data.gallery_piece_images].sort((a, b) => a.ordem - b.ordem) } as Piece);
+      await refreshEditing(editing.id);
       load();
     } catch (err) {
       toast({ title: "Erro no upload", description: err instanceof Error ? err.message : "", variant: "destructive" });
@@ -172,6 +233,53 @@ export const PiecesManager = () => {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
+  };
+
+  const handleCoverUpload = async (files: FileList | null) => {
+    if (!files || !editing) return;
+    const file = files[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    setCoverUploading(true);
+    try {
+      // Remove previous cover from storage
+      if (editing.cover_storage_path) {
+        await supabase.storage.from("gallery").remove([editing.cover_storage_path]);
+      }
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `pieces/${editing.id}/cover-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("gallery").getPublicUrl(path);
+      const { error: updErr } = await supabase
+        .from("gallery_pieces")
+        .update({ cover_url: pub.publicUrl, cover_storage_path: path })
+        .eq("id", editing.id);
+      if (updErr) throw updErr;
+      toast({ title: "Capa atualizada" });
+      await refreshEditing(editing.id);
+      load();
+    } catch (err) {
+      toast({ title: "Erro no upload da capa", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    } finally {
+      setCoverUploading(false);
+      if (coverRef.current) coverRef.current.value = "";
+    }
+  };
+
+  const removeCover = async () => {
+    if (!editing || !editing.cover_url) return;
+    if (!confirm("Remover imagem capa?")) return;
+    if (editing.cover_storage_path) {
+      await supabase.storage.from("gallery").remove([editing.cover_storage_path]);
+    }
+    const { error } = await supabase
+      .from("gallery_pieces")
+      .update({ cover_url: null, cover_storage_path: null })
+      .eq("id", editing.id);
+    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
+    toast({ title: "Capa removida" });
+    await refreshEditing(editing.id);
+    load();
   };
 
   const removeImage = async (img: Image) => {
@@ -185,34 +293,26 @@ export const PiecesManager = () => {
     load();
   };
 
-  const moveImage = async (img: Image, dir: -1 | 1) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     if (!editing) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     const list = editing.gallery_piece_images;
-    const idx = list.findIndex((i) => i.id === img.id);
-    const swap = list[idx + dir];
-    if (!swap) return;
-    await Promise.all([
-      supabase.from("gallery_piece_images").update({ ordem: swap.ordem }).eq("id", img.id),
-      supabase.from("gallery_piece_images").update({ ordem: img.ordem }).eq("id", swap.id),
-    ]);
-    const fresh = [...list];
-    fresh[idx] = { ...swap, ordem: img.ordem };
-    fresh[idx + dir] = { ...img, ordem: swap.ordem };
-    fresh.sort((a, b) => a.ordem - b.ordem);
-    setEditing({ ...editing, gallery_piece_images: fresh });
-  };
-
-  const setCover = async (img: Image) => {
-    if (!editing) return;
-    const { error } = await supabase
-      .from("gallery_pieces")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ cover_image_id: img.id } as any)
-      .eq("id", editing.id);
-    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
-    setEditing({ ...editing, cover_image_id: img.id });
-    toast({ title: "Capa definida" });
-    load();
+    const oldIdx = list.findIndex((i) => i.id === active.id);
+    const newIdx = list.findIndex((i) => i.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove(list, oldIdx, newIdx).map((img, idx) => ({ ...img, ordem: idx }));
+    setEditing({ ...editing, gallery_piece_images: reordered });
+    // Persist new order: update only items whose ordem changed
+    const updates = reordered
+      .filter((img, idx) => list[idx]?.id !== img.id || list[idx]?.ordem !== img.ordem)
+      .map((img) => supabase.from("gallery_piece_images").update({ ordem: img.ordem }).eq("id", img.id));
+    const results = await Promise.all(updates);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      toast({ title: "Erro ao reordenar", description: failed.error.message, variant: "destructive" });
+      await refreshEditing(editing.id);
+    }
   };
 
   return (
@@ -282,47 +382,79 @@ export const PiecesManager = () => {
           </div>
 
           {editing && (
-            <div className="pt-6 border-t border-border/50 space-y-4">
-              <div className="flex justify-between items-center">
-                <h5 className="font-accent text-sm tracking-[0.15em] uppercase">Imagens</h5>
-                <div>
-                  <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleUpload(e.target.files)} />
-                  <Button onClick={() => fileRef.current?.click()} disabled={uploading} className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">
-                    <Upload className="h-4 w-4 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
-                  </Button>
+            <>
+              {/* Cover image block */}
+              <div className="pt-6 border-t border-border/50 space-y-3">
+                <h5 className="font-accent text-sm tracking-[0.15em] uppercase">Imagem capa</h5>
+                <p className="text-xs text-muted-foreground">
+                  Esta imagem aparece como destaque nos cards da galeria. É independente das demais imagens da obra.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <div className="w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40">
+                    {editing.cover_url ? (
+                      <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={coverRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => handleCoverUpload(e.target.files)}
+                    />
+                    <Button
+                      onClick={() => coverRef.current?.click()}
+                      disabled={coverUploading}
+                      className="rounded-none font-accent tracking-[0.15em] uppercase text-xs"
+                    >
+                      <Upload className="h-4 w-4 mr-1" />
+                      {coverUploading ? "Enviando…" : editing.cover_url ? "Trocar capa" : "Enviar capa"}
+                    </Button>
+                    {editing.cover_url && (
+                      <Button
+                        variant="outline"
+                        onClick={removeCover}
+                        className="rounded-none font-accent tracking-[0.15em] uppercase text-xs"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" /> Remover capa
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-              {editing.gallery_piece_images.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma imagem ainda.</p>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {editing.gallery_piece_images.map((img, idx) => {
-                    const isCover = editing.cover_image_id === img.id;
-                    return (
-                      <div
-                        key={img.id}
-                        className={`relative aspect-square bg-secondary/30 group ${isCover ? "ring-2 ring-primary-glow" : ""}`}
-                      >
-                        <img src={img.url} alt="" className="w-full h-full object-cover" />
-                        {isCover && (
-                          <span className="absolute top-1 left-1 z-10 bg-primary text-primary-foreground text-[10px] font-accent tracking-[0.15em] uppercase px-1.5 py-0.5">
-                            Capa
-                          </span>
-                        )}
-                        <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 flex-wrap">
-                          <Button size="icon" variant="ghost" disabled={isCover} onClick={() => setCover(img)} title="Definir como capa">
-                            <Star className={`h-4 w-4 ${isCover ? "fill-current" : ""}`} />
-                          </Button>
-                          <Button size="icon" variant="ghost" disabled={idx === 0} onClick={() => moveImage(img, -1)}><ChevronUp className="h-4 w-4" /></Button>
-                          <Button size="icon" variant="ghost" disabled={idx === editing.gallery_piece_images.length - 1} onClick={() => moveImage(img, 1)}><ChevronDown className="h-4 w-4" /></Button>
-                          <Button size="icon" variant="ghost" onClick={() => removeImage(img)}><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </div>
-                    );
-                  })}
+
+              {/* Gallery images (sortable) */}
+              <div className="pt-6 border-t border-border/50 space-y-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h5 className="font-accent text-sm tracking-[0.15em] uppercase">Imagens da obra</h5>
+                    <p className="text-xs text-muted-foreground mt-1">Arraste para reordenar</p>
+                  </div>
+                  <div>
+                    <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleUpload(e.target.files)} />
+                    <Button onClick={() => fileRef.current?.click()} disabled={uploading} className="rounded-none font-accent tracking-[0.15em] uppercase text-xs">
+                      <Upload className="h-4 w-4 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
+                {editing.gallery_piece_images.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma imagem ainda.</p>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={editing.gallery_piece_images.map((i) => i.id)} strategy={rectSortingStrategy}>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {editing.gallery_piece_images.map((img) => (
+                          <SortableImage key={img.id} img={img} onRemove={removeImage} />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -331,27 +463,24 @@ export const PiecesManager = () => {
         <div className="text-muted-foreground text-sm">Carregando…</div>
       ) : (
         <div className="border border-border/50 bg-card divide-y divide-border/50">
-          {pieces.map((p) => (
-            <div key={p.id} className="p-4 flex items-center gap-4">
-              <div className="w-16 h-16 bg-secondary/30 flex-shrink-0">
-                {(() => {
-                  const cover = p.cover_image_id
-                    ? p.gallery_piece_images.find((i) => i.id === p.cover_image_id)
-                    : undefined;
-                  const thumb = cover ?? p.gallery_piece_images[0];
-                  return thumb ? <img src={thumb.url} alt={p.nome} className="w-full h-full object-cover" /> : null;
-                })()}
+          {pieces.map((p) => {
+            const thumbUrl = p.cover_url ?? p.gallery_piece_images[0]?.url;
+            return (
+              <div key={p.id} className="p-4 flex items-center gap-4">
+                <div className="w-16 h-16 bg-secondary/30 flex-shrink-0">
+                  {thumbUrl ? <img src={thumbUrl} alt={p.nome} className="w-full h-full object-cover" /> : null}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-display truncate">{p.nome}</p>
+                  <p className="text-xs text-muted-foreground">{p.gallery_categories?.nome ?? "—"} · {p.gallery_piece_images.length} img · #{p.ordem}</p>
+                </div>
+                {p.destaque && <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-brand-red/20 text-brand-red px-2 py-1">Destaque</span>}
+                {p.novo && <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-primary/20 text-primary-glow px-2 py-1">Novo</span>}
+                <Button size="icon" variant="ghost" onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => handleDelete(p.id)}><Trash2 className="h-4 w-4" /></Button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-display truncate">{p.nome}</p>
-                <p className="text-xs text-muted-foreground">{p.gallery_categories?.nome ?? "—"} · {p.gallery_piece_images.length} img · #{p.ordem}</p>
-              </div>
-              {p.destaque && <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-brand-red/20 text-brand-red px-2 py-1">Destaque</span>}
-              {p.novo && <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-primary/20 text-primary-glow px-2 py-1">Novo</span>}
-              <Button size="icon" variant="ghost" onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" onClick={() => handleDelete(p.id)}><Trash2 className="h-4 w-4" /></Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
