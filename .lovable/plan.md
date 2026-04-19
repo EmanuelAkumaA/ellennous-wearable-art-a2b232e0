@@ -1,28 +1,42 @@
 
 
-## Plano — Ajustar espaçamento no Footer
+## Plano — Galeria mobile com "Ver mais obras" + ordenação
 
-Na imagem, as linhas divisórias (acima do logo e entre o copyright/Kuma Tech) estão muito próximas dos textos/elementos. Reduzir o `tracking` (letter-spacing) excessivo dos textos e aumentar levemente o respiro vertical entre divisores e conteúdo.
+### 1. Nova classificação "Novo" em `pieces.ts`
 
-### Mudanças em `src/components/sections/Footer.tsx`
+Adicionar campo opcional `novo?: boolean` em `Piece`. Hoje já existe `destaque?: boolean`. Sem `novo` marcado em nenhuma peça (usuário marca depois) — fica pronto para uso.
 
-**1. Tagline "ARTE VESTÍVEL · PEÇAS ÚNICAS FEITAS À MÃO"**
-- Reduzir `tracking-[0.3em]` → `tracking-[0.15em]` (diminui o "esticado" das letras).
+### 2. Ordenação fixa em `Gallery.tsx`
 
-**2. Bottom bar (copyright + Kuma Tech)**
-- Reduzir `tracking-wider` (copyright) e `tracking-[0.2em]` (Kuma Tech) → `tracking-[0.1em]` em ambos, para coerência.
-- Aumentar `pt-6` → `pt-8` no divisor inferior, dando mais respiro entre a linha e o texto.
+Antes de renderizar `filtered`, ordenar:
+1. `novo === true` primeiro
+2. `destaque === true` em seguida
+3. Restante (sem classificação) por último
 
-**3. Divisor superior (border-t do footer)**
-- Aumentar `pt-14` → `pt-16` para dar mais espaço entre a linha superior e o logo.
+Mantém ordem original dentro de cada grupo (sort estável). Aplica para todos os filtros, inclusive "Todas".
 
-### Arquivo afetado
+### 3. Botão "Ver mais obras" — só mobile
+
+- Estado novo: `const [showAll, setShowAll] = useState(false)`.
+- Detectar mobile via hook existente `useIsMobile()` (já está em `src/hooks/use-mobile.tsx`).
+- Limite mobile: **6 peças** visíveis inicialmente.
+- Lógica:
+  - Se `isMobile && !showAll` → renderiza `sorted.slice(0, 6)`.
+  - Senão → renderiza tudo.
+- Botão aparece **só** quando `isMobile && !showAll && sorted.length > 6`, abaixo do grid.
+  - Estilo: mesma estética dos filtros (`font-accent`, `tracking-[0.15em] uppercase`, borda + hover glow).
+  - Texto: "Ver mais obras".
+- Ao trocar de filtro (`setFilter`), resetar `showAll = false` para o comportamento ser consistente por categoria.
+
+### Arquivos afetados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/sections/Footer.tsx` | reduzir tracking dos textos CAPS, aumentar padding vertical dos divisores |
+| `src/components/sections/gallery/pieces.ts` | adicionar `novo?: boolean` em `Piece` |
+| `src/components/sections/gallery/Gallery.tsx` | ordenação por novo→destaque→resto + estado/botão mobile "Ver mais obras" |
 
 ### Pontos de atenção
-- Sem mudança de fonte, cor ou tamanho — só espaçamento horizontal (letras) e vertical (divisores).
-- Mantém a hierarquia visual atual.
+- Desktop não muda — mostra todas as peças sempre.
+- Como nenhuma peça está marcada como `novo` ainda, a ordem visível agora será: destaques (1, 4, 6, 7) primeiro, depois restantes (2, 3, 5).
+- Quiser marcar peças como "Novo" no `pieces.ts`, é só setar `novo: true` na peça.
 
