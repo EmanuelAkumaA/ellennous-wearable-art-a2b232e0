@@ -27,17 +27,18 @@ export const useGalleryData = () => {
         supabase.from("gallery_categories").select("nome").order("ordem", { ascending: true }),
         supabase
           .from("gallery_pieces")
-          .select("id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, cover_image_id, gallery_categories(nome), gallery_piece_images(id, url, ordem)")
+          .select("id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, gallery_categories(nome), gallery_piece_images(id, url, ordem)")
           .order("ordem", { ascending: true }),
       ]);
       if (catsRes.data) setCategories(catsRes.data.map((c) => c.nome));
       if (piecesRes.data) {
         setPieces(
-          piecesRes.data.map((p: typeof piecesRes.data[number] & { cover_image_id?: string | null }) => {
+          piecesRes.data.map((p) => {
+            const pAny = p as typeof p & { cover_image_id?: string | null };
             const sortedImages = [...(p.gallery_piece_images ?? [])].sort((a, b) => a.ordem - b.ordem);
             const urls = sortedImages.map((i) => i.url);
-            const coverImg = p.cover_image_id
-              ? sortedImages.find((i) => i.id === p.cover_image_id)
+            const coverImg = pAny.cover_image_id
+              ? sortedImages.find((i) => i.id === pAny.cover_image_id)
               : undefined;
             const capa = coverImg?.url ?? urls[0] ?? "";
             return {
