@@ -1,83 +1,49 @@
 
 
-# Plano — Atualização de Tipografia Premium
+## Análise rápida
 
-## Análise
-
-Atual:
-- `display`: Butler / Cormorant Garamond (serifado clássico)
-- `sans`/`body`: EB Garamond (serifado)
-- Tudo em serifa = visual barroco demais para o objetivo "luxo artístico moderno"
-
-Novo sistema solicitado (3 fontes):
-| Uso | Fonte | Peso |
-|---|---|---|
-| H1, H2 (títulos principais) | Playfair Display | 400, 700 |
-| H3, destaques curtos, "IDENTIDADE/EXCLUSIVO" | Bebas Neue | 400 |
-| Parágrafos, UI, botões | Inter | 400, 500, 600 |
+**Tarefas:**
+1. Rodar `npm run bump` — não posso executar em modo plan; será feito ao aprovar.
+2. Microtipografia: aumentar `letter-spacing` em parágrafos Inter + ajustar `line-height` em Playfair.
+3. Testimonials: tornar `@handle` clicável → link para `https://instagram.com/<handle sem @>`.
+4. Gallery modal: trocar imagem única por **carrossel automático** com várias imagens por peça.
 
 ## Mudanças
 
-### 1. `src/index.css`
-- Trocar `@import` do Google Fonts: remover Cormorant + EB Garamond, importar **Playfair Display** (400, 700, italic), **Bebas Neue** (400) e **Inter** (400, 500, 600)
-- Manter os `@font-face` Butler? **Não** — remover, conforme nova diretriz "não usar mais de 3 fontes"
-- Atualizar `body` → `font-family: 'Inter', system-ui, sans-serif`
-- Atualizar `h1, h2` → `font-family: 'Playfair Display', serif`; letter-spacing leve (0.005em); peso 700 default
-- Adicionar regra `h3, h4` → `font-family: 'Bebas Neue', sans-serif`; letter-spacing 0.05em; uppercase
-- Atualizar utilitários `.font-display` → Playfair, `.font-body` → Inter, criar `.font-accent` → Bebas Neue
+### 1. Bump de versão
+- Executar `npm run bump "troca de tipografia para Playfair + Bebas Neue + Inter"` → atualiza `package.json` para 0.1.1 e adiciona linha no README.
 
-### 2. `tailwind.config.ts`
-Substituir `fontFamily`:
-```ts
-display: ['"Playfair Display"', 'Georgia', 'serif'],
-accent: ['"Bebas Neue"', 'Impact', 'sans-serif'],
-sans: ['Inter', 'system-ui', 'sans-serif'],
-body: ['Inter', 'system-ui', 'sans-serif'],
-```
+### 2. Microtipografia editorial (`src/index.css`)
+- `body` (Inter): adicionar `letter-spacing: 0.01em` e manter `line-height: 1.65`.
+- `p`: `letter-spacing: 0.012em; line-height: 1.7`.
+- `h1, h2` (Playfair): `line-height: 1.05` (atualmente algumas usam 0.95 em utility — manter override em utility), `letter-spacing: -0.005em` para look editorial.
+- Não alterar `font-accent` (Bebas) — já condensado.
 
-### 3. Aplicar `font-accent` (Bebas Neue) em destaques curtos
-Revisar os componentes em `src/components/sections/` e trocar `font-display` para `font-accent` onde o texto é uma **palavra-chave curta em CAPS** (eyebrows, labels, números de pilares):
+### 3. Instagram clicável em Testimonials (`src/components/sections/Testimonials.tsx`)
+- Adicionar campo `instagramUrl` opcional em cada testimonial (derivado do handle: `https://instagram.com/${handle.replace('@','').replace('.','')}` — mas como handles fictícios podem não existir, vou montar o link a partir do handle removendo só o `@`).
+- Trocar `<p>` do handle por `<a href={instagramUrl} target="_blank" rel="noopener noreferrer">` com hover color (text-primary-glow → text-foreground).
+- Adicionar pequeno ícone Instagram do lucide-react ao lado do handle para reforçar affordance.
 
-- `Hero.tsx`: eyebrow `"Ellennous · Arte Vestível"` → font-accent; título principal `"NÃO É ROUPA / É IDENTIDADE"` (curto, impacto, CAPS) → **font-accent** com tamanho ainda maior; substituto `font-display` no H1 não combina aqui pois é toda em CAPS (Bebas brilha)
-- `FinalCTA.tsx`: eyebrow → font-accent; H2 longo "Se você entendeu, você já sabe." → manter **font-display** (Playfair) por ser frase, não palavra-chave
-- `Manifesto.tsx`: blockquote longa → **font-display** (Playfair italic combina com manifesto); eyebrow "MANIFESTO" → font-accent
-- `Positioning.tsx`, `ForWhom.tsx`: eyebrows → font-accent; números "01/02/03" → font-accent (já são curtos/CAPS-like); títulos das pillars curtos → font-accent
-- `ScarType.tsx`, `Process.tsx`, `Gallery.tsx`, `Testimonials.tsx`, `Footer.tsx`: aplicar mesma lógica — eyebrows e labels CAPS → Bebas; títulos de frase → Playfair; corpo → Inter (default automático)
-
-### 4. Botões
-- `Button` (`ui/button.tsx`) já usa default `font-medium` → herdará Inter automaticamente. ✓
-- Botões com `tracking-[0.15em] uppercase font-semibold` no Hero/FinalCTA → trocar para classe `font-accent` (Bebas Neue) para mais força visual nos CTAs principais
-
-### 5. Ajustes de tamanho/spacing
-- Bebas Neue é mais alta/estreita — ajustar `tracking` para compensar (`tracking-wide` em CAPS curtos)
-- Playfair é serif larga — manter `[text-wrap:balance]` e `leading-[0.95]` já existentes
-- Inter como body → garantir `leading-relaxed` em parágrafos longos
-
-### 6. README
-Adicionar nota da nova stack tipográfica na tabela/seção de design.
+### 4. Carrossel automático no modal da Galeria (`src/components/sections/Gallery.tsx`)
+- Mudar tipo `Piece`: `imagem: string` → `imagens: string[]` (array). Manter `imagem` na grid principal (primeira do array).
+- Para cada peça em `PIECES`, popular `imagens` com a imagem atual (1 item por enquanto). Usuário pode adicionar mais depois — o carrossel já funciona com qualquer quantidade ≥1.
+- No `<DialogContent>`, substituir `<img>` único por `<Carousel>` (já existe `@/components/ui/carousel`) + plugin `embla-carousel-autoplay` (já usado em Testimonials):
+  - `Carousel` com `opts={{ loop: true }}`, autoplay 4s.
+  - Quando `imagens.length === 1`: renderizar imagem estática (sem controles/autoplay).
+  - Quando ≥2: mostrar `CarouselPrevious`/`CarouselNext` discretos + indicadores (dots) opcionais.
+- Lazy/loading: `loading="lazy"` em todas as imagens do carrossel.
 
 ## Arquivos afetados
 
 | Arquivo | Ação |
 |---|---|
-| `src/index.css` | trocar @import, @font-face, font-family de h1/h2/h3, utilitários |
-| `tailwind.config.ts` | redefinir `fontFamily` (display/accent/sans/body) |
-| `src/components/sections/Hero.tsx` | font-accent em eyebrow, título e CTA |
-| `src/components/sections/FinalCTA.tsx` | font-accent em eyebrow e CTA |
-| `src/components/sections/Manifesto.tsx` | font-accent em eyebrow |
-| `src/components/sections/Positioning.tsx` | eyebrow + números + títulos curtos → font-accent |
-| `src/components/sections/ForWhom.tsx` | eyebrow + numeração → font-accent |
-| `src/components/sections/ScarType.tsx` | revisar |
-| `src/components/sections/Process.tsx` | revisar |
-| `src/components/sections/Gallery.tsx` | revisar (filtros → font-accent) |
-| `src/components/sections/Testimonials.tsx` | revisar |
-| `src/components/sections/Footer.tsx` | eyebrows → font-accent |
-| `README.md` | atualizar seção tipografia |
+| `package.json` + `README.md` | bump via script |
+| `src/index.css` | letter-spacing/leading editorial |
+| `src/components/sections/Testimonials.tsx` | handle → link Instagram + ícone |
+| `src/components/sections/Gallery.tsx` | tipo `imagens: string[]` + carrossel autoplay no modal |
 
 ## Pontos de atenção
-
-- **Paleta e layouts não mudam** — apenas tokens de fonte e classes utilitárias
-- Butler `.woff2` instruído anteriormente deixará de ser usado; vou remover os `@font-face` para não tentar carregar arquivos inexistentes
-- Bebas Neue sempre em maiúsculas/CAPS para preservar identidade da fonte
-- Limite respeitado: **3 fontes** (Playfair / Bebas / Inter)
+- Carrossel autoplay no modal pausa em hover/interação (mesmo padrão do Testimonials).
+- Handles Instagram nos depoimentos são fictícios → links irão para perfis inexistentes; comportamento esperado e fácil de trocar quando o cliente fornecer handles reais.
+- Sem mexer em paleta, layout ou estrutura.
 
