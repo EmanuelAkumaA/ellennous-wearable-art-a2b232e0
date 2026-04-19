@@ -1,42 +1,55 @@
 
 
-## Plano — Galeria mobile com "Ver mais obras" + ordenação
+## Plano — Paginação incremental "Ver mais / Fechar" no mobile
 
-### 1. Nova classificação "Novo" em `pieces.ts`
+### Comportamento (só mobile)
 
-Adicionar campo opcional `novo?: boolean` em `Piece`. Hoje já existe `destaque?: boolean`. Sem `novo` marcado em nenhuma peça (usuário marca depois) — fica pronto para uso.
+- Inicial: 5 obras visíveis.
+- Clicar **"Ver mais obras"**: revela +5 (10, 15, 20...).
+- Botão **"Fechar"** aparece a partir da 2ª leva (quando já clicou "Ver mais" pelo menos 1x).
+- **"Fechar"** sempre volta para as 5 primeiras e faz scroll até a **5ª obra** (última da leva inicial), pra página não ficar gigante.
+- Quando todas as obras já estiverem visíveis (chegou no fim), **só "Fechar"** aparece (sem "Ver mais").
+- No meio do caminho (já expandiu mas ainda tem mais): **ambos** os botões aparecem lado a lado.
+- Trocar de filtro reseta para 5 obras visíveis.
 
-### 2. Ordenação fixa em `Gallery.tsx`
+### Estados em `Gallery.tsx`
 
-Antes de renderizar `filtered`, ordenar:
-1. `novo === true` primeiro
-2. `destaque === true` em seguida
-3. Restante (sem classificação) por último
+Substituir `showAll: boolean` por:
+- `visibleCount: number` (inicial: 5).
+- Constante `MOBILE_STEP = 5`.
 
-Mantém ordem original dentro de cada grupo (sort estável). Aplica para todos os filtros, inclusive "Todas".
+Derivações:
+- `visible = isMobile ? sorted.slice(0, visibleCount) : sorted`.
+- `hasMore = isMobile && visibleCount < sorted.length`.
+- `canClose = isMobile && visibleCount > MOBILE_STEP` (já clicou "Ver mais" pelo menos 1x).
 
-### 3. Botão "Ver mais obras" — só mobile
+Handlers:
+- `handleShowMore`: `setVisibleCount(c => Math.min(c + MOBILE_STEP, sorted.length))`.
+- `handleClose`: `setVisibleCount(MOBILE_STEP)` + scroll suave até a 5ª obra (ref no card de índice 4) com `scrollIntoView({ behavior: "smooth", block: "center" })`.
+- `handleFilter`: também reseta `visibleCount = MOBILE_STEP`.
 
-- Estado novo: `const [showAll, setShowAll] = useState(false)`.
-- Detectar mobile via hook existente `useIsMobile()` (já está em `src/hooks/use-mobile.tsx`).
-- Limite mobile: **6 peças** visíveis inicialmente.
-- Lógica:
-  - Se `isMobile && !showAll` → renderiza `sorted.slice(0, 6)`.
-  - Senão → renderiza tudo.
-- Botão aparece **só** quando `isMobile && !showAll && sorted.length > 6`, abaixo do grid.
-  - Estilo: mesma estética dos filtros (`font-accent`, `tracking-[0.15em] uppercase`, borda + hover glow).
-  - Texto: "Ver mais obras".
-- Ao trocar de filtro (`setFilter`), resetar `showAll = false` para o comportamento ser consistente por categoria.
+### Scroll para a 5ª obra ao fechar
 
-### Arquivos afetados
+- Criar `fifthItemRef = useRef<HTMLButtonElement | null>(null)`.
+- No `.map(visible, idx)`, atribuir `ref={idx === 4 ? fifthItemRef : undefined}` no botão da peça.
+- `handleClose` chama `fifthItemRef.current?.scrollIntoView(...)` após setar o estado (usar `setTimeout(..., 0)` ou `requestAnimationFrame` pra garantir que o DOM já recolheu antes do scroll).
+
+### UI dos botões
+
+Container abaixo do grid, `flex justify-center gap-3 mt-10`:
+- Renderiza `"Ver mais obras"` se `hasMore`.
+- Renderiza `"Fechar"` se `canClose`.
+- Mesma estética atual (font-accent, tracking-[0.15em], borda + hover glow). "Fechar" usa borda mais sutil (`border-border/60`) pra hierarquia visual com o primário.
+
+### Arquivo afetado
 
 | Arquivo | Mudança |
 |---|---|
-| `src/components/sections/gallery/pieces.ts` | adicionar `novo?: boolean` em `Piece` |
-| `src/components/sections/gallery/Gallery.tsx` | ordenação por novo→destaque→resto + estado/botão mobile "Ver mais obras" |
+| `src/components/sections/gallery/Gallery.tsx` | trocar `showAll` por `visibleCount`, adicionar `fifthItemRef`, lógica de "Ver mais"/"Fechar" com scroll |
 
 ### Pontos de atenção
-- Desktop não muda — mostra todas as peças sempre.
-- Como nenhuma peça está marcada como `novo` ainda, a ordem visível agora será: destaques (1, 4, 6, 7) primeiro, depois restantes (2, 3, 5).
-- Quiser marcar peças como "Novo" no `pieces.ts`, é só setar `novo: true` na peça.
+- Desktop não muda (mostra tudo sempre).
+- Categorias com ≤5 obras: nenhum botão aparece.
+- Categorias com 6–10 obras: aparece "Ver mais" → depois só "Fechar".
+- Reset ao trocar filtro mantém UX previsível.
 
