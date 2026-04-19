@@ -6,6 +6,7 @@ export interface PieceData {
   nome: string;
   categoria: string;
   imagens: string[];
+  capa: string;
   descricao: string;
   conceito: string;
   historia: string;
@@ -26,27 +27,34 @@ export const useGalleryData = () => {
         supabase.from("gallery_categories").select("nome").order("ordem", { ascending: true }),
         supabase
           .from("gallery_pieces")
-          .select("id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, gallery_categories(nome), gallery_piece_images(url, ordem)")
+          .select("id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, cover_image_id, gallery_categories(nome), gallery_piece_images(id, url, ordem)")
           .order("ordem", { ascending: true }),
       ]);
       if (catsRes.data) setCategories(catsRes.data.map((c) => c.nome));
       if (piecesRes.data) {
         setPieces(
-          piecesRes.data.map((p) => ({
-            id: p.id,
-            nome: p.nome,
-            categoria: p.gallery_categories?.nome ?? "",
-            imagens: [...(p.gallery_piece_images ?? [])]
-              .sort((a, b) => a.ordem - b.ordem)
-              .map((i) => i.url),
-            descricao: p.descricao ?? "",
-            conceito: p.conceito ?? "",
-            historia: p.historia ?? "",
-            tempo: p.tempo ?? "",
-            destaque: p.destaque,
-            novo: p.novo,
-            ordem: p.ordem,
-          })),
+          piecesRes.data.map((p: typeof piecesRes.data[number] & { cover_image_id?: string | null }) => {
+            const sortedImages = [...(p.gallery_piece_images ?? [])].sort((a, b) => a.ordem - b.ordem);
+            const urls = sortedImages.map((i) => i.url);
+            const coverImg = p.cover_image_id
+              ? sortedImages.find((i) => i.id === p.cover_image_id)
+              : undefined;
+            const capa = coverImg?.url ?? urls[0] ?? "";
+            return {
+              id: p.id,
+              nome: p.nome,
+              categoria: p.gallery_categories?.nome ?? "",
+              imagens: urls,
+              capa,
+              descricao: p.descricao ?? "",
+              conceito: p.conceito ?? "",
+              historia: p.historia ?? "",
+              tempo: p.tempo ?? "",
+              destaque: p.destaque,
+              novo: p.novo,
+              ordem: p.ordem,
+            };
+          }),
         );
       }
       setLoading(false);
