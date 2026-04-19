@@ -478,6 +478,13 @@ export const PiecesManager = () => {
     : null;
   const activePiece = activePieceId ? pieces.find((p) => p.id === activePieceId) : null;
 
+  const isFiltering = search.trim() !== "" || filterCat !== "all";
+  const filteredPieces = pieces.filter((p) => {
+    if (filterCat !== "all" && p.categoria_id !== filterCat) return false;
+    if (search.trim() && !p.nome.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -486,6 +493,36 @@ export const PiecesManager = () => {
           <Plus className="h-4 w-4 mr-1" /> Nova obra
         </Button>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_auto] gap-3 items-end">
+        <div>
+          <Label className="text-xs uppercase tracking-wider">Buscar por nome</Label>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Digite o nome…" />
+        </div>
+        <div>
+          <Label className="text-xs uppercase tracking-wider">Categoria</Label>
+          <Select value={filterCat} onValueChange={setFilterCat}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => { setSearch(""); setFilterCat("all"); }}
+          disabled={!isFiltering}
+          className="rounded-none font-accent tracking-[0.15em] uppercase text-xs"
+        >
+          Limpar
+        </Button>
+      </div>
+      {isFiltering && (
+        <p className="text-xs text-muted-foreground">
+          Mostrando {filteredPieces.length} de {pieces.length} · Reordenação desativada com filtros ativos
+        </p>
+      )}
 
       {creating && (
         <div className="border border-primary/40 bg-card p-6 space-y-4">
