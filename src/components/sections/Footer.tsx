@@ -1,22 +1,20 @@
 import { Instagram } from "lucide-react";
 import { buildWhatsAppLink, INSTAGRAM_URL } from "@/components/FloatingWhatsApp";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
-import logoEllennous from "@/assets/logo-ellennous.png";
+import logoEllennous from "@/assets/logo-ellennous.svg";
 
 export const Footer = () => (
-  <footer className="relative border-t border-border/40 py-14 px-6">
-    <div className="max-w-6xl mx-auto flex flex-col items-center gap-10 md:flex-row md:items-center md:justify-between">
+  <footer className="relative border-t border-border/40 pt-14 pb-28 md:pb-14 px-6">
+    <div className="max-w-6xl mx-auto flex flex-col items-center gap-10 md:flex-row md:items-center md:justify-between text-center md:text-left">
       {/* Logo */}
-      <div className="flex flex-col items-center md:items-start gap-2">
+      <div className="flex flex-col items-center md:items-start gap-3">
         <img
           src={logoEllennous}
           alt="ELLENNOUS — arte vestível"
-          width={1920}
-          height={1080}
           loading="lazy"
-          className="h-10 md:h-12 w-auto object-contain"
+          className="h-16 sm:h-20 md:h-24 w-auto object-contain"
         />
-        <p className="text-xs text-muted-foreground tracking-[0.25em] uppercase">
+        <p className="text-[11px] sm:text-xs text-muted-foreground tracking-[0.25em] uppercase max-w-xs">
           Arte vestível · Peças únicas feitas à mão
         </p>
       </div>
@@ -45,7 +43,7 @@ export const Footer = () => (
     </div>
 
     {/* Bottom bar */}
-    <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-border/30 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
+    <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-border/30 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground text-center md:text-left">
       <span className="tracking-wider">© {new Date().getFullYear()} Ellennous. Todos os direitos reservados.</span>
       <a
         href="https://kumatech.com.br/"
@@ -53,7 +51,7 @@ export const Footer = () => (
         rel="noopener noreferrer"
         className="tracking-[0.2em] uppercase hover:text-primary-glow transition-colors"
       >
-        Criado por <span className="font-semibold text-foreground/80 group-hover:text-primary-glow">Kuma Tech</span>
+        Criado por <span className="font-semibold text-foreground/80">Kuma Tech</span>
       </a>
     </div>
   </footer>

@@ -5,35 +5,49 @@ Site institucional premium da marca **Ellennous**: peças únicas feitas à mão
 ## Stack
 
 - React 18 + Vite + TypeScript
-- Tailwind CSS + design system semântico (HSL tokens)
+- Tailwind CSS + design system semântico (HSL tokens) — **dark mode only**
 - shadcn/ui · Radix · Embla Carousel · Lucide
-- Tipografia: **Cormorant Garamond** (display) + **EB Garamond** (texto)
+- Tipografia: **Butler** (oficial) com fallback em **Cormorant Garamond** + **EB Garamond** (texto)
 
 ## Versionamento
 
 - Formato: `MAJOR.MINOR.PATCH` (SemVer)
-- A cada commit incrementamos o **PATCH** (último dígito).
-- Versão atual: ver [`package.json`](./package.json).
+- A cada commit incrementamos o **PATCH** (último dígito) via script.
+
+```bash
+npm run bump                          # +1 patch, descrição genérica
+npm run bump "ajusta footer mobile"   # +1 patch + descrição na tabela
+npm run bump minor "novo header"      # +1 minor (zera patch)
+npm run bump major "redesign total"   # +1 major (zera minor + patch)
+```
+
+> O ambiente Lovable não roda hooks de pre-commit, então o bump é manual:
+> rode `npm run bump "<descrição>"` antes de cada push relevante. O script
+> atualiza `package.json` e adiciona uma linha à tabela abaixo.
 
 | Versão | Mudanças |
 | ------ | -------- |
 | 0.1.0  | Versão inicial do site |
-| 0.1.1  | Tipografia Butler/Garamond, light premium, ícones sociais, fix de filtros, crédito Kuma Tech |
 
 ## Estrutura
 
 ```
+public/
+└── fonts/             # Coloque aqui Butler-*.woff2 (ver public/fonts/README.md)
+
+scripts/
+└── bump-version.mjs   # Bump automático de versão + README
+
 src/
 ├── assets/              # Imagens da galeria, hero, logo, depoimentos
 ├── components/
 │   ├── icons/           # Ícones customizados (WhatsApp, etc.)
 │   ├── sections/        # Seções da landing (Hero, Galeria, Footer…)
 │   ├── ui/              # shadcn/ui primitives
-│   ├── FloatingWhatsApp.tsx
-│   └── ThemeToggle.tsx  # Light/Dark switch (canto superior direito)
+│   └── FloatingWhatsApp.tsx
 ├── hooks/
 ├── pages/
-└── index.css            # Design tokens (light + dark)
+└── index.css            # Design tokens (dark) + @font-face Butler
 ```
 
 ## Scripts
@@ -43,12 +57,12 @@ npm run dev         # desenvolvimento
 npm run build       # build produção
 npm run lint        # eslint
 npm run test        # vitest
+npm run bump        # incrementa versão + atualiza README
 ```
 
 ## Tema
 
-Suporta **dark (padrão)** e **light premium**. Persistência em `localStorage`
-sob a chave `ellennous-theme`. Aplicado antes do paint para evitar flash.
+Dark mode único (palette roxo/vinho/gelo). Não há toggle de tema.
 
 ## Crédito
 

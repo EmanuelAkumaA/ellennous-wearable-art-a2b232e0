@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Cormorant Garamond"', 'Butler', 'Garamond', 'serif'],
+        display: ['Butler', '"Cormorant Garamond"', 'Garamond', 'serif'],
         sans: ['"EB Garamond"', 'Garamond', 'Times New Roman', 'serif'],
         body: ['"EB Garamond"', 'Garamond', 'serif'],
       },

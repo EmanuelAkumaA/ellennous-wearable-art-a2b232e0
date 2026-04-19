@@ -31,7 +31,7 @@ export const Hero = () => (
       <p className="text-xs md:text-sm tracking-[0.4em] text-brand-ice/70 uppercase mb-6">
         Ellennous · Arte Vestível
       </p>
-      <h1 className="font-display text-5xl sm:text-7xl md:text-8xl font-black leading-[0.95] mb-8">
+      <h1 className="font-display text-[2.75rem] xs:text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[1] sm:leading-[0.95] mb-8 break-words [text-wrap:balance]">
         <span className="block text-foreground">NÃO É ROUPA.</span>
         <span className="block text-gradient-brand mt-2">É IDENTIDADE.</span>
       </h1>
