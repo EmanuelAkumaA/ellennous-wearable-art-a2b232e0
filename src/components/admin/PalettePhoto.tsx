@@ -10,6 +10,8 @@ interface PalettePhotoProps {
   editable?: boolean;
   onPick?: () => void;
   className?: string;
+  /** Optional 5 hex colors for the paint dots. Falls back to brand tokens when omitted. */
+  colors?: string[] | null;
 }
 
 const SIZES: Record<Size, { box: number; initials: string; dot: number }> = {
@@ -18,20 +20,25 @@ const SIZES: Record<Size, { box: number; initials: string; dot: number }> = {
   lg: { box: 144, initials: "text-3xl", dot: 7 },
 };
 
-// Organic painter's palette path (viewBox 100x100)
-// Outer shape: rounded blob with a notch on bottom-left (thumb hole inside)
 const PALETTE_PATH =
   "M 50 4 C 78 4 96 22 96 48 C 96 70 82 86 64 92 C 56 95 50 95 44 92 C 38 89 34 83 32 76 C 30 69 24 66 18 68 C 10 70 4 64 4 56 C 4 30 22 4 50 4 Z";
 
 const THUMB_HOLE = { cx: 26, cy: 60, r: 5 };
 
-// Paint dots in the top-right cluster (within the palette body)
-const DOTS = [
-  { cx: 72, cy: 22, color: "hsl(var(--primary))" },
-  { cx: 82, cy: 30, color: "hsl(var(--primary-glow))" },
-  { cx: 78, cy: 42, color: "hsl(var(--brand-red))" },
-  { cx: 66, cy: 32, color: "hsl(var(--brand-deepblue))" },
-  { cx: 88, cy: 50, color: "hsl(var(--brand-gold, 45 90% 60%))" },
+export const DEFAULT_PALETTE_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--primary-glow))",
+  "hsl(var(--brand-red))",
+  "hsl(var(--brand-deepblue))",
+  "hsl(var(--brand-gold, 45 90% 60%))",
+];
+
+const DOT_POSITIONS = [
+  { cx: 72, cy: 22 },
+  { cx: 82, cy: 30 },
+  { cx: 78, cy: 42 },
+  { cx: 66, cy: 32 },
+  { cx: 88, cy: 50 },
 ];
 
 export const PalettePhoto = ({
@@ -41,10 +48,14 @@ export const PalettePhoto = ({
   editable = false,
   onPick,
   className = "",
+  colors,
 }: PalettePhotoProps) => {
   const id = useId();
   const clipId = `palette-clip-${id}`;
   const { box, initials: initialsCls, dot } = SIZES[size];
+
+  const palette =
+    Array.isArray(colors) && colors.length === 5 ? colors : DEFAULT_PALETTE_COLORS;
 
   return (
     <div
@@ -71,13 +82,11 @@ export const PalettePhoto = ({
           {src ? (
             <image href={src} x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice" />
           ) : (
-            <>
-              <rect width="100" height="100" fill={`url(#bg-${id})`} />
-            </>
+            <rect width="100" height="100" fill={`url(#bg-${id})`} />
           )}
         </g>
 
-        {/* Outer stroke (over the clipped image for crisp edge) */}
+        {/* Outer stroke */}
         <path d={PALETTE_PATH} fill="none" stroke="hsl(var(--primary-glow) / 0.5)" strokeWidth="0.8" />
         {/* Thumb hole inner ring */}
         <circle
@@ -90,9 +99,9 @@ export const PalettePhoto = ({
         />
 
         {/* Paint dots */}
-        {DOTS.map((d, i) => (
+        {DOT_POSITIONS.map((d, i) => (
           <g key={i}>
-            <circle cx={d.cx} cy={d.cy} r={dot * 0.9} fill={d.color} opacity="0.95" />
+            <circle cx={d.cx} cy={d.cy} r={dot * 0.9} fill={palette[i]} opacity="0.95" />
             <circle cx={d.cx - dot * 0.25} cy={d.cy - dot * 0.25} r={dot * 0.25} fill="white" opacity="0.5" />
           </g>
         ))}

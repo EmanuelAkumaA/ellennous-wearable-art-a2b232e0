@@ -82,6 +82,7 @@ const SidebarBody = ({
   email,
   displayName,
   avatarUrl,
+  paletteColors,
   onSignOut,
 }: {
   active: AdminTab;
@@ -89,6 +90,7 @@ const SidebarBody = ({
   email?: string;
   displayName?: string | null;
   avatarUrl?: string | null;
+  paletteColors?: string[] | null;
   onSignOut: () => void;
 }) => {
   const fallback = displayName?.trim() || "Ellennous";
@@ -97,7 +99,7 @@ const SidebarBody = ({
   <div className="flex flex-col h-full">
     <div className="px-6 pt-8 pb-6 border-b border-border/40">
       <div className="flex items-center gap-3">
-        <PalettePhoto size="sm" src={avatarUrl ?? undefined} initials={initials} />
+        <PalettePhoto size="sm" src={avatarUrl ?? undefined} initials={initials} colors={paletteColors} />
         <div className="min-w-0">
           <p className="font-display text-lg leading-none text-gradient-light truncate" title={fallback}>{fallback}</p>
           <p className="font-accent text-[10px] tracking-[0.4em] text-primary-glow/70 uppercase mt-1">Atelier · Ellennous</p>
@@ -166,7 +168,7 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
       <div className="lg:grid lg:grid-cols-[280px_1fr] min-h-screen">
         {/* Desktop sidebar */}
         <aside className="hidden lg:block sticky top-0 h-screen border-r border-border/40 bg-card/40 backdrop-blur-xl">
-          <SidebarBody active={active} onSelect={handleSelect} email={user?.email} displayName={profile.display_name} avatarUrl={profile.avatar_url} onSignOut={signOut} />
+          <SidebarBody active={active} onSelect={handleSelect} email={user?.email} displayName={profile.display_name} avatarUrl={profile.avatar_url} paletteColors={profile.palette_colors} onSignOut={signOut} />
         </aside>
 
         <div className="flex flex-col min-w-0">
@@ -181,7 +183,7 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="p-0 w-[280px] bg-card/95 backdrop-blur-xl border-border/40">
-                  <SidebarBody active={active} onSelect={handleSelect} email={user?.email} displayName={profile.display_name} avatarUrl={profile.avatar_url} onSignOut={signOut} />
+                  <SidebarBody active={active} onSelect={handleSelect} email={user?.email} displayName={profile.display_name} avatarUrl={profile.avatar_url} paletteColors={profile.palette_colors} onSignOut={signOut} />
                 </SheetContent>
               </Sheet>
 
