@@ -133,7 +133,7 @@ const SortablePieceRow = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 flex items-center gap-4 touch-none bg-card relative ${
+      className={`p-4 flex items-stretch gap-3 touch-none bg-card relative ${
         isOver && !isDragging ? "before:content-[''] before:absolute before:left-0 before:right-0 before:-top-px before:h-0.5 before:bg-primary before:z-10" : ""
       }`}
     >
@@ -142,24 +142,45 @@ const SortablePieceRow = ({
         {...attributes}
         {...listeners}
         disabled={disabled}
-        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 disabled:opacity-30 disabled:cursor-not-allowed"
+        className="flex-shrink-0 self-center text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 disabled:opacity-30 disabled:cursor-not-allowed"
         title={disabled ? "Reordenação desativada com filtros" : "Arrastar para reordenar"}
       >
-        <GripVertical className="h-4 w-4" />
+        <GripVertical className="h-5 w-5" />
       </button>
-      <div className="w-16 h-16 bg-secondary/30 flex-shrink-0">
-        {thumbUrl ? <img src={thumbUrl} alt={piece.nome} className="w-full h-full object-cover" /> : null}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-display truncate">{piece.nome}</p>
-        <p className="text-xs text-muted-foreground">
+      <div className="flex-1 min-w-0 flex flex-col gap-2">
+        {/* Linha 1: thumb + nome */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-14 h-14 bg-secondary/30 flex-shrink-0">
+            {thumbUrl ? <img src={thumbUrl} alt={piece.nome} className="w-full h-full object-cover" /> : null}
+          </div>
+          <p className="font-display text-sm leading-tight flex-1 min-w-0 line-clamp-2">{piece.nome}</p>
+        </div>
+        {/* Linha 2: categoria + contagem */}
+        <p className="text-xs text-muted-foreground truncate">
           {piece.gallery_categories?.nome ?? "—"} · {piece.gallery_piece_images.length} img
         </p>
+        {/* Linha 3: tags + ações */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {piece.novo && (
+            <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-primary/20 text-primary-glow px-2 py-1">
+              Novo
+            </span>
+          )}
+          {piece.destaque && (
+            <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-brand-red/20 text-brand-red px-2 py-1">
+              Destaque
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-1">
+            <Button size="icon" variant="ghost" onClick={() => onEdit(piece)} title="Editar">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="ghost" onClick={() => onDelete(piece.id)} title="Excluir">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
-      {piece.destaque && <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-brand-red/20 text-brand-red px-2 py-1">Destaque</span>}
-      {piece.novo && <span className="text-[10px] font-accent tracking-[0.15em] uppercase bg-primary/20 text-primary-glow px-2 py-1">Novo</span>}
-      <Button size="icon" variant="ghost" onClick={() => onEdit(piece)}><Pencil className="h-4 w-4" /></Button>
-      <Button size="icon" variant="ghost" onClick={() => onDelete(piece.id)}><Trash2 className="h-4 w-4" /></Button>
     </div>
   );
 };
