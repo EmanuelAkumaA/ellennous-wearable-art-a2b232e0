@@ -156,7 +156,7 @@ export const Gallery = () => {
               className="group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left animate-fade-up"
             >
               <img
-                src={piece.imagem}
+                src={piece.imagens[0]}
                 alt={`${piece.nome} — ${piece.categoria}`}
                 loading="lazy"
                 width={1024}
