@@ -80,7 +80,7 @@ export const Testimonials = () => {
 
       <div className="relative max-w-7xl mx-auto">
         <div className="reveal text-center mb-16">
-          <p className="text-xs tracking-[0.4em] text-primary-glow/80 uppercase mb-6">Quem veste a Ellennous</p>
+          <p className="font-accent text-sm tracking-[0.4em] text-primary-glow/80 uppercase mb-6">Quem veste a Ellennous</p>
           <h2 className="font-display text-5xl md:text-7xl font-bold mb-6">
             Quem veste, <span className="text-gradient-brand">fala por si.</span>
           </h2>
@@ -109,7 +109,7 @@ export const Testimonials = () => {
                         className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
-                      <span className="absolute top-4 left-4 inline-block px-3 py-1 text-[10px] tracking-[0.3em] uppercase bg-primary/20 backdrop-blur border border-primary-glow/30 text-primary-glow">
+                      <span className="font-accent absolute top-4 left-4 inline-block px-3 py-1 text-xs tracking-[0.3em] uppercase bg-primary/20 backdrop-blur border border-primary-glow/30 text-primary-glow">
                         {t.category}
                       </span>
                     </div>
@@ -121,7 +121,7 @@ export const Testimonials = () => {
                       </p>
                       <div className="flex items-center justify-between pt-4 border-t border-border/40">
                         <div>
-                          <p className="font-display text-base text-foreground">{t.name}</p>
+                          <p className="font-accent text-lg text-foreground tracking-wide">{t.name}</p>
                           <p className="text-xs text-muted-foreground tracking-wider">{t.city}</p>
                         </div>
                         <p className="text-xs text-primary-glow/70 tracking-widest">{t.handle}</p>

@@ -18,7 +18,7 @@ export const ScarType = () => {
 
       <div className="relative max-w-6xl mx-auto">
         <div className="reveal text-center mb-16">
-          <p className="text-xs tracking-[0.4em] text-brand-red/80 uppercase mb-6">Método Exclusivo</p>
+          <p className="font-accent text-sm tracking-[0.4em] text-brand-red/80 uppercase mb-6">Método Exclusivo</p>
           <h2 className="font-display text-5xl md:text-7xl font-bold mb-6">
             Método <span className="text-gradient-brand">ScarType™</span>
           </h2>
@@ -37,7 +37,7 @@ export const ScarType = () => {
               <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/0 group-hover:from-primary/10 group-hover:to-brand-red/5 transition-all duration-700" />
               <div className="relative">
                 <div className="w-10 h-px bg-primary-glow mb-6" />
-                <h3 className="font-display text-xl mb-3">{t.title}</h3>
+                <h3 className="font-accent text-2xl mb-3 tracking-wide uppercase">{t.title}</h3>
                 <p className="text-muted-foreground leading-relaxed text-sm">{t.text}</p>
               </div>
             </div>

@@ -14,7 +14,7 @@ export const Footer = () => (
           loading="lazy"
           className="h-16 sm:h-20 md:h-24 w-auto object-contain text-center"
         />
-        <p className="text-[11px] sm:text-xs text-muted-foreground tracking-[0.25em] uppercase max-w-xs">
+        <p className="font-accent text-xs sm:text-sm text-muted-foreground tracking-[0.3em] uppercase max-w-xs">
           Arte vestível · Peças únicas feitas à mão
         </p>
       </div>
@@ -51,7 +51,7 @@ export const Footer = () => (
         rel="noopener noreferrer"
         className="tracking-[0.2em] uppercase hover:text-primary-glow transition-colors"
       >
-        Criado por <span className="font-semibold text-foreground/80">Kuma Tech</span>
+        Criado por <span className="font-accent tracking-wider text-foreground/80">Kuma Tech</span>
       </a>
     </div>
   </footer>

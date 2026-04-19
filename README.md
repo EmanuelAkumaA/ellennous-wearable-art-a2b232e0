@@ -7,7 +7,7 @@ Site institucional premium da marca **Ellennous**: peças únicas feitas à mão
 - React 18 + Vite + TypeScript
 - Tailwind CSS + design system semântico (HSL tokens) — **dark mode only**
 - shadcn/ui · Radix · Embla Carousel · Lucide
-- Tipografia: **Butler** (oficial) com fallback em **Cormorant Garamond** + **EB Garamond** (texto)
+- Tipografia: **Playfair Display** (títulos H1/H2) · **Bebas Neue** (destaques CAPS, H3, CTAs) · **Inter** (corpo, UI)
 
 ## Versionamento
 

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -9,36 +9,7 @@
    Dark mode only. All colors HSL.
    ============================================================ */
 
-/* Butler (oficial da marca) — arquivos em /public/fonts.
-   Enquanto não forem subidos, o navegador usa o fallback Cormorant. */
-@font-face {
-  font-family: 'Butler';
-  src: url('/fonts/Butler-Light.woff2') format('woff2');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Butler';
-  src: url('/fonts/Butler-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Butler';
-  src: url('/fonts/Butler-Medium.woff2') format('woff2');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Butler';
-  src: url('/fonts/Butler-Bold.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
+/* Tipografia oficial — Playfair Display (títulos), Bebas Neue (destaques CAPS), Inter (corpo/UI). */
 
 @layer base {
   :root {
@@ -114,17 +85,24 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'EB Garamond', Garamond, 'Times New Roman', serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
     background-image:
       radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.12), transparent),
       radial-gradient(ellipse 60% 50% at 90% 80%, hsl(var(--accent-red) / 0.06), transparent);
     background-attachment: fixed;
   }
 
-  h1, h2, h3, h4 {
-    font-family: 'Butler', 'Cormorant Garamond', Garamond, serif;
-    letter-spacing: 0.01em;
-    font-weight: 600;
+  h1, h2 {
+    font-family: 'Playfair Display', Georgia, serif;
+    letter-spacing: 0.005em;
+    font-weight: 700;
+  }
+
+  h3, h4 {
+    font-family: 'Bebas Neue', Impact, sans-serif;
+    letter-spacing: 0.05em;
+    font-weight: 400;
   }
 
   ::selection {
@@ -146,11 +124,16 @@
 
 @layer utilities {
   .font-display {
-    font-family: 'Butler', 'Cormorant Garamond', Garamond, serif;
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .font-accent {
+    font-family: 'Bebas Neue', Impact, sans-serif;
+    letter-spacing: 0.05em;
   }
 
   .font-body {
-    font-family: 'EB Garamond', Garamond, serif;
+    font-family: 'Inter', system-ui, sans-serif;
   }
 
   .text-gradient-light {
