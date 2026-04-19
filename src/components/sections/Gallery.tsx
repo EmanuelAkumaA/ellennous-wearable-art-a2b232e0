@@ -1,6 +1,14 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Autoplay from "embla-carousel-autoplay";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { buildWhatsAppLink } from "@/components/FloatingWhatsApp";
 import { Dragon } from "@/components/Dragon";
@@ -18,7 +26,7 @@ interface Piece {
   id: string;
   nome: string;
   categoria: Exclude<Category, "Todas">;
-  imagem: string;
+  imagens: string[];
   descricao: string;
   conceito: string;
   tempo: string;
@@ -30,7 +38,7 @@ const PIECES: Piece[] = [
     id: "1",
     nome: "Sombra do Monarca",
     categoria: "Anime / Geek",
-    imagem: animeImg,
+    imagens: [animeImg],
     descricao: "Jaqueta de couro pintada à mão com cena inspirada em fantasia sombria.",
     conceito: "Uma homenagem ao herói que carrega o peso da escuridão. Roxo profundo e respingos de sangue como narrativa visual.",
     tempo: "38 dias",
@@ -40,7 +48,7 @@ const PIECES: Piece[] = [
     id: "2",
     nome: "Cavaleiro Violeta",
     categoria: "Anime / Geek",
-    imagem: anime2Img,
+    imagens: [anime2Img],
     descricao: "Bomber black com armadura roxa pintada e olhos vermelhos vivos.",
     conceito: "Presença imponente. A figura do guerreiro como símbolo de poder silencioso.",
     tempo: "32 dias",
@@ -49,7 +57,7 @@ const PIECES: Piece[] = [
     id: "3",
     nome: "Retrato em Carmim",
     categoria: "Realismo",
-    imagem: realismoImg,
+    imagens: [realismoImg],
     descricao: "Jaqueta jeans com retrato hiperrealista em tons de vinho.",
     conceito: "O olhar que não pede licença. Pintura a óleo direta no tecido.",
     tempo: "40 dias",
@@ -58,7 +66,7 @@ const PIECES: Piece[] = [
     id: "4",
     nome: "Tigre Soberano",
     categoria: "Realismo",
-    imagem: realismo2Img,
+    imagens: [realismo2Img],
     descricao: "Couro vinho com tigre realista pintado à mão.",
     conceito: "Força e elegância selvagem. Cada pelo desenhado com pincel fino.",
     tempo: "35 dias",
@@ -68,7 +76,7 @@ const PIECES: Piece[] = [
     id: "5",
     nome: "Jardim Noturno",
     categoria: "Floral",
-    imagem: floralImg,
+    imagens: [floralImg],
     descricao: "Bomber preto com rosas profundas em roxo e vermelho.",
     conceito: "A beleza que floresce no escuro. Botânica gótica em camadas de tinta.",
     tempo: "30 dias",
@@ -77,7 +85,7 @@ const PIECES: Piece[] = [
     id: "6",
     nome: "Costura Dilacerada",
     categoria: "ScarType",
-    imagem: scartypeImg,
+    imagens: [scartypeImg],
     descricao: "Peça desconstruída com fusão de tecidos vinho e azul elétrico.",
     conceito: "O método ScarType™ em sua expressão mais pura. Cada cicatriz é um traço autoral.",
     tempo: "40 dias",
@@ -87,7 +95,7 @@ const PIECES: Piece[] = [
     id: "7",
     nome: "Dragão Imperial",
     categoria: "Exclusivas",
-    imagem: exclusivaImg,
+    imagens: [exclusivaImg],
     descricao: "Couro metálico com dragão oriental em roxo e carmim.",
     conceito: "Peça única de status. Numerada, registrada, irrepetível.",
     tempo: "45 dias",
