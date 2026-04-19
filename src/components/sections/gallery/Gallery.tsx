@@ -108,12 +108,16 @@ export const Gallery = () => {
 
         {/* Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {visible.map((piece, idx) => (
+          {visible.map((piece, idx) => {
+            const isNew = idx >= animateFromRef.current;
+            const delay = isNew ? (idx - animateFromRef.current) * 80 : 0;
+            return (
             <button
               key={piece.id}
               ref={idx === 4 ? fifthItemRef : undefined}
               onClick={() => setSelected(piece)}
-              className="group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left animate-fade-up"
+              style={isNew ? { animationDelay: `${delay}ms` } : undefined}
+              className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
             >
               <img
                 src={piece.imagens[0]}
@@ -146,7 +150,8 @@ export const Gallery = () => {
                 </p>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {(hasMore || canClose) && (
