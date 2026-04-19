@@ -71,7 +71,7 @@ const SortableImage = ({
   onRemove: (img: Image) => void;
   onPromote: (img: Image) => void;
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: img.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: img.id });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -81,7 +81,9 @@ const SortableImage = ({
     <div
       ref={setNodeRef}
       style={style}
-      className="relative aspect-square bg-secondary/30 group touch-none"
+      className={`relative aspect-square bg-secondary/30 group touch-none ${
+        isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+      }`}
     >
       <img src={img.url} alt="" className="w-full h-full object-cover pointer-events-none" />
       <button
@@ -110,12 +112,17 @@ const SortablePieceRow = ({
   piece,
   onEdit,
   onDelete,
+  disabled,
 }: {
   piece: Piece;
   onEdit: (p: Piece) => void;
   onDelete: (id: string) => void;
+  disabled?: boolean;
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: piece.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
+    id: piece.id,
+    disabled,
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -123,13 +130,20 @@ const SortablePieceRow = ({
   };
   const thumbUrl = piece.cover_url ?? piece.gallery_piece_images[0]?.url;
   return (
-    <div ref={setNodeRef} style={style} className="p-4 flex items-center gap-4 touch-none bg-card">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 flex items-center gap-4 touch-none bg-card relative ${
+        isOver && !isDragging ? "before:content-[''] before:absolute before:left-0 before:right-0 before:-top-px before:h-0.5 before:bg-primary before:z-10" : ""
+      }`}
+    >
       <button
         type="button"
         {...attributes}
         {...listeners}
-        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1"
-        title="Arrastar para reordenar"
+        disabled={disabled}
+        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 disabled:opacity-30 disabled:cursor-not-allowed"
+        title={disabled ? "Reordenação desativada com filtros" : "Arrastar para reordenar"}
       >
         <GripVertical className="h-4 w-4" />
       </button>
