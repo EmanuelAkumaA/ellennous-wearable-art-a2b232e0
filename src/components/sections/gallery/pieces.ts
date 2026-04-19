@@ -21,6 +21,7 @@ export interface Piece {
   conceito: string;
   tempo: string;
   destaque?: boolean;
+  novo?: boolean;
 }
 
 export const CATEGORIES: Category[] = [
