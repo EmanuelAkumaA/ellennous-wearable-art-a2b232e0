@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useReveal } from "@/hooks/use-reveal";
@@ -22,6 +22,8 @@ export const Gallery = () => {
   const isMobile = useIsMobile();
   const ref = useReveal();
   const fifthItemRef = useRef<HTMLButtonElement | null>(null);
+  const previousCountRef = useRef(MOBILE_STEP);
+  const animateFromRef = useRef(0);
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
   const sorted = [...filtered].sort((a, b) => rankPiece(a) - rankPiece(b));
@@ -31,19 +33,28 @@ export const Gallery = () => {
 
   const handleFilter = (cat: Category) => {
     setFilter(cat);
+    animateFromRef.current = 0;
+    previousCountRef.current = MOBILE_STEP;
     setVisibleCount(MOBILE_STEP);
   };
 
   const handleShowMore = () => {
+    animateFromRef.current = visibleCount;
     setVisibleCount((c) => Math.min(c + MOBILE_STEP, sorted.length));
   };
 
   const handleClose = () => {
+    animateFromRef.current = 0;
+    previousCountRef.current = MOBILE_STEP;
     setVisibleCount(MOBILE_STEP);
     requestAnimationFrame(() => {
       fifthItemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   };
+
+  useEffect(() => {
+    previousCountRef.current = visibleCount;
+  }, [visibleCount]);
 
   const closeZoom = () => setZoomedImages(null);
   const prevZoom = () => {
@@ -97,12 +108,16 @@ export const Gallery = () => {
 
         {/* Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {visible.map((piece, idx) => (
+          {visible.map((piece, idx) => {
+            const isNew = idx >= animateFromRef.current;
+            const delay = isNew ? (idx - animateFromRef.current) * 80 : 0;
+            return (
             <button
               key={piece.id}
               ref={idx === 4 ? fifthItemRef : undefined}
               onClick={() => setSelected(piece)}
-              className="group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left animate-fade-up"
+              style={isNew ? { animationDelay: `${delay}ms` } : undefined}
+              className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
             >
               <img
                 src={piece.imagens[0]}
@@ -135,7 +150,8 @@ export const Gallery = () => {
                 </p>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {(hasMore || canClose) && (
