@@ -1,42 +1,86 @@
 
 
-## Plano — Progress bar, swipe no zoom, sem zoom no mobile
+## Plano — Pausa autoplay + refactor + Supabase
 
-### 1. Barra de progresso fina no carrossel do modal (`PieceCarousel`)
+### 1. Pausa do autoplay em interação manual (`PieceCarousel`)
 
-- Estado `progress` (0-100) atualizado via `requestAnimationFrame` enquanto o autoplay roda.
-- Usar `autoplay.current.timeUntilNext()` (API do `embla-carousel-autoplay`) a cada frame para calcular `progress = 100 - (timeUntilNext / 4000) * 100`.
-- Resetar `progress` para 0 no evento `select` do Embla (transição de slide).
-- Pausar a animação quando autoplay está parado (hover desktop) — checar `autoplay.current.isPlaying()`.
-- UI: `<div>` absoluto no topo do carrossel, `h-0.5 w-full bg-white/10`, com filho `bg-primary-glow` cujo `width: ${progress}%` e `transition-none` (movimento contínuo via rAF).
-- Renderizar apenas quando `images.length > 1`.
+**Comportamento desejado:** clicar em dot, seta prev/next, ou tocar/clicar na imagem deve pausar autoplay + progress bar por ~5s, depois retomar.
 
-### 2. Swipe horizontal no overlay de zoom + remoção das setas
+**Implementação:**
+- Adicionar `useRef` para `pauseTimeoutRef: number | null`.
+- Função `pauseAutoplay()`:
+  - Chama `autoplay.current.stop()`.
+  - Limpa timeout anterior se existir.
+  - Seta novo timeout de 5000ms que chama `autoplay.current.play()` + reset do `progress` indicador.
+- Disparar `pauseAutoplay()` em:
+  - `api.on("pointerDown", ...)` — captura swipe/drag no carrossel (Embla nativo).
+  - `onClick` dos dots (antes do `api.scrollTo(i)`).
+  - Wrapper nos botões `CarouselPrevious`/`CarouselNext` — interceptar via `onClickCapture` no container, OU usar `api.on("pointerDown")` que já cobre.
+- Loop do progress bar via `requestAnimationFrame` já checa `ap.isPlaying?.()` → quando pausado, `progress` para de avançar; ao retomar, volta a animar do ponto onde está (na verdade reinicia do 0 porque o `select` event não dispara — adicionar reset manual de `progress` para 0 ao retomar).
+- Cleanup: limpar `pauseTimeoutRef` no unmount.
 
-- Detectar mobile via hook `useIsMobile()` (já existe em `src/hooks/use-mobile.tsx`).
-- Adicionar handlers `onTouchStart` / `onTouchEnd` no container do overlay:
-  - Guardar `touchStartX` em ref.
-  - No `touchEnd`, comparar `deltaX`; se `|deltaX| > 50px` → `nextZoom()` (swipe esquerda) ou `prevZoom()` (swipe direita).
-- **Remover os botões `ChevronLeft`/`ChevronRight`** do overlay completamente (em todos os tamanhos, conforme pedido).
-- Manter o **contador "N / Total"** discreto no rodapé (ainda útil como indicador).
-- Manter navegação por teclado (setas) no desktop — já existe.
+### 2. Refactor de `Gallery.tsx`
 
-### 3. Remover zoom no mobile
+**Estrutura nova:**
 
-- Em `PieceCarousel`, **não chamar `onZoom`** quando `useIsMobile()` for `true`:
-  - `onClick={isMobile ? undefined : () => onZoom?.(images, i)}`
-  - Trocar classe `cursor-zoom-in` por `cursor-default` no mobile (ou condicional).
-- Aplicar tanto no caso `images.length <= 1` quanto no carrossel.
-- O overlay de zoom continua existindo (caso desktop dispare), mas no mobile nunca abre.
+```text
+src/components/sections/gallery/
+  ├── Gallery.tsx          (componente principal, orquestra estado + grid + filtros + modal)
+  ├── PieceCarousel.tsx    (carrossel autoplay + dots + progress bar)
+  ├── ZoomOverlay.tsx      (overlay fullscreen + swipe + keyboard)
+  ├── pieces.ts            (constante PIECES + tipos Piece, Category, CATEGORIES)
+  └── index.ts             (re-export do Gallery default)
+```
+
+- `src/pages/Index.tsx` continua importando `Gallery` de `@/components/sections/Gallery` — manter um `Gallery.tsx` no path antigo OU atualizar import. Optar por **atualizar import** em `Index.tsx` para `@/components/sections/gallery` (cleaner).
+- Tipos `Piece`, `Category` exportados de `pieces.ts`.
+- `PieceCarousel` e `ZoomOverlay` recebem props tipadas; sem mudança de comportamento.
+
+### 3. Conexão Supabase (Lovable Cloud)
+
+**Objetivo do usuário:** "melhor controle das imagens e armazenamento assim como organização".
+
+**Escopo proposto (mínimo viável agora):**
+- Habilitar **Lovable Cloud** no projeto (Supabase gerenciado, sem conta externa).
+- Criar tabela `gallery_pieces` espelhando o tipo `Piece`:
+  - `id uuid pk default gen_random_uuid()`
+  - `nome text not null`
+  - `categoria text not null` (enum check: 'Anime / Geek' | 'Realismo' | 'Floral' | 'ScarType' | 'Exclusivas')
+  - `descricao text`, `conceito text`, `tempo text`
+  - `destaque boolean default false`
+  - `ordem int default 0` (para controlar ordem de exibição)
+  - `created_at timestamptz default now()`
+- Criar tabela `gallery_images`:
+  - `id uuid pk`, `piece_id uuid fk → gallery_pieces(id) on delete cascade`
+  - `storage_path text not null`, `ordem int default 0`, `alt text`
+- Criar bucket público `gallery` no Storage para hospedar as imagens.
+- **RLS:** leitura pública (`select` para `anon`); escrita restrita (sem políticas de insert/update/delete por enquanto — só admin via Supabase Studio).
+- **Migrar imagens atuais:** subir os arquivos `src/assets/gallery-*.jpg` para o bucket `gallery/` e seedar as duas tabelas com os dados atuais de `PIECES`.
+- **Frontend:** trocar `pieces.ts` constante por hook `useGalleryPieces()` que faz `supabase.from('gallery_pieces').select('*, gallery_images(*)').order('ordem')` e mapeia para o tipo `Piece` (URLs públicas via `supabase.storage.from('gallery').getPublicUrl(path)`).
+- Loading state simples no grid (skeleton ou shimmer com a mesma paleta).
+
+**O que NÃO entra agora (escopo futuro, posso fazer depois se aprovar):**
+- Painel admin no site para CRUD das peças (precisa de auth).
+- Upload de imagens via UI.
+- Reordenação drag-and-drop.
 
 ### Arquivos afetados
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/sections/Gallery.tsx` | progress bar + swipe handlers + remover botões prev/next + bloquear zoom no mobile via `useIsMobile` |
+| `src/components/sections/gallery/Gallery.tsx` | novo (refactor) |
+| `src/components/sections/gallery/PieceCarousel.tsx` | novo + lógica de pausa |
+| `src/components/sections/gallery/ZoomOverlay.tsx` | novo |
+| `src/components/sections/gallery/pieces.ts` | novo (tipos + categorias; dados serão buscados do DB) |
+| `src/components/sections/gallery/useGalleryPieces.ts` | novo (hook de fetch) |
+| `src/components/sections/gallery/index.ts` | novo (re-export) |
+| `src/components/sections/Gallery.tsx` | remover |
+| `src/pages/Index.tsx` | atualizar import |
+| Migration Supabase | criar tabelas + bucket + RLS + seed |
 
 ### Pontos de atenção
-- Sem mudanças em paleta, tipografia, layout ou outros componentes.
-- Contador "1 / 3" mantido no overlay como referência visual.
-- Progress bar reseta visualmente a cada novo slide; `transition-none` evita "voltar suave" indesejado.
+- Lovable Cloud será habilitado automaticamente ao aprovar — sem conta externa.
+- Imagens migradas mantêm exatamente os mesmos arquivos (mesma qualidade visual).
+- Pausa do autoplay = 5s (ajustável).
+- Refactor não muda nada visualmente, só organiza o código.
 
