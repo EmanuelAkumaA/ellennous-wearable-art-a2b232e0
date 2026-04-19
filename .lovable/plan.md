@@ -1,80 +1,64 @@
 
 
-## Plano — Perfil com avatar em paleta de pintor + nome customizado
+## Plano — Remover foto, paleta com cores customizáveis e sidebar reativa
 
-### Conceito visual
-Substituir o avatar circular na sidebar e na aba Conta por uma **paleta de pintor estilizada** (forma orgânica com furo lateral para o polegar + 5 "tintas" coloridas no canto). Quando há foto, ela preenche o corpo da paleta; quando não, mostra iniciais. As tintas usam cores da identidade (purple, primary-glow, brand-red, ice blue, gold).
+### 1. Sidebar dinâmica (bug fix)
+**Problema**: `useAdminProfile` é instanciado 2x (em `AdminShell` e `UserSettings`) — cada um mantém estado próprio. Salvar em UserSettings só atualiza a instância local; sidebar continua com dados velhos até reload.
 
-```text
-       ╭─────╮
-      │ ●●●  │  ← tintas (dots coloridos)
-   ╭──╯      ╰──╮
-  │   [foto]    │  ← paleta (clip-path orgânico)
-   ╲    ⊙    ╱   ← furo do polegar
-    ╲______╱
+**Solução**: transformar o hook num **store compartilhado** (singleton em módulo + `useSyncExternalStore`). Toda chamada a `refresh()` propaga pra todos os consumidores. Sem Context, sem prop drilling.
+
+```ts
+// useAdminProfile.ts vira:
+let state: AdminProfile = EMPTY;
+const listeners = new Set<() => void>();
+const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
+const fetchProfile = async (userId) => { /* ...select... */ state = data; listeners.forEach(l => l()); };
+export const useAdminProfile = () => {
+  const profile = useSyncExternalStore(subscribe, () => state);
+  // useEffect dispara fetchProfile(user.id) quando user muda
+  return { profile, refresh: () => fetchProfile(user.id) };
+};
 ```
 
-### 1. Backend — tabela `admin_profile`
-Nova migration: tabela 1-pra-1 com `auth.users` para guardar nome de exibição e avatar.
-```sql
-create table public.admin_profile (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  display_name text,
-  avatar_url text,
-  avatar_storage_path text,
-  updated_at timestamptz default now()
-);
-alter table public.admin_profile enable row level security;
--- SELECT: qualquer admin lê (precisamos exibir na sidebar)
-create policy "admin reads profile" on public.admin_profile
-  for select to authenticated using (has_role(auth.uid(), 'admin'));
--- UPDATE/INSERT: só o próprio dono
-create policy "owner upserts profile" on public.admin_profile
-  for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
-```
-Storage: reusar bucket `gallery` numa pasta `admin-avatars/{user_id}.jpg` (já é público — perfeito pra exibir sem signed URL).
+Resultado: ao salvar nome/foto/remover foto na aba Conta, a sidebar atualiza instantaneamente sem reload.
 
-### 2. Hook compartilhado `useAdminProfile`
-`src/hooks/useAdminProfile.ts` — busca/cacheia `display_name` e `avatar_url` do usuário logado. Expõe `profile`, `loading`, `refresh()`. Usado pela sidebar e pela aba Conta.
+### 2. Botão "Remover foto" (UserSettings)
+Ao lado da paleta (abaixo do label "Paleta · clique para trocar"), botão pequeno `ghost` com ícone trash, visível **só quando** `profile.avatar_url` existe.
+Ação: `supabase.storage.remove([avatar_storage_path])` + `upsertProfile({ avatar_url: null, avatar_storage_path: null })` + `refresh()` → volta ao estado de iniciais.
 
-### 3. Componente `PalettePhoto`
-`src/components/admin/PalettePhoto.tsx` — SVG da paleta com:
-- `clipPath` orgânico (forma de paleta com furo) aplicado na imagem/iniciais.
-- 5 círculos de "tinta" no topo-direito com cores `--primary`, `--primary-glow`, `--brand-red`, `--brand-deepblue`, `--brand-gold`.
-- Props: `src?`, `initials`, `size` (sm 40px / md 64px / lg 120px), `editable?` (mostra overlay "trocar foto" no hover quando true).
-- Glow sutil ao redor com `drop-shadow`.
+### 3. Cores customizáveis das 5 tintas
 
-### 4. Sidebar (`AdminShell.tsx`)
-- Topo da sidebar: trocar `<img className="rounded-full">` pela `<PalettePhoto size="sm" src={profile.avatar_url} initials={...} />`.
-- Texto ao lado: linha 1 = `profile.display_name || "Ellennous"`; linha 2 = `ATELIER · ELLENNOUS` (mantém estilo accent uppercase).
-- No drawer mobile, mesmo tratamento.
+**Schema (migration)**: adicionar coluna `palette_colors jsonb` na `admin_profile` (default `null`). Armazena array de 5 strings hex: `["#8A2AE3", "#B47CFF", "#E11D48", "#1E3A8A", "#F5C518"]`.
 
-### 5. Aba Conta (`UserSettings.tsx`)
-Reorganizar o card "Conta" no canto superior esquerdo:
-- **Esquerda**: `PalettePhoto size="lg" editable` — clique abre input file. Upload pro Supabase Storage → atualiza `admin_profile.avatar_url` → refresh do hook (sidebar atualiza junto).
-- **Direita**: Form com:
-  - Input "Nome de exibição" (preenche `display_name`).
-  - Email (readonly, mostrando `user.email`).
-  - Botão "Salvar perfil" com `bg-gradient-purple-wine`.
-- Card de senha permanece abaixo, sem mudanças.
+**Tipo no hook**: estende `AdminProfile` com `palette_colors: string[] | null`.
 
-### 6. Login (`Login.tsx`)
-Sem alteração — login não tem perfil ainda.
+**`PalettePhoto`**: aceita prop `colors?: string[]`. Se vier, usa essas 5 cores; senão usa o fallback atual (`hsl(var(--primary))` etc.).
+
+**UI em UserSettings**: novo bloco no card de Conta (abaixo do email, antes do botão Salvar) — **"Cores da paleta"**:
+- Grid 5 colunas, cada slot com:
+  - `<input type="color" />` estilizado como bolinha (igual aos dots da paleta) com a cor atual.
+  - Label minúsculo: "Tinta 1", "Tinta 2"…
+- Botão "Restaurar padrão" (`ghost` pequeno) ao lado → seta `palette_colors = null`.
+- Mudanças são locais (state) até clicar **Salvar perfil**, que envia `palette_colors` no upsert junto com display_name.
+- A `PalettePhoto` na própria aba Conta recebe as cores em tempo real (preview) usando o state local, não o `profile`.
+
+**Sidebar**: também passa `colors={profile.palette_colors}` pra `PalettePhoto`, então as cores customizadas aparecem em todo lugar.
 
 ### Arquivos afetados
 | Arquivo | Mudança |
 |---|---|
-| nova migration | tabela `admin_profile` + RLS |
-| `src/components/admin/PalettePhoto.tsx` | NOVO — SVG paleta |
-| `src/hooks/useAdminProfile.ts` | NOVO — fetch/update perfil |
-| `src/components/admin/AdminShell.tsx` | usar PalettePhoto + display_name |
-| `src/pages/admin/UserSettings.tsx` | upload avatar + form de nome |
+| nova migration | `alter table admin_profile add column palette_colors jsonb` |
+| `src/hooks/useAdminProfile.ts` | Reescrever como store compartilhado + incluir `palette_colors` |
+| `src/components/admin/PalettePhoto.tsx` | Aceitar prop `colors?: string[]` |
+| `src/components/admin/AdminShell.tsx` | Passar `colors={profile.palette_colors}` |
+| `src/pages/admin/UserSettings.tsx` | Botão remover foto + bloco color pickers + state local + envio no upsert |
 
 ### Validação
-1. Aba Conta → upload de foto → paleta exibe a foto (com furo do polegar e tintas no canto).
-2. Preencher "Nome de exibição" → salvar → sidebar atualiza imediatamente, mostrando nome novo no lugar de "Ellennous".
-3. Segunda linha continua "ATELIER · ELLENNOUS".
-4. Sem foto → paleta exibe iniciais.
-5. Recarregar `/admin` → perfil persiste.
+1. Aba Conta → preencher nome → salvar → sidebar atualiza **sem reload**.
+2. Upload foto → sidebar mostra a foto na hora.
+3. Botão "Remover foto" aparece → clica → paleta volta a mostrar iniciais (Conta + sidebar).
+4. Mudar 1 das 5 cores no color picker → preview na paleta da Conta atualiza ao vivo.
+5. Salvar → sidebar reflete as novas cores.
+6. "Restaurar padrão" → volta às cores originais da marca.
+7. Reload `/admin` → tudo persiste.
 
