@@ -14,16 +14,154 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      gallery_categories: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gallery_piece_images: {
+        Row: {
+          created_at: string
+          id: string
+          ordem: number
+          piece_id: string
+          storage_path: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ordem?: number
+          piece_id: string
+          storage_path?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ordem?: number
+          piece_id?: string
+          storage_path?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_piece_images_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_pieces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_pieces: {
+        Row: {
+          categoria_id: string
+          conceito: string
+          created_at: string
+          descricao: string
+          destaque: boolean
+          historia: string
+          id: string
+          nome: string
+          novo: boolean
+          ordem: number
+          tempo: string
+          updated_at: string
+        }
+        Insert: {
+          categoria_id: string
+          conceito?: string
+          created_at?: string
+          descricao?: string
+          destaque?: boolean
+          historia?: string
+          id?: string
+          nome: string
+          novo?: boolean
+          ordem?: number
+          tempo?: string
+          updated_at?: string
+        }
+        Update: {
+          categoria_id?: string
+          conceito?: string
+          created_at?: string
+          descricao?: string
+          destaque?: boolean
+          historia?: string
+          id?: string
+          nome?: string
+          novo?: boolean
+          ordem?: number
+          tempo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_pieces_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +288,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
