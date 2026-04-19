@@ -349,18 +349,22 @@ interface PieceCarouselProps {
 }
 
 const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
+  const isMobile = useIsMobile();
+  const AUTOPLAY_DELAY = 4000;
   const autoplay = useRef(
-    Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true, playOnInit: true })
+    Autoplay({ delay: AUTOPLAY_DELAY, stopOnInteraction: false, stopOnMouseEnter: true, playOnInit: true })
   );
   const [api, setApi] = useState<CarouselApi>();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [snapCount, setSnapCount] = useState(0);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!api) return;
     const update = () => {
       setSelectedIndex(api.selectedScrollSnap());
       setSnapCount(api.scrollSnapList().length);
+      setProgress(0);
     };
     update();
     api.on("select", update);
@@ -380,14 +384,42 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     };
   }, [api]);
 
+  // Animate progress bar in sync with autoplay
+  useEffect(() => {
+    if (!api || images.length <= 1) return;
+    let raf = 0;
+    const tick = () => {
+      const ap = autoplay.current as unknown as {
+        isPlaying?: () => boolean;
+        timeUntilNext?: () => number | null;
+      };
+      const playing = ap.isPlaying?.() ?? false;
+      const remaining = ap.timeUntilNext?.();
+      if (playing && typeof remaining === "number" && remaining >= 0) {
+        const pct = Math.max(0, Math.min(100, 100 - (remaining / AUTOPLAY_DELAY) * 100));
+        setProgress(pct);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [api, images.length]);
+
+  const canZoom = !isMobile;
+  const cursorClass = canZoom ? "cursor-zoom-in" : "cursor-default";
+  const handleImageClick = (i: number) => {
+    if (!canZoom) return;
+    onZoom?.(images, i);
+  };
+
   if (images.length <= 1) {
     return (
       <img
         src={images[0]}
         alt={alt}
         loading="lazy"
-        onClick={() => onZoom?.(images, 0)}
-        className="w-full h-full object-cover cursor-zoom-in"
+        onClick={() => handleImageClick(0)}
+        className={`w-full h-full object-cover ${cursorClass}`}
       />
     );
   }
@@ -406,14 +438,22 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
               src={src}
               alt={`${alt} — imagem ${i + 1}`}
               loading="lazy"
-              onClick={() => onZoom?.(images, i)}
-              className="w-full h-full object-cover aspect-square md:aspect-auto cursor-zoom-in"
+              onClick={() => handleImageClick(i)}
+              className={`w-full h-full object-cover aspect-square md:aspect-auto ${cursorClass}`}
             />
           </CarouselItem>
         ))}
       </CarouselContent>
       <CarouselPrevious className="left-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
       <CarouselNext className="right-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
+
+      {/* Progress bar */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 z-10">
+        <div
+          className="h-full bg-primary-glow transition-none"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
 
       {/* Dots */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/40 backdrop-blur-sm">
