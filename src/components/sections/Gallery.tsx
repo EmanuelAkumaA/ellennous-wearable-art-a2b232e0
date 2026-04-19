@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { X } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -266,70 +267,78 @@ export const Gallery = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Zoom overlay */}
       {zoomedImages && (
-        <div
-          onClick={closeZoom}
-          className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex items-center justify-center p-6 md:p-12 cursor-zoom-out animate-fade-in"
-          role="dialog"
-          aria-label="Imagem ampliada"
-        >
-          <img
-            src={zoomedImages[zoomedIndex]}
-            alt={`Visualização ampliada ${zoomedIndex + 1} de ${zoomedImages.length}`}
-            onClick={(e) => e.stopPropagation()}
-            className="max-w-full max-h-full object-contain shadow-2xl border border-primary/20"
-          />
-
-          {/* Prev/Next buttons */}
-          {zoomedImages.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  prevZoom();
-                }}
-                aria-label="Imagem anterior"
-                className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-[110] h-12 w-12 rounded-full bg-background/40 backdrop-blur-sm border border-border/40 hover:border-primary-glow/60 text-foreground/80 hover:text-primary-glow transition-all flex items-center justify-center"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  nextZoom();
-                }}
-                aria-label="Próxima imagem"
-                className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-[110] h-12 w-12 rounded-full bg-background/40 backdrop-blur-sm border border-border/40 hover:border-primary-glow/60 text-foreground/80 hover:text-primary-glow transition-all flex items-center justify-center"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-
-              {/* Counter */}
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] font-accent text-xs tracking-[0.3em] uppercase text-foreground/70 bg-background/40 backdrop-blur-sm px-3 py-1.5 border border-border/40">
-                {zoomedIndex + 1} / {zoomedImages.length}
-              </div>
-            </>
-          )}
-
-          {/* Close button */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeZoom();
-            }}
-            aria-label="Fechar visualização"
-            className="absolute top-4 right-4 md:top-6 md:right-6 z-[110] min-h-[44px] min-w-[44px] flex items-center justify-center gap-2 font-accent text-xs tracking-[0.3em] uppercase text-foreground/80 hover:text-primary-glow transition-colors px-4 py-2 border border-border/40 hover:border-primary-glow/60 bg-background/60 backdrop-blur-sm"
-          >
-            <span className="hidden sm:inline">Fechar</span>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <ZoomOverlay
+          images={zoomedImages}
+          index={zoomedIndex}
+          onClose={closeZoom}
+          onPrev={prevZoom}
+          onNext={nextZoom}
+        />
       )}
     </section>
+  );
+};
+
+interface ZoomOverlayProps {
+  images: string[];
+  index: number;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+}
+
+const ZoomOverlay = ({ images, index, onClose, onPrev, onNext }: ZoomOverlayProps) => {
+  const touchStartX = useRef<number | null>(null);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current == null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(deltaX) < 50 || images.length <= 1) return;
+    if (deltaX < 0) onNext();
+    else onPrev();
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex items-center justify-center p-6 md:p-12 cursor-zoom-out animate-fade-in"
+      role="dialog"
+      aria-label="Imagem ampliada"
+    >
+      <img
+        src={images[index]}
+        alt={`Visualização ampliada ${index + 1} de ${images.length}`}
+        onClick={(e) => e.stopPropagation()}
+        className="max-w-full max-h-full object-contain shadow-2xl border border-primary/20 select-none"
+        draggable={false}
+      />
+
+      {images.length > 1 && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] font-accent text-xs tracking-[0.3em] uppercase text-foreground/70 bg-background/40 backdrop-blur-sm px-3 py-1.5 border border-border/40">
+          {index + 1} / {images.length}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        aria-label="Fechar visualização"
+        className="absolute top-4 right-4 md:top-6 md:right-6 z-[110] min-h-[44px] min-w-[44px] flex items-center justify-center gap-2 font-accent text-xs tracking-[0.3em] uppercase text-foreground/80 hover:text-primary-glow transition-colors px-4 py-2 border border-border/40 hover:border-primary-glow/60 bg-background/60 backdrop-blur-sm"
+      >
+        <span className="hidden sm:inline">Fechar</span>
+        <X className="h-4 w-4" />
+      </button>
+    </div>
   );
 };
 
@@ -340,18 +349,22 @@ interface PieceCarouselProps {
 }
 
 const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
+  const isMobile = useIsMobile();
+  const AUTOPLAY_DELAY = 4000;
   const autoplay = useRef(
-    Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true, playOnInit: true })
+    Autoplay({ delay: AUTOPLAY_DELAY, stopOnInteraction: false, stopOnMouseEnter: true, playOnInit: true })
   );
   const [api, setApi] = useState<CarouselApi>();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [snapCount, setSnapCount] = useState(0);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!api) return;
     const update = () => {
       setSelectedIndex(api.selectedScrollSnap());
       setSnapCount(api.scrollSnapList().length);
+      setProgress(0);
     };
     update();
     api.on("select", update);
@@ -371,14 +384,42 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     };
   }, [api]);
 
+  // Animate progress bar in sync with autoplay
+  useEffect(() => {
+    if (!api || images.length <= 1) return;
+    let raf = 0;
+    const tick = () => {
+      const ap = autoplay.current as unknown as {
+        isPlaying?: () => boolean;
+        timeUntilNext?: () => number | null;
+      };
+      const playing = ap.isPlaying?.() ?? false;
+      const remaining = ap.timeUntilNext?.();
+      if (playing && typeof remaining === "number" && remaining >= 0) {
+        const pct = Math.max(0, Math.min(100, 100 - (remaining / AUTOPLAY_DELAY) * 100));
+        setProgress(pct);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [api, images.length]);
+
+  const canZoom = !isMobile;
+  const cursorClass = canZoom ? "cursor-zoom-in" : "cursor-default";
+  const handleImageClick = (i: number) => {
+    if (!canZoom) return;
+    onZoom?.(images, i);
+  };
+
   if (images.length <= 1) {
     return (
       <img
         src={images[0]}
         alt={alt}
         loading="lazy"
-        onClick={() => onZoom?.(images, 0)}
-        className="w-full h-full object-cover cursor-zoom-in"
+        onClick={() => handleImageClick(0)}
+        className={`w-full h-full object-cover ${cursorClass}`}
       />
     );
   }
@@ -397,14 +438,22 @@ const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
               src={src}
               alt={`${alt} — imagem ${i + 1}`}
               loading="lazy"
-              onClick={() => onZoom?.(images, i)}
-              className="w-full h-full object-cover aspect-square md:aspect-auto cursor-zoom-in"
+              onClick={() => handleImageClick(i)}
+              className={`w-full h-full object-cover aspect-square md:aspect-auto ${cursorClass}`}
             />
           </CarouselItem>
         ))}
       </CarouselContent>
       <CarouselPrevious className="left-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
       <CarouselNext className="right-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow" />
+
+      {/* Progress bar */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 z-10">
+        <div
+          className="h-full bg-primary-glow transition-none"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
 
       {/* Dots */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/40 backdrop-blur-sm">
