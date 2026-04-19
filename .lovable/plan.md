@@ -1,35 +1,62 @@
 
-## Plano — Campo "Imagem capa" nas obras
+## Plano — Aplicar migration da capa no Supabase (Cloud)
 
-### Objetivo
-Permitir que o admin defina explicitamente qual imagem é a capa da obra (mostrada nos cards da galeria e na lista do admin), em vez de sempre usar a primeira imagem por ordem.
+### Diagnóstico
+- Frontend já está pronto (botão "Definir como capa", badge "CAPA", `useGalleryData` lendo `cover_image_id`).
+- Banco **não tem** a coluna `cover_image_id` em `gallery_pieces` — a migration foi proposta antes mas nunca foi aplicada.
+- Resultado: hoje clicar na estrela não tem efeito permanente.
 
-### Mudanças no banco
-Adicionar coluna `cover_image_id` (uuid, nullable) em `gallery_pieces` referenciando uma imagem de `gallery_piece_images`. Sem FK rígida (pra evitar problemas de ordem de delete) — limpamos via trigger quando a imagem capa é removida.
+### Mudança no banco (única migration)
+```sql
+-- 1. Coluna nullable, sem FK rígida
+ALTER TABLE public.gallery_pieces
+  ADD COLUMN cover_image_id uuid;
 
-- Migration:
-  - `ALTER TABLE gallery_pieces ADD COLUMN cover_image_id uuid;`
-  - Trigger `BEFORE DELETE` em `gallery_piece_images`: se a imagem deletada é capa de alguma peça, setar `cover_image_id = NULL`.
-  - Backfill: para peças existentes, setar `cover_image_id` = id da imagem com menor `ordem`.
+-- 2. Trigger: ao deletar imagem, limpar capa nas peças que a usavam
+CREATE OR REPLACE FUNCTION public.clear_cover_on_image_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.gallery_pieces
+  SET cover_image_id = NULL
+  WHERE cover_image_id = OLD.id;
+  RETURN OLD;
+END;
+$$;
 
-### Mudanças no admin (`src/pages/admin/PiecesManager.tsx`)
-- Incluir `cover_image_id` no `Piece`, `form` e payload de save.
-- Na grade de imagens (dentro do form de edição), em cada card adicionar um botão "Definir como capa" (ícone estrela). A imagem capa atual recebe um badge "CAPA" e borda destacada.
-- Ao clicar em "definir capa": update direto em `gallery_pieces.cover_image_id` + refresh local.
-- Ao remover imagem que é capa: trigger do banco já limpa; UI re-fetch.
-- Na listagem de obras, o thumbnail usa `cover_image_id` se existir, senão fallback pra primeira por ordem.
+CREATE TRIGGER trg_clear_cover_on_image_delete
+BEFORE DELETE ON public.gallery_piece_images
+FOR EACH ROW EXECUTE FUNCTION public.clear_cover_on_image_delete();
 
-### Mudanças na galeria pública (`src/components/sections/gallery/useGalleryData.ts`)
-- Selecionar `cover_image_id` e expor `capa: string` no `PieceData` (URL da imagem capa, ou primeira como fallback).
-- Verificar consumidores (`PieceCarousel`, `Gallery`) e usar `capa` no thumbnail/preview, mantendo `imagens[]` para o carrossel interno.
+-- 3. Backfill: peças existentes recebem como capa a primeira imagem por ordem
+UPDATE public.gallery_pieces p
+SET cover_image_id = sub.id
+FROM (
+  SELECT DISTINCT ON (piece_id) id, piece_id
+  FROM public.gallery_piece_images
+  ORDER BY piece_id, ordem ASC, created_at ASC
+) sub
+WHERE p.id = sub.piece_id AND p.cover_image_id IS NULL;
+```
+
+### Frontend
+Nada a alterar — o código já lida com `cover_image_id`. Após a migration:
+- O `types.ts` é regenerado automaticamente, removendo o `as any` que ficou no `setCover`.
+- A leitura pública (`useGalleryData`) passa a respeitar a capa escolhida.
+
+### Lovable Cloud — sem desconectar
+Mantemos o backend atual (Lovable Cloud / projeto `tayitsyyyqskbmnmyljl`). A migration roda direto via tool de migração; nenhuma ação manual no Supabase é necessária.
+
+### Validação após aplicar
+1. Abrir `/admin` → editar uma obra com várias imagens → clicar na estrela em uma imagem que não é a primeira → recarregar a página → confirmar que badge "CAPA" persiste.
+2. Abrir a galeria pública → confirmar que o card mostra a imagem escolhida como capa.
+3. Deletar a imagem que é capa → confirmar que `cover_image_id` volta a `NULL` (e o frontend cai no fallback da primeira imagem).
 
 ### Arquivos afetados
 | Arquivo | Mudança |
 |---|---|
-| migration nova | adiciona coluna + trigger + backfill |
-| `src/pages/admin/PiecesManager.tsx` | UI "definir capa", thumb usa capa |
-| `src/components/sections/gallery/useGalleryData.ts` | expõe campo `capa` |
-| `src/components/sections/gallery/PieceCarousel.tsx` (e/ou `Gallery.tsx`) | usa `capa` no card |
-
-### Notas
-- Não é um campo de upload separado: a "capa" é uma das imagens já enviadas, marcada como capa. Isso evita duplicação de upload e mantém consistência. Se você quiser literalmente um upload separado e independente das outras imagens, me avise que eu mudo a abordagem (coluna `cover_url` + `cover_storage_path` próprios).
+| nova migration | adiciona coluna + trigger + backfill |
+| `src/integrations/supabase/types.ts` | regenerado automaticamente |
