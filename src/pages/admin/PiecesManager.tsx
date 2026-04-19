@@ -71,7 +71,7 @@ const SortableImage = ({
   onRemove: (img: Image) => void;
   onPromote: (img: Image) => void;
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: img.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: img.id });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -81,7 +81,9 @@ const SortableImage = ({
     <div
       ref={setNodeRef}
       style={style}
-      className="relative aspect-square bg-secondary/30 group touch-none"
+      className={`relative aspect-square bg-secondary/30 group touch-none ${
+        isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+      }`}
     >
       <img src={img.url} alt="" className="w-full h-full object-cover pointer-events-none" />
       <button
@@ -110,12 +112,17 @@ const SortablePieceRow = ({
   piece,
   onEdit,
   onDelete,
+  disabled,
 }: {
   piece: Piece;
   onEdit: (p: Piece) => void;
   onDelete: (id: string) => void;
+  disabled?: boolean;
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: piece.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
+    id: piece.id,
+    disabled,
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -123,13 +130,20 @@ const SortablePieceRow = ({
   };
   const thumbUrl = piece.cover_url ?? piece.gallery_piece_images[0]?.url;
   return (
-    <div ref={setNodeRef} style={style} className="p-4 flex items-center gap-4 touch-none bg-card">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 flex items-center gap-4 touch-none bg-card relative ${
+        isOver && !isDragging ? "before:content-[''] before:absolute before:left-0 before:right-0 before:-top-px before:h-0.5 before:bg-primary before:z-10" : ""
+      }`}
+    >
       <button
         type="button"
         {...attributes}
         {...listeners}
-        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1"
-        title="Arrastar para reordenar"
+        disabled={disabled}
+        className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 disabled:opacity-30 disabled:cursor-not-allowed"
+        title={disabled ? "Reordenação desativada com filtros" : "Arrastar para reordenar"}
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -165,6 +179,8 @@ export const PiecesManager = () => {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState<string>("all");
   const fileRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
 
@@ -462,6 +478,13 @@ export const PiecesManager = () => {
     : null;
   const activePiece = activePieceId ? pieces.find((p) => p.id === activePieceId) : null;
 
+  const isFiltering = search.trim() !== "" || filterCat !== "all";
+  const filteredPieces = pieces.filter((p) => {
+    if (filterCat !== "all" && p.categoria_id !== filterCat) return false;
+    if (search.trim() && !p.nome.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -470,6 +493,36 @@ export const PiecesManager = () => {
           <Plus className="h-4 w-4 mr-1" /> Nova obra
         </Button>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_auto] gap-3 items-end">
+        <div>
+          <Label className="text-xs uppercase tracking-wider">Buscar por nome</Label>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Digite o nome…" />
+        </div>
+        <div>
+          <Label className="text-xs uppercase tracking-wider">Categoria</Label>
+          <Select value={filterCat} onValueChange={setFilterCat}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => { setSearch(""); setFilterCat("all"); }}
+          disabled={!isFiltering}
+          className="rounded-none font-accent tracking-[0.15em] uppercase text-xs"
+        >
+          Limpar
+        </Button>
+      </div>
+      {isFiltering && (
+        <p className="text-xs text-muted-foreground">
+          Mostrando {filteredPieces.length} de {pieces.length} · Reordenação desativada com filtros ativos
+        </p>
+      )}
 
       {creating && (
         <div className="border border-primary/40 bg-card p-6 space-y-4">
@@ -653,11 +706,15 @@ export const PiecesManager = () => {
           onDragEnd={handlePieceDragEnd}
           onDragCancel={() => setActivePieceId(null)}
         >
-          <SortableContext items={pieces.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={filteredPieces.map((p) => p.id)} strategy={verticalListSortingStrategy} disabled={isFiltering}>
             <div className="border border-border/50 bg-card divide-y divide-border/50">
-              {pieces.map((p) => (
-                <SortablePieceRow key={p.id} piece={p} onEdit={openEdit} onDelete={handleDelete} />
-              ))}
+              {filteredPieces.length === 0 ? (
+                <div className="p-6 text-sm text-muted-foreground">Nenhuma obra encontrada.</div>
+              ) : (
+                filteredPieces.map((p) => (
+                  <SortablePieceRow key={p.id} piece={p} onEdit={openEdit} onDelete={handleDelete} disabled={isFiltering} />
+                ))
+              )}
             </div>
           </SortableContext>
           <DragOverlay>
