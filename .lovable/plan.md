@@ -1,78 +1,83 @@
 
 
-# Plano de Polimento — Ellennous v0.1.x
+# Plano — Atualização de Tipografia Premium
 
-Vou analisar antes de planejar. Pelas imagens e instruções:
+## Análise
 
-- **image-5**: ThemeToggle (botão sol/lua no canto superior direito) — usuário quer **remover**.
-- **image-6**: Seção FinalCTA no mobile — texto "você já sabe." está sendo cortado (overflow). Precisa ajustar responsividade.
-- **image-7**: Footer no mobile — logo atual é o wordmark colorido pequeno. Trocar pela logo SVG enviada (`Ellennous-3.svg`) e arrumar responsividade (botão WhatsApp flutuante sobrepõe o crédito "Kuma Tech").
+Atual:
+- `display`: Butler / Cormorant Garamond (serifado clássico)
+- `sans`/`body`: EB Garamond (serifado)
+- Tudo em serifa = visual barroco demais para o objetivo "luxo artístico moderno"
 
-## 1. Versão de volta para 0.1.0
-- `package.json`: `"version": "0.1.0"`
-- `README.md`: atualizar tabela de versões removendo a 0.1.1.
+Novo sistema solicitado (3 fontes):
+| Uso | Fonte | Peso |
+|---|---|---|
+| H1, H2 (títulos principais) | Playfair Display | 400, 700 |
+| H3, destaques curtos, "IDENTIDADE/EXCLUSIVO" | Bebas Neue | 400 |
+| Parágrafos, UI, botões | Inter | 400, 500, 600 |
 
-## 2. Sistema de bump automático de versão
-Como o ambiente Lovable não roda hooks do git nem permite criar `.husky/`, vou criar:
-- `scripts/bump-version.mjs` — script Node que:
-  - Lê `package.json`, incrementa o **patch**
-  - Atualiza a tabela do `README.md` adicionando uma nova linha (entrada manual de descrição via `process.argv[2]` ou placeholder)
-- Adicionar comando `npm run bump` em `package.json` (`"bump": "node scripts/bump-version.mjs"`)
-- Documentar no README como usar (`npm run bump "descrição da mudança"`)
+## Mudanças
 
-> Observação para o usuário: como o Lovable gerencia commits internamente, o pre-commit hook tradicional não funciona. O script `npm run bump` deve ser executado manualmente antes de subir mudanças significativas via GitHub local. Vou deixar isso claro no README.
+### 1. `src/index.css`
+- Trocar `@import` do Google Fonts: remover Cormorant + EB Garamond, importar **Playfair Display** (400, 700, italic), **Bebas Neue** (400) e **Inter** (400, 500, 600)
+- Manter os `@font-face` Butler? **Não** — remover, conforme nova diretriz "não usar mais de 3 fontes"
+- Atualizar `body` → `font-family: 'Inter', system-ui, sans-serif`
+- Atualizar `h1, h2` → `font-family: 'Playfair Display', serif`; letter-spacing leve (0.005em); peso 700 default
+- Adicionar regra `h3, h4` → `font-family: 'Bebas Neue', sans-serif`; letter-spacing 0.05em; uppercase
+- Atualizar utilitários `.font-display` → Playfair, `.font-body` → Inter, criar `.font-accent` → Bebas Neue
 
-## 3. Fonte Butler real (.woff2)
-**Importante**: não tenho a fonte Butler em mãos — ela é comercial (paga). Não posso baixá-la nem distribuí-la sem licença. Vou:
-- Criar a estrutura `public/fonts/` com um `README.md` explicando onde o usuário deve colocar os arquivos `Butler-Regular.woff2`, `Butler-Medium.woff2`, `Butler-Bold.woff2`, `Butler-Light.woff2`
-- Já configurar os `@font-face` em `src/index.css` apontando para `/fonts/Butler-*.woff2` com `font-display: swap`
-- Atualizar `tailwind.config.ts`: `display: ['Butler', 'Cormorant Garamond', serif]` (Butler primeiro, Cormorant como fallback até o usuário subir os arquivos)
-- Assim, no momento que o usuário fizer o upload dos `.woff2`, a fonte oficial passa a vigorar automaticamente. Sem upload, o fallback Cormorant continua funcionando.
+### 2. `tailwind.config.ts`
+Substituir `fontFamily`:
+```ts
+display: ['"Playfair Display"', 'Georgia', 'serif'],
+accent: ['"Bebas Neue"', 'Impact', 'sans-serif'],
+sans: ['Inter', 'system-ui', 'sans-serif'],
+body: ['Inter', 'system-ui', 'sans-serif'],
+```
 
-## 4. Remover Light mode
-- Deletar `src/components/ThemeToggle.tsx`
-- Remover import/render em `src/pages/Index.tsx` (ou onde estiver)
-- Remover bloco `:root` light de `src/index.css` — manter só o tema dark como padrão
-- Remover script anti-flash do `index.html` que checa localStorage do tema
-- Atualizar `README.md` removendo menção ao toggle
+### 3. Aplicar `font-accent` (Bebas Neue) em destaques curtos
+Revisar os componentes em `src/components/sections/` e trocar `font-display` para `font-accent` onde o texto é uma **palavra-chave curta em CAPS** (eyebrows, labels, números de pilares):
 
-## 5. Responsividade Hero/FinalCTA (image-6)
-Em `src/components/sections/FinalCTA.tsx`:
-- O h2 está com `text-5xl sm:text-7xl md:text-8xl` — no viewport 390px, `text-5xl` (3rem) ainda quebra estranho com "você já sabe." em itálico/larga.
-- Reduzir mobile: `text-4xl sm:text-6xl md:text-7xl lg:text-8xl`
-- Adicionar `break-words` e padding lateral maior no container
-- Garantir `overflow-hidden` na section e `max-w-full` no h2
+- `Hero.tsx`: eyebrow `"Ellennous · Arte Vestível"` → font-accent; título principal `"NÃO É ROUPA / É IDENTIDADE"` (curto, impacto, CAPS) → **font-accent** com tamanho ainda maior; substituto `font-display` no H1 não combina aqui pois é toda em CAPS (Bebas brilha)
+- `FinalCTA.tsx`: eyebrow → font-accent; H2 longo "Se você entendeu, você já sabe." → manter **font-display** (Playfair) por ser frase, não palavra-chave
+- `Manifesto.tsx`: blockquote longa → **font-display** (Playfair italic combina com manifesto); eyebrow "MANIFESTO" → font-accent
+- `Positioning.tsx`, `ForWhom.tsx`: eyebrows → font-accent; números "01/02/03" → font-accent (já são curtos/CAPS-like); títulos das pillars curtos → font-accent
+- `ScarType.tsx`, `Process.tsx`, `Gallery.tsx`, `Testimonials.tsx`, `Footer.tsx`: aplicar mesma lógica — eyebrows e labels CAPS → Bebas; títulos de frase → Playfair; corpo → Inter (default automático)
 
-Verificar também outras seções principais com tipografia gigante (Hero, Manifesto) para o mesmo problema no 390px.
+### 4. Botões
+- `Button` (`ui/button.tsx`) já usa default `font-medium` → herdará Inter automaticamente. ✓
+- Botões com `tracking-[0.15em] uppercase font-semibold` no Hero/FinalCTA → trocar para classe `font-accent` (Bebas Neue) para mais força visual nos CTAs principais
 
-## 6. Footer — trocar logo + responsividade mobile (image-7)
-- Copiar `user-uploads://Ellennous-3.svg` para `src/assets/logo-ellennous.svg`
-- Em `src/components/sections/Footer.tsx`:
-  - Substituir `import logoEllennous from "@/assets/logo-ellennous.png"` por `.svg`
-  - Aumentar a altura da logo no mobile (`h-14 md:h-16`)
-  - Adicionar `padding-bottom` extra no footer mobile (`pb-24 md:pb-14`) para o botão WhatsApp flutuante não cobrir o crédito Kuma Tech
-  - Centralizar melhor blocos no mobile, garantir gap adequado
-  - Considerar esconder ou reposicionar elementos para evitar sobreposição com o FAB do WhatsApp
+### 5. Ajustes de tamanho/spacing
+- Bebas Neue é mais alta/estreita — ajustar `tracking` para compensar (`tracking-wide` em CAPS curtos)
+- Playfair é serif larga — manter `[text-wrap:balance]` e `leading-[0.95]` já existentes
+- Inter como body → garantir `leading-relaxed` em parágrafos longos
+
+### 6. README
+Adicionar nota da nova stack tipográfica na tabela/seção de design.
 
 ## Arquivos afetados
 
 | Arquivo | Ação |
 |---|---|
-| `package.json` | versão → 0.1.0; novo script `bump` |
-| `scripts/bump-version.mjs` | **novo** — bump automático |
-| `public/fonts/README.md` | **novo** — instruções Butler |
-| `src/index.css` | @font-face Butler; remove tema light |
-| `tailwind.config.ts` | Butler como display primária |
-| `src/components/ThemeToggle.tsx` | **deletado** |
-| `src/pages/Index.tsx` | remove ThemeToggle |
-| `index.html` | remove script anti-flash de tema |
-| `src/components/sections/FinalCTA.tsx` | responsividade tipografia |
-| `src/components/sections/Hero.tsx` | revisar tipografia mobile |
-| `src/assets/logo-ellennous.svg` | **novo** — logo oficial |
-| `src/components/sections/Footer.tsx` | nova logo + spacing mobile |
-| `README.md` | tabela versões + remover light mode + doc bump |
+| `src/index.css` | trocar @import, @font-face, font-family de h1/h2/h3, utilitários |
+| `tailwind.config.ts` | redefinir `fontFamily` (display/accent/sans/body) |
+| `src/components/sections/Hero.tsx` | font-accent em eyebrow, título e CTA |
+| `src/components/sections/FinalCTA.tsx` | font-accent em eyebrow e CTA |
+| `src/components/sections/Manifesto.tsx` | font-accent em eyebrow |
+| `src/components/sections/Positioning.tsx` | eyebrow + números + títulos curtos → font-accent |
+| `src/components/sections/ForWhom.tsx` | eyebrow + numeração → font-accent |
+| `src/components/sections/ScarType.tsx` | revisar |
+| `src/components/sections/Process.tsx` | revisar |
+| `src/components/sections/Gallery.tsx` | revisar (filtros → font-accent) |
+| `src/components/sections/Testimonials.tsx` | revisar |
+| `src/components/sections/Footer.tsx` | eyebrows → font-accent |
+| `README.md` | atualizar seção tipografia |
 
 ## Pontos de atenção
-- **Butler é fonte paga**: arquivos `.woff2` precisam ser subidos pelo usuário em `public/fonts/`. Já deixarei `@font-face` configurado e fallback funcional.
-- **Bump pré-commit no Lovable**: o ambiente sandbox não suporta git hooks; o script será manual via `npm run bump`.
+
+- **Paleta e layouts não mudam** — apenas tokens de fonte e classes utilitárias
+- Butler `.woff2` instruído anteriormente deixará de ser usado; vou remover os `@font-face` para não tentar carregar arquivos inexistentes
+- Bebas Neue sempre em maiúsculas/CAPS para preservar identidade da fonte
+- Limite respeitado: **3 fontes** (Playfair / Bebas / Inter)
 
