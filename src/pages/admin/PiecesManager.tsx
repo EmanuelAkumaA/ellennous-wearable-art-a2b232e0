@@ -22,7 +22,7 @@ interface Piece {
   destaque: boolean;
   novo: boolean;
   ordem: number;
-  cover_image_id: string | null;
+  cover_image_id?: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Image[];
 }
