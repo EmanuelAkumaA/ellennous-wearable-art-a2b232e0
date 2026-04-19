@@ -10,45 +10,52 @@ import { PieceCarousel } from "./PieceCarousel";
 import { ZoomOverlay } from "./ZoomOverlay";
 
 const MOBILE_STEP = 5;
+const DESKTOP_STEP = 6;
 
 const rankPiece = (p: Piece) => (p.novo ? 0 : p.destaque ? 1 : 2);
 
 export const Gallery = () => {
+  const isMobile = useIsMobile();
+  const step = isMobile ? MOBILE_STEP : DESKTOP_STEP;
   const [filter, setFilter] = useState<Category>("Todas");
   const [selected, setSelected] = useState<Piece | null>(null);
   const [zoomedImages, setZoomedImages] = useState<string[] | null>(null);
   const [zoomedIndex, setZoomedIndex] = useState(0);
-  const [visibleCount, setVisibleCount] = useState(MOBILE_STEP);
-  const isMobile = useIsMobile();
+  const [visibleCount, setVisibleCount] = useState(step);
   const ref = useReveal();
-  const fifthItemRef = useRef<HTMLButtonElement | null>(null);
-  const previousCountRef = useRef(MOBILE_STEP);
+  const lastInitialItemRef = useRef<HTMLButtonElement | null>(null);
+  const previousCountRef = useRef(step);
   const animateFromRef = useRef(0);
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
   const sorted = [...filtered].sort((a, b) => rankPiece(a) - rankPiece(b));
-  const visible = isMobile ? sorted.slice(0, visibleCount) : sorted;
-  const hasMore = isMobile && visibleCount < sorted.length;
-  const canClose = isMobile && visibleCount > MOBILE_STEP;
+  const visible = sorted.slice(0, visibleCount);
+  const hasMore = visibleCount < sorted.length;
+  const canClose = visibleCount > step;
+
+  // Re-sync visible count when breakpoint changes (only if user hasn't expanded)
+  useEffect(() => {
+    setVisibleCount((current) => (current <= Math.max(MOBILE_STEP, DESKTOP_STEP) ? step : current));
+  }, [step]);
 
   const handleFilter = (cat: Category) => {
     setFilter(cat);
     animateFromRef.current = 0;
-    previousCountRef.current = MOBILE_STEP;
-    setVisibleCount(MOBILE_STEP);
+    previousCountRef.current = step;
+    setVisibleCount(step);
   };
 
   const handleShowMore = () => {
     animateFromRef.current = visibleCount;
-    setVisibleCount((c) => Math.min(c + MOBILE_STEP, sorted.length));
+    setVisibleCount((c) => Math.min(c + step, sorted.length));
   };
 
   const handleClose = () => {
     animateFromRef.current = 0;
-    previousCountRef.current = MOBILE_STEP;
-    setVisibleCount(MOBILE_STEP);
+    previousCountRef.current = step;
+    setVisibleCount(step);
     requestAnimationFrame(() => {
-      fifthItemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      lastInitialItemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   };
 
@@ -110,11 +117,11 @@ export const Gallery = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {visible.map((piece, idx) => {
             const isNew = idx >= animateFromRef.current;
-            const delay = isNew ? (idx - animateFromRef.current) * 80 : 0;
+            const delay = isNew ? (idx - animateFromRef.current) * 150 : 0;
             return (
             <button
               key={piece.id}
-              ref={idx === 4 ? fifthItemRef : undefined}
+              ref={idx === step - 1 ? lastInitialItemRef : undefined}
               onClick={() => setSelected(piece)}
               style={isNew ? { animationDelay: `${delay}ms` } : undefined}
               className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
