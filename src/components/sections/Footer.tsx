@@ -1,24 +1,60 @@
-import { buildWhatsAppLink } from "@/components/FloatingWhatsApp";
+import { Instagram } from "lucide-react";
+import { buildWhatsAppLink, INSTAGRAM_URL } from "@/components/FloatingWhatsApp";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import logoEllennous from "@/assets/logo-ellennous.png";
 
 export const Footer = () => (
-  <footer className="relative border-t border-border/40 py-12 px-6">
-    <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-      <div className="text-center md:text-left">
-        <p className="font-display text-2xl tracking-[0.2em] text-gradient-light">ELLENNOUS</p>
-        <p className="text-xs text-muted-foreground tracking-wider mt-1">Arte vestível · Peças únicas feitas à mão</p>
+  <footer className="relative border-t border-border/40 py-14 px-6">
+    <div className="max-w-6xl mx-auto flex flex-col items-center gap-10 md:flex-row md:items-center md:justify-between">
+      {/* Logo */}
+      <div className="flex flex-col items-center md:items-start gap-2">
+        <img
+          src={logoEllennous}
+          alt="ELLENNOUS — arte vestível"
+          width={1920}
+          height={1080}
+          loading="lazy"
+          className="h-10 md:h-12 w-auto object-contain"
+        />
+        <p className="text-xs text-muted-foreground tracking-[0.25em] uppercase">
+          Arte vestível · Peças únicas feitas à mão
+        </p>
       </div>
-      <div className="flex flex-col md:flex-row items-center gap-4 text-sm text-muted-foreground">
+
+      {/* Social */}
+      <div className="flex items-center gap-4">
         <a
           href={buildWhatsAppLink()}
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:text-primary-glow transition-colors"
+          aria-label="WhatsApp Ellennous"
+          className="group h-11 w-11 flex items-center justify-center rounded-full border border-border hover:border-[#25D366] hover:bg-[#25D366]/10 transition-all duration-500"
         >
-          WhatsApp
+          <WhatsAppIcon className="h-5 w-5 text-muted-foreground group-hover:text-[#25D366] transition-colors" />
         </a>
-        <span className="hidden md:inline opacity-30">·</span>
-        <span>© {new Date().getFullYear()} Ellennous. Todos os direitos reservados.</span>
+        <a
+          href={INSTAGRAM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Instagram @ellennouss"
+          className="group h-11 w-11 flex items-center justify-center rounded-full border border-border hover:border-primary-glow hover:bg-primary/10 transition-all duration-500"
+        >
+          <Instagram className="h-5 w-5 text-muted-foreground group-hover:text-primary-glow transition-colors" strokeWidth={1.6} />
+        </a>
       </div>
+    </div>
+
+    {/* Bottom bar */}
+    <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-border/30 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
+      <span className="tracking-wider">© {new Date().getFullYear()} Ellennous. Todos os direitos reservados.</span>
+      <a
+        href="https://kumatech.com.br/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="tracking-[0.2em] uppercase hover:text-primary-glow transition-colors"
+      >
+        Criado por <span className="font-semibold text-foreground/80 group-hover:text-primary-glow">Kuma Tech</span>
+      </a>
     </div>
   </footer>
 );

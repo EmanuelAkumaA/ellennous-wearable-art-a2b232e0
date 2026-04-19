@@ -14,8 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Cinzel', 'serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['"Cormorant Garamond"', 'Butler', 'Garamond', 'serif'],
+        sans: ['"EB Garamond"', 'Garamond', 'Times New Roman', 'serif'],
+        body: ['"EB Garamond"', 'Garamond', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
