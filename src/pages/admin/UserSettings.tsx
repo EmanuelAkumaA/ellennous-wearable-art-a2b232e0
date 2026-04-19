@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminProfile } from "@/hooks/useAdminProfile";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
+import { AvatarCropDialog } from "@/components/admin/AvatarCropDialog";
 import { Shield, KeyRound, ShieldCheck, ShieldAlert, Save, Loader2, Trash2, Palette, RotateCcw } from "lucide-react";
 
 const scorePassword = (pwd: string): number => {
@@ -46,6 +47,7 @@ export const UserSettings = () => {
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
 
   const [pwd, setPwd] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -97,28 +99,37 @@ export const UserSettings = () => {
 
   const handlePickFile = () => fileRef.current?.click();
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !user) return;
+    if (!file) return;
     if (!file.type.startsWith("image/")) {
       return toast({ title: "Arquivo inválido", description: "Envie uma imagem.", variant: "destructive" });
     }
-    if (file.size > 5 * 1024 * 1024) {
-      return toast({ title: "Imagem grande demais", description: "Máximo 5MB.", variant: "destructive" });
+    if (file.size > 10 * 1024 * 1024) {
+      return toast({ title: "Imagem grande demais", description: "Máximo 10MB.", variant: "destructive" });
     }
+    const url = URL.createObjectURL(file);
+    setCropSrc(url);
+  };
 
+  const closeCrop = () => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+  };
+
+  const handleCropApply = async (blob: Blob) => {
+    if (!user) return;
     setUploading(true);
     try {
       if (profile.avatar_storage_path) {
         await supabase.storage.from(BUCKET).remove([profile.avatar_storage_path]);
       }
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${FOLDER}/${user.id}-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+      const path = `${FOLDER}/${user.id}-${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, blob, {
         cacheControl: "3600",
         upsert: true,
-        contentType: file.type,
+        contentType: "image/jpeg",
       });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
@@ -127,6 +138,7 @@ export const UserSettings = () => {
       if (dbErr) throw dbErr;
       await refresh();
       toast({ title: "Foto atualizada" });
+      closeCrop();
     } catch (err: any) {
       toast({ title: "Erro no upload", description: err.message, variant: "destructive" });
     } finally {
@@ -437,6 +449,13 @@ export const UserSettings = () => {
           {savingPwd ? "Salvando…" : "Atualizar senha"}
         </Button>
       </form>
+
+      <AvatarCropDialog
+        open={!!cropSrc}
+        imageSrc={cropSrc}
+        onCancel={closeCrop}
+        onApply={handleCropApply}
+      />
     </div>
   );
 };
