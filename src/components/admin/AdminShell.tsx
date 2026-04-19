@@ -166,7 +166,7 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
       <div className="lg:grid lg:grid-cols-[280px_1fr] min-h-screen">
         {/* Desktop sidebar */}
         <aside className="hidden lg:block sticky top-0 h-screen border-r border-border/40 bg-card/40 backdrop-blur-xl">
-          <SidebarBody active={active} onSelect={handleSelect} email={user?.email} onSignOut={signOut} />
+          <SidebarBody active={active} onSelect={handleSelect} email={user?.email} displayName={profile.display_name} avatarUrl={profile.avatar_url} onSignOut={signOut} />
         </aside>
 
         <div className="flex flex-col min-w-0">
@@ -181,7 +181,7 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="p-0 w-[280px] bg-card/95 backdrop-blur-xl border-border/40">
-                  <SidebarBody active={active} onSelect={handleSelect} email={user?.email} onSignOut={signOut} />
+                  <SidebarBody active={active} onSelect={handleSelect} email={user?.email} displayName={profile.display_name} avatarUrl={profile.avatar_url} onSignOut={signOut} />
                 </SheetContent>
               </Sheet>
 
