@@ -2,20 +2,35 @@ import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useReveal } from "@/hooks/use-reveal";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { buildWhatsAppLink } from "@/components/FloatingWhatsApp";
 import { Dragon } from "@/components/Dragon";
 import { CATEGORIES, PIECES, type Category, type Piece } from "./pieces";
 import { PieceCarousel } from "./PieceCarousel";
 import { ZoomOverlay } from "./ZoomOverlay";
 
+const MOBILE_LIMIT = 6;
+
+const rankPiece = (p: Piece) => (p.novo ? 0 : p.destaque ? 1 : 2);
+
 export const Gallery = () => {
   const [filter, setFilter] = useState<Category>("Todas");
   const [selected, setSelected] = useState<Piece | null>(null);
   const [zoomedImages, setZoomedImages] = useState<string[] | null>(null);
   const [zoomedIndex, setZoomedIndex] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+  const isMobile = useIsMobile();
   const ref = useReveal();
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
+  const sorted = [...filtered].sort((a, b) => rankPiece(a) - rankPiece(b));
+  const visible = isMobile && !showAll ? sorted.slice(0, MOBILE_LIMIT) : sorted;
+  const showMoreButton = isMobile && !showAll && sorted.length > MOBILE_LIMIT;
+
+  const handleFilter = (cat: Category) => {
+    setFilter(cat);
+    setShowAll(false);
+  };
 
   const closeZoom = () => setZoomedImages(null);
   const prevZoom = () => {
