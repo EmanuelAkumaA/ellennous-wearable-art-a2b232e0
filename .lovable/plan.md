@@ -1,62 +1,53 @@
 
-## Plano — Aplicar migration da capa no Supabase (Cloud)
 
-### Diagnóstico
-- Frontend já está pronto (botão "Definir como capa", badge "CAPA", `useGalleryData` lendo `cover_image_id`).
-- Banco **não tem** a coluna `cover_image_id` em `gallery_pieces` — a migration foi proposta antes mas nunca foi aplicada.
-- Resultado: hoje clicar na estrela não tem efeito permanente.
+## Plano — Melhorias no admin de obras
 
-### Mudança no banco (única migration)
-```sql
--- 1. Coluna nullable, sem FK rígida
-ALTER TABLE public.gallery_pieces
-  ADD COLUMN cover_image_id uuid;
+### 1. DragOverlay nas imagens da obra
+No `DndContext` existente em `PiecesManager.tsx`, adicionar `<DragOverlay>` com preview da imagem sendo arrastada (estado `activeId` setado em `onDragStart`, limpo em `onDragEnd`/`onDragCancel`).
 
--- 2. Trigger: ao deletar imagem, limpar capa nas peças que a usavam
-CREATE OR REPLACE FUNCTION public.clear_cover_on_image_delete()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  UPDATE public.gallery_pieces
-  SET cover_image_id = NULL
-  WHERE cover_image_id = OLD.id;
-  RETURN OLD;
-END;
-$$;
+### 2. Drag-and-drop nas obras (listagem)
+Envolver a lista de peças em outro `DndContext` + `SortableContext` (vertical strategy). Cada linha vira `SortableItem` com handle `GripVertical`. Após drop, persistir nova `ordem` em batch (`update` em cada peça cuja ordem mudou) e atualizar estado local.
+- Remover o campo "Ordem" do form de edição (item 5 do pedido).
+- A `ordem` passa a ser controlada exclusivamente por drag-and-drop.
 
-CREATE TRIGGER trg_clear_cover_on_image_delete
-BEFORE DELETE ON public.gallery_piece_images
-FOR EACH ROW EXECUTE FUNCTION public.clear_cover_on_image_delete();
+### 3. Estrela ao lado da lixeira (toggle capa ↔ imagens)
+Comportamento solicitado: marcar uma imagem como capa **promove** ela pra `cover_url`/`cover_storage_path` (sai da grade de imagens), e a capa anterior **desce** pra grade de imagens.
 
--- 3. Backfill: peças existentes recebem como capa a primeira imagem por ordem
-UPDATE public.gallery_pieces p
-SET cover_image_id = sub.id
-FROM (
-  SELECT DISTINCT ON (piece_id) id, piece_id
-  FROM public.gallery_piece_images
-  ORDER BY piece_id, ordem ASC, created_at ASC
-) sub
-WHERE p.id = sub.piece_id AND p.cover_image_id IS NULL;
-```
+Implementação:
+- Em cada `SortableImage`, adicionar botão estrela ao lado do botão lixeira (mesmo overlay hover).
+- Ao clicar:
+  1. Capturar a imagem selecionada (`url`, `storage_path`).
+  2. Se já existe capa atual (`cover_url` + `cover_storage_path`), inserir um novo registro em `gallery_piece_images` com esses valores (no fim da ordem).
+  3. Deletar o registro de `gallery_piece_images` da imagem promovida (sem remover do storage — o arquivo continua sendo usado como capa).
+  4. `update gallery_pieces set cover_url = <nova>, cover_storage_path = <nova>`.
+  5. Refresh.
+- A capa é mostrada apenas no bloco "Imagem capa" (já existe). Garantir que só uma imagem é capa (modelo já força isso — coluna única).
+- O bloco capa atual já tem botão "Trocar capa" / "Remover capa"; mantemos.
 
-### Frontend
-Nada a alterar — o código já lida com `cover_image_id`. Após a migration:
-- O `types.ts` é regenerado automaticamente, removendo o `as any` que ficou no `setCover`.
-- A leitura pública (`useGalleryData`) passa a respeitar a capa escolhida.
+Observação: como movemos o storage_path entre tabelas (sem re-upload), ao remover capa pelo botão "Remover capa" continuamos deletando o arquivo do storage como hoje. Ao remover uma imagem promovida a capa, o arquivo antigo da capa (que voltou pra galeria) também é tratado normalmente.
 
-### Lovable Cloud — sem desconectar
-Mantemos o backend atual (Lovable Cloud / projeto `tayitsyyyqskbmnmyljl`). A migration roda direto via tool de migração; nenhuma ação manual no Supabase é necessária.
+### 4. Remover campo "Ordem" do form
+Tirar o input numérico `Ordem` do grid do form. Ao criar nova peça, setar `ordem = pieces.length` automaticamente.
 
-### Validação após aplicar
-1. Abrir `/admin` → editar uma obra com várias imagens → clicar na estrela em uma imagem que não é a primeira → recarregar a página → confirmar que badge "CAPA" persiste.
-2. Abrir a galeria pública → confirmar que o card mostra a imagem escolhida como capa.
-3. Deletar a imagem que é capa → confirmar que `cover_image_id` volta a `NULL` (e o frontend cai no fallback da primeira imagem).
+### 5. Adicionar categoria inline no form de edição
+Ao lado do `Select` de categoria, botão `+` que abre um pequeno popover/inline com `Input` + `Salvar`. Ao salvar:
+- Insert em `gallery_categories` com `nome` + `ordem = categories.length`.
+- Atualizar lista local de categorias.
+- Auto-selecionar a nova categoria no form (`form.categoria_id = nova.id`).
+- Toast de sucesso.
 
 ### Arquivos afetados
 | Arquivo | Mudança |
 |---|---|
-| nova migration | adiciona coluna + trigger + backfill |
-| `src/integrations/supabase/types.ts` | regenerado automaticamente |
+| `src/pages/admin/PiecesManager.tsx` | DragOverlay; DnD nas obras; botão estrela; remoção campo ordem; categoria inline |
+
+### Banco
+Nenhuma migration nova — todas as colunas necessárias já existem (`cover_url`, `cover_storage_path`, `ordem`).
+
+### Validação
+1. Arrastar imagem dentro do form → ver preview no cursor.
+2. Arrastar uma obra na listagem → confirmar persistência após reload.
+3. Clicar estrela em imagem → ela sobe pra capa, capa antiga vira imagem normal.
+4. Editar obra → não há mais campo Ordem.
+5. No select de categoria, clicar + → digitar nome → salvar → categoria aparece selecionada.
+
