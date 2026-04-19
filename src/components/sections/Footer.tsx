@@ -4,7 +4,7 @@ import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import logoEllennous from "@/assets/logo-ellennous.png";
 
 export const Footer = () => (
-  <footer className="relative border-t border-border/40 pt-14 pb-28 md:pb-14 px-6">
+  <footer className="relative border-t border-border/40 pt-16 pb-28 md:pb-14 px-6">
     <div className="max-w-6xl mx-auto flex flex-col items-center gap-10 md:flex-row md:items-center md:justify-between text-center md:text-left">
       {/* Logo */}
       <div className="flex flex-col items-center md:items-start gap-3">
@@ -14,7 +14,7 @@ export const Footer = () => (
           loading="lazy"
           className="h-16 sm:h-20 md:h-24 w-auto object-contain text-center"
         />
-        <p className="font-accent text-xs sm:text-sm text-muted-foreground tracking-[0.3em] uppercase max-w-xs">
+        <p className="font-accent text-xs sm:text-sm text-muted-foreground tracking-[0.15em] uppercase max-w-xs">
           Arte vestível · Peças únicas feitas à mão
         </p>
       </div>
@@ -43,13 +43,13 @@ export const Footer = () => (
     </div>
 
     {/* Bottom bar */}
-    <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-border/30 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground text-center md:text-left">
-      <span className="tracking-wider">© {new Date().getFullYear()} Ellennous. Todos os direitos reservados.</span>
+    <div className="max-w-6xl mx-auto mt-10 pt-8 border-t border-border/30 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground text-center md:text-left">
+      <span className="tracking-[0.1em]">© {new Date().getFullYear()} Ellennous. Todos os direitos reservados.</span>
       <a
         href="https://kumatech.com.br/"
         target="_blank"
         rel="noopener noreferrer"
-        className="tracking-[0.2em] uppercase hover:text-primary-glow transition-colors"
+        className="tracking-[0.1em] uppercase hover:text-primary-glow transition-colors"
       >
         Criado por <span className="text-foreground">Kuma Tech</span>
       </a>
