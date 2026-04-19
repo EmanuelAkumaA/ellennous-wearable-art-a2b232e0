@@ -94,8 +94,9 @@ export default {
           },
         },
         "fade-up": {
-          "0%": { opacity: "0", transform: "translateY(28px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
+          "0%": { opacity: "0", transform: "translateY(28px)", filter: "blur(8px)" },
+          "60%": { filter: "blur(2px)" },
+          "100%": { opacity: "1", transform: "translateY(0)", filter: "blur(0)" },
         },
       },
       animation: {
