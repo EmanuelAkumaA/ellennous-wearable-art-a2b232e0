@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import Autoplay from "embla-carousel-autoplay";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
@@ -62,6 +64,10 @@ const testimonials = [
 
 export const Testimonials = () => {
   const ref = useReveal();
+  const autoplay = useRef(
+    Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })
+  );
+
   return (
     <section
       ref={ref}
@@ -86,6 +92,7 @@ export const Testimonials = () => {
         <div className="reveal">
           <Carousel
             opts={{ align: "start", loop: true }}
+            plugins={[autoplay.current]}
             className="w-full"
           >
             <CarouselContent className="-ml-4">
