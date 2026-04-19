@@ -13,15 +13,15 @@ export const Manifesto = () => {
 
       <div className="relative max-w-5xl mx-auto text-center">
         <div className="reveal">
-          <p className="text-xs tracking-[0.4em] text-brand-red/80 uppercase mb-8">— Manifesto —</p>
-          <blockquote className="font-display text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] tracking-tight">
+          <p className="font-accent text-sm tracking-[0.4em] text-brand-red/80 uppercase mb-8">— Manifesto —</p>
+          <blockquote className="font-display italic text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.15] tracking-tight">
             <span className="text-foreground">"Eu não nasci pra me encaixar.</span>
             <br />
-            <span className="text-gradient-brand">Nasci pra ser referência."</span>
+            <span className="text-gradient-brand not-italic">Nasci pra ser referência."</span>
           </blockquote>
           <div className="mt-12 inline-flex items-center gap-3">
             <div className="h-px w-16 bg-foreground/30" />
-            <span className="font-display text-sm tracking-[0.3em] text-muted-foreground">ELLENNOUS</span>
+            <span className="font-accent text-base tracking-[0.4em] text-muted-foreground">ELLENNOUS</span>
             <div className="h-px w-16 bg-foreground/30" />
           </div>
         </div>

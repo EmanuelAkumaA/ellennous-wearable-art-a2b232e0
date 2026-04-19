@@ -12,7 +12,7 @@ export const Positioning = () => {
     <section ref={ref} className="relative py-32 px-6 overflow-hidden">
       <div className="max-w-6xl mx-auto">
         <div className="reveal text-center mb-20">
-          <p className="text-xs tracking-[0.4em] text-primary-glow/80 uppercase mb-6">Posicionamento</p>
+          <p className="font-accent text-sm tracking-[0.4em] text-primary-glow/80 uppercase mb-6">Posicionamento</p>
           <h2 className="font-display text-3xl md:text-5xl lg:text-6xl font-bold leading-tight">
             Você não compra uma peça.
             <br />
@@ -28,8 +28,8 @@ export const Positioning = () => {
               style={{ transitionDelay: `${i * 120}ms` }}
             >
               <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary-glow/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-              <p className="font-display text-5xl text-primary-glow/30 mb-4">{p.num}</p>
-              <h3 className="font-display text-xl mb-3 text-foreground">{p.title}</h3>
+              <p className="font-accent text-6xl text-primary-glow/40 mb-4 tracking-wider">{p.num}</p>
+              <h3 className="font-accent text-2xl mb-3 text-foreground tracking-wide uppercase">{p.title}</h3>
               <p className="text-muted-foreground leading-relaxed">{p.text}</p>
             </div>
           ))}

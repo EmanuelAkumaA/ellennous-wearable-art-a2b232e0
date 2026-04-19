@@ -28,10 +28,10 @@ export const Hero = () => (
 
     {/* Content */}
     <div className="relative z-10 max-w-5xl mx-auto px-6 text-center animate-fade-up">
-      <p className="text-xs md:text-sm tracking-[0.4em] text-brand-ice/70 uppercase mb-6">
+      <p className="font-accent text-xs md:text-sm tracking-[0.4em] text-brand-ice/70 uppercase mb-6">
         Ellennous · Arte Vestível
       </p>
-      <h1 className="font-display text-[2.75rem] xs:text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[1] sm:leading-[0.95] mb-8 break-words [text-wrap:balance]">
+      <h1 className="font-accent text-[3.5rem] xs:text-6xl sm:text-7xl md:text-8xl lg:text-[10rem] leading-[0.9] tracking-[0.02em] mb-8 break-words [text-wrap:balance]">
         <span className="block text-foreground">NÃO É ROUPA.</span>
         <span className="block text-gradient-brand mt-2">É IDENTIDADE.</span>
       </h1>
@@ -44,7 +44,7 @@ export const Hero = () => (
         <Button
           asChild
           size="lg"
-          className="bg-gradient-purple-wine border border-primary-glow/40 hover:shadow-glow text-white font-semibold tracking-wide px-8 h-14 rounded-none"
+          className="font-accent text-base bg-gradient-purple-wine border border-primary-glow/40 hover:shadow-glow text-white tracking-[0.2em] uppercase px-8 h-14 rounded-none"
         >
           <a href={buildWhatsAppLink()} target="_blank" rel="noopener noreferrer">
             Criar minha peça exclusiva
@@ -54,7 +54,7 @@ export const Hero = () => (
           asChild
           variant="outline"
           size="lg"
-          className="border-foreground/20 hover:border-primary-glow hover:bg-transparent hover:text-primary-glow tracking-wide px-8 h-14 rounded-none bg-background/40 backdrop-blur"
+          className="font-accent text-base border-foreground/20 hover:border-primary-glow hover:bg-transparent hover:text-primary-glow tracking-[0.2em] uppercase px-8 h-14 rounded-none bg-background/40 backdrop-blur"
         >
           <a href="#galeria">Explorar obras</a>
         </Button>
@@ -62,7 +62,7 @@ export const Hero = () => (
     </div>
 
     {/* Scroll cue */}
-    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-muted-foreground text-xs tracking-[0.3em] uppercase opacity-60">
+    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-muted-foreground text-xs tracking-[0.3em] uppercase opacity-60 font-accent">
       <div className="flex flex-col items-center gap-2">
         <span>Role</span>
         <div className="w-px h-10 bg-gradient-to-b from-foreground/40 to-transparent" />

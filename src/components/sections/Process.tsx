@@ -14,7 +14,7 @@ export const Process = () => {
     <section ref={ref} className="relative py-32 px-6 overflow-hidden">
       <div className="max-w-5xl mx-auto">
         <div className="reveal text-center mb-20">
-          <p className="text-xs tracking-[0.4em] text-primary-glow/80 uppercase mb-6">Processo</p>
+          <p className="font-accent text-sm tracking-[0.4em] text-primary-glow/80 uppercase mb-6">Processo</p>
           <h2 className="font-display text-4xl md:text-6xl font-bold mb-6">
             Como nasce uma <span className="text-gradient-brand">Ellennous</span>
           </h2>
@@ -36,8 +36,8 @@ export const Process = () => {
               style={{ transitionDelay: `${i * 80}ms` }}
             >
               <div className={`pl-16 md:pl-0 ${i % 2 === 0 ? "md:text-right md:pr-12" : "md:pl-12"}`}>
-                <p className="font-display text-6xl md:text-7xl text-primary-glow/30 mb-3">{step.n}</p>
-                <h3 className="font-display text-2xl md:text-3xl mb-3">{step.title}</h3>
+                <p className="font-accent text-7xl md:text-8xl text-primary-glow/40 mb-3 tracking-wider">{step.n}</p>
+                <h3 className="font-accent text-3xl md:text-4xl mb-3 tracking-wide uppercase">{step.title}</h3>
                 <p className="text-muted-foreground leading-relaxed">{step.text}</p>
               </div>
               {/* Dot */}
@@ -48,8 +48,8 @@ export const Process = () => {
         </div>
 
         <div className="reveal text-center mt-12 pt-12 border-t border-border/40">
-          <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground mb-2">Tempo médio</p>
-          <p className="font-display text-3xl md:text-4xl text-gradient-light">30 a 40 dias</p>
+          <p className="font-accent text-sm tracking-[0.4em] uppercase text-muted-foreground mb-2">Tempo médio</p>
+          <p className="font-accent text-4xl md:text-5xl text-gradient-light tracking-wide">30 a 40 dias</p>
         </div>
       </div>
     </section>
