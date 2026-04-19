@@ -9,6 +9,7 @@ import { ForWhom } from "@/components/sections/ForWhom";
 import { FinalCTA } from "@/components/sections/FinalCTA";
 import { Footer } from "@/components/sections/Footer";
 import { FloatingWhatsApp } from "@/components/FloatingWhatsApp";
+import { FloatingAdmin } from "@/components/FloatingAdmin";
 
 const Index = () => {
   return (
@@ -24,6 +25,7 @@ const Index = () => {
       <FinalCTA />
       <Footer />
       <FloatingWhatsApp />
+      <FloatingAdmin />
     </main>
   );
 };
