@@ -57,45 +57,18 @@ export const PalettePhoto = ({
   const palette =
     Array.isArray(colors) && colors.length === 5 ? colors : DEFAULT_PALETTE_COLORS;
 
-  const borderColors = [palette[0], palette[1], palette[2], palette[3]];
   const bgFill = palette[4];
-
-  // Conic gradient for animated border (uses --angle so the gradient itself spins, not the element)
-  const borderGradient = `conic-gradient(from var(--angle, 0deg), ${borderColors[0]}, ${borderColors[1]}, ${borderColors[2]}, ${borderColors[3]}, ${borderColors[0]})`;
 
   return (
     <div
-      className={`palette-frame relative inline-block group ${editable ? "cursor-pointer" : ""} ${className}`}
+      className={`relative inline-block group ${editable ? "cursor-pointer" : ""} ${className}`}
       style={{ width: box, height: box, filter: "drop-shadow(0 8px 20px hsl(var(--primary) / 0.35))" }}
       onClick={editable ? onPick : undefined}
       role={editable ? "button" : undefined}
       tabIndex={editable ? 0 : undefined}
       aria-label={editable ? "Trocar foto de perfil" : undefined}
     >
-      {/* Animated gradient border layer — clipped to the palette outline */}
-      <div
-        className="palette-border absolute inset-0 animate-palette-spin"
-        style={{
-          background: borderGradient,
-          WebkitClipPath: `path('${PALETTE_PATH}')`,
-          clipPath: `path('${PALETTE_PATH}')`,
-          transform: "scale(1)",
-        }}
-      />
-
-      {/* Inner content (slightly inset to reveal the border underneath) */}
-      <svg
-        viewBox="0 0 100 100"
-        width={box}
-        height={box}
-        className="absolute inset-0"
-        style={{
-          WebkitClipPath: `path('${PALETTE_PATH}')`,
-          clipPath: `path('${PALETTE_PATH}')`,
-          transform: "scale(0.94)",
-          transformOrigin: "50% 50%",
-        }}
-      >
+      <svg viewBox="0 0 100 100" width={box} height={box} className="absolute inset-0">
         <defs>
           <clipPath id={clipId}>
             <path
