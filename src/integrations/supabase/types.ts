@@ -77,6 +77,7 @@ export type Database = {
         Row: {
           categoria_id: string
           conceito: string
+          cover_image_id: string | null
           created_at: string
           descricao: string
           destaque: boolean
@@ -91,6 +92,7 @@ export type Database = {
         Insert: {
           categoria_id: string
           conceito?: string
+          cover_image_id?: string | null
           created_at?: string
           descricao?: string
           destaque?: boolean
@@ -105,6 +107,7 @@ export type Database = {
         Update: {
           categoria_id?: string
           conceito?: string
+          cover_image_id?: string | null
           created_at?: string
           descricao?: string
           destaque?: boolean
