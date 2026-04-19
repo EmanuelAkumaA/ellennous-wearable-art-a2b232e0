@@ -156,7 +156,7 @@ export const Gallery = () => {
                 <button
                   key={piece.id}
                   ref={idx === step - 1 ? lastInitialItemRef : undefined}
-                  onClick={() => setSelected(piece)}
+                  onClick={() => handleSelectPiece(piece)}
                   style={isNew ? { animationDelay: `${delay}ms` } : undefined}
                   className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
                 >
@@ -218,7 +218,7 @@ export const Gallery = () => {
         )}
       </div>
 
-      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+      <Dialog open={!!selected} onOpenChange={handleModalChange}>
         <DialogContent className="max-w-4xl bg-card border-primary/30 p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
           {selected && (
             <div className="grid md:grid-cols-2 gap-0">
@@ -267,6 +267,7 @@ export const Gallery = () => {
                     href={buildWhatsAppLink(`Quero algo no nível de "${selected.nome}". Me conta como começamos.`)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={handleCtaClick}
                   >
                     Quero algo nesse nível
                   </a>
