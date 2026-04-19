@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useReveal } from "@/hooks/use-reveal";
@@ -9,7 +9,7 @@ import { CATEGORIES, PIECES, type Category, type Piece } from "./pieces";
 import { PieceCarousel } from "./PieceCarousel";
 import { ZoomOverlay } from "./ZoomOverlay";
 
-const MOBILE_LIMIT = 6;
+const MOBILE_STEP = 5;
 
 const rankPiece = (p: Piece) => (p.novo ? 0 : p.destaque ? 1 : 2);
 
@@ -18,18 +18,31 @@ export const Gallery = () => {
   const [selected, setSelected] = useState<Piece | null>(null);
   const [zoomedImages, setZoomedImages] = useState<string[] | null>(null);
   const [zoomedIndex, setZoomedIndex] = useState(0);
-  const [showAll, setShowAll] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(MOBILE_STEP);
   const isMobile = useIsMobile();
   const ref = useReveal();
+  const fifthItemRef = useRef<HTMLButtonElement | null>(null);
 
   const filtered = filter === "Todas" ? PIECES : PIECES.filter((p) => p.categoria === filter);
   const sorted = [...filtered].sort((a, b) => rankPiece(a) - rankPiece(b));
-  const visible = isMobile && !showAll ? sorted.slice(0, MOBILE_LIMIT) : sorted;
-  const showMoreButton = isMobile && !showAll && sorted.length > MOBILE_LIMIT;
+  const visible = isMobile ? sorted.slice(0, visibleCount) : sorted;
+  const hasMore = isMobile && visibleCount < sorted.length;
+  const canClose = isMobile && visibleCount > MOBILE_STEP;
 
   const handleFilter = (cat: Category) => {
     setFilter(cat);
-    setShowAll(false);
+    setVisibleCount(MOBILE_STEP);
+  };
+
+  const handleShowMore = () => {
+    setVisibleCount((c) => Math.min(c + MOBILE_STEP, sorted.length));
+  };
+
+  const handleClose = () => {
+    setVisibleCount(MOBILE_STEP);
+    requestAnimationFrame(() => {
+      fifthItemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   };
 
   const closeZoom = () => setZoomedImages(null);
@@ -84,9 +97,10 @@ export const Gallery = () => {
 
         {/* Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {visible.map((piece) => (
+          {visible.map((piece, idx) => (
             <button
               key={piece.id}
+              ref={idx === 4 ? fifthItemRef : undefined}
               onClick={() => setSelected(piece)}
               className="group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left animate-fade-up"
             >
@@ -124,14 +138,24 @@ export const Gallery = () => {
           ))}
         </div>
 
-        {showMoreButton && (
-          <div className="flex justify-center mt-10">
-            <button
-              onClick={() => setShowAll(true)}
-              className="font-accent px-6 py-3 text-sm tracking-[0.15em] uppercase border border-primary-glow/60 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-glow transition-all duration-500"
-            >
-              Ver mais obras
-            </button>
+        {(hasMore || canClose) && (
+          <div className="flex justify-center gap-3 mt-10">
+            {hasMore && (
+              <button
+                onClick={handleShowMore}
+                className="font-accent px-6 py-3 text-sm tracking-[0.15em] uppercase border border-primary-glow/60 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary hover:shadow-glow transition-all duration-500"
+              >
+                Ver mais obras
+              </button>
+            )}
+            {canClose && (
+              <button
+                onClick={handleClose}
+                className="font-accent px-6 py-3 text-sm tracking-[0.15em] uppercase border border-border/60 text-muted-foreground hover:border-primary-glow hover:text-foreground transition-all duration-500"
+              >
+                Fechar
+              </button>
+            )}
           </div>
         )}
       </div>
