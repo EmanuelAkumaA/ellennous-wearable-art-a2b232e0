@@ -255,7 +255,8 @@ export const PiecesManager = () => {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    // Mobile: long-press 1s para ativar drag, permitindo scroll vertical normal
+    useSensor(TouchSensor, { activationConstraint: { delay: 1000, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
