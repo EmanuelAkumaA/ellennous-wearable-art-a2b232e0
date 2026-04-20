@@ -9,6 +9,12 @@ import { PieceCarousel } from "./PieceCarousel";
 import { ZoomOverlay } from "./ZoomOverlay";
 import { useGalleryData, type PieceData } from "./useGalleryData";
 import { trackPieceEvent } from "@/lib/analytics";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 
 const MOBILE_STEP = 5;
 const DESKTOP_STEP = 6;
