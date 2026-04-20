@@ -4,6 +4,7 @@ import { CategoriesManager } from "./CategoriesManager";
 import { PiecesManager } from "./PiecesManager";
 import { UserSettings } from "./UserSettings";
 import { StatsManager } from "./StatsManager";
+import { ReviewsManager } from "./ReviewsManager";
 
 const AdminDashboard = () => {
   const [tab, setTab] = useState<AdminTab>("pieces");
@@ -16,6 +17,7 @@ const AdminDashboard = () => {
     <AdminShell active={tab} onSelect={setTab}>
       {tab === "pieces" && <PiecesManager />}
       {tab === "categories" && <CategoriesManager />}
+      {tab === "reviews" && <ReviewsManager />}
       {tab === "stats" && <StatsManager />}
       {tab === "user" && <UserSettings />}
     </AdminShell>
