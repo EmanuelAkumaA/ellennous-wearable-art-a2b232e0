@@ -38,6 +38,8 @@ export const Testimonials = () => {
 
   const { data: cards, isLoading } = useQuery({
     queryKey: ["approved-reviews"],
+    staleTime: 60_000,
+    refetchOnMount: "always",
     queryFn: async (): Promise<CardData[]> => {
       const { data, error } = await supabase
         .from("reviews")
@@ -45,8 +47,8 @@ export const Testimonials = () => {
         .eq("status", "approved")
         .order("ordem", { ascending: true })
         .order("created_at", { ascending: false });
-      if (error || !data || data.length === 0) return fallbackTestimonials;
-      return data.map((r) => ({
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
         image: r.photo_url,
         name: r.client_name,
         role: r.client_role,
@@ -59,7 +61,8 @@ export const Testimonials = () => {
     },
   });
 
-  const items = cards ?? fallbackTestimonials;
+  const items = cards ?? [];
+  const hasItems = items.length > 0;
 
   return (
     <section
