@@ -10,7 +10,6 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { getOptimizedImageUrl, preloadImage } from "@/lib/imageOptimization";
 
 interface PieceCarouselProps {
   images: string[];
@@ -112,25 +111,12 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     onZoom?.(images, i);
   };
 
-  const optimizedSlide = (src: string) =>
-    getOptimizedImageUrl(src, { width: 1200, quality: 80 });
-
-  // Preload next/prev for snappy navigation
-  useEffect(() => {
-    if (images.length <= 1) return;
-    const next = (selectedIndex + 1) % images.length;
-    const prev = (selectedIndex - 1 + images.length) % images.length;
-    preloadImage(optimizedSlide(images[next]));
-    preloadImage(optimizedSlide(images[prev]));
-  }, [selectedIndex, images]);
-
   if (images.length <= 1) {
     return (
       <img
-        src={optimizedSlide(images[0])}
+        src={images[0]}
         alt={alt}
-        loading="eager"
-        decoding="async"
+        loading="lazy"
         onClick={() => handleImageClick(0)}
         className={`w-full h-full object-cover ${cursorClass}`}
       />
@@ -153,10 +139,9 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         {images.map((src, i) => (
           <CarouselItem key={i} className="h-full">
             <img
-              src={optimizedSlide(src)}
+              src={src}
               alt={`${alt} — imagem ${i + 1}`}
-              loading={i === 0 ? "eager" : "lazy"}
-              decoding="async"
+              loading="lazy"
               onClick={() => handleImageClick(i)}
               className={`w-full h-full object-cover aspect-square md:aspect-auto ${cursorClass}`}
             />

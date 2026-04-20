@@ -131,9 +131,7 @@ export type Database = {
         Row: {
           categoria_id: string
           conceito: string
-          cover_fit: string
           cover_image_id: string | null
-          cover_position: string
           cover_storage_path: string | null
           cover_url: string | null
           created_at: string
@@ -150,9 +148,7 @@ export type Database = {
         Insert: {
           categoria_id: string
           conceito?: string
-          cover_fit?: string
           cover_image_id?: string | null
-          cover_position?: string
           cover_storage_path?: string | null
           cover_url?: string | null
           created_at?: string
@@ -169,9 +165,7 @@ export type Database = {
         Update: {
           categoria_id?: string
           conceito?: string
-          cover_fit?: string
           cover_image_id?: string | null
-          cover_position?: string
           cover_storage_path?: string | null
           cover_url?: string | null
           created_at?: string

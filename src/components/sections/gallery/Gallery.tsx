@@ -9,7 +9,6 @@ import { PieceCarousel } from "./PieceCarousel";
 import { ZoomOverlay } from "./ZoomOverlay";
 import { useGalleryData, type PieceData } from "./useGalleryData";
 import { trackPieceEvent } from "@/lib/analytics";
-import { getOptimizedImageUrl, getOptimizedSrcSet } from "@/lib/imageOptimization";
 
 const MOBILE_STEP = 5;
 const DESKTOP_STEP = 6;
@@ -153,36 +152,23 @@ export const Gallery = () => {
             {visible.map((piece, idx) => {
               const isNew = idx >= animateFromRef.current;
               const delay = isNew ? (idx - animateFromRef.current) * 150 : 0;
-              const rawSrc = piece.capa || piece.imagens[0];
-              const isAboveFold = idx < 3;
-              const optimizedSrc = getOptimizedImageUrl(rawSrc, { width: 600, quality: 70 });
-              const srcSet = getOptimizedSrcSet(rawSrc, [400, 600, 900], 70);
-              const isContain = piece.coverFit === "contain";
               return (
                 <button
                   key={piece.id}
                   ref={idx === step - 1 ? lastInitialItemRef : undefined}
                   onClick={() => handleSelectPiece(piece)}
                   style={isNew ? { animationDelay: `${delay}ms` } : undefined}
-                  className={`group relative aspect-[3/4] overflow-hidden bg-secondary/40 border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
+                  className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
                 >
                   <img
-                    src={optimizedSrc}
-                    srcSet={srcSet || undefined}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    src={piece.capa || piece.imagens[0]}
                     alt={`${piece.nome} — ${piece.categoria}`}
-                    loading={isAboveFold ? "eager" : "lazy"}
-                    decoding="async"
-                    {...(isAboveFold ? { fetchpriority: "high" as const } : {})}
+                    loading="lazy"
                     width={1024}
                     height={1280}
-                    style={{ objectPosition: piece.coverPosition }}
-                    className={`w-full h-full transition-transform duration-1000 group-hover:scale-105 ${
-                      isContain ? "object-contain" : "object-cover"
-                    }`}
+                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                   />
-                  {/* Bottom info gradient — kept subtle so the piece stays visible */}
-                  <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-2/5 bg-gradient-to-t from-background via-background/70 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
                   <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
                     {piece.novo && (
                       <span className="font-accent text-xs tracking-[0.15em] uppercase bg-primary/90 text-primary-foreground px-3 py-1">
