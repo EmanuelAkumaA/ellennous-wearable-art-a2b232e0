@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { cacheStaleWhileRevalidate, isOffline } from "@/lib/offlineCache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -335,16 +336,41 @@ export const ReviewsManager = () => {
 
   const load = async () => {
     setLoading(true);
-    const [inv, rev] = await Promise.all([
-      supabase.from("review_invites").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("reviews")
-        .select("*")
-        .order("ordem", { ascending: true })
-        .order("created_at", { ascending: false }),
-    ]);
-    if (inv.data) setInvites(inv.data as Invite[]);
-    if (rev.data) setReviews(rev.data as Review[]);
+    await cacheStaleWhileRevalidate<{ invites: Invite[]; reviews: Review[] }>(
+      "admin:invites+reviews",
+      async () => {
+        const [inv, rev] = await Promise.all([
+          supabase.from("review_invites").select("*").order("created_at", { ascending: false }),
+          supabase
+            .from("reviews")
+            .select("*")
+            .order("ordem", { ascending: true })
+            .order("created_at", { ascending: false }),
+        ]);
+        if (inv.error) throw inv.error;
+        if (rev.error) throw rev.error;
+        return {
+          invites: (inv.data as Invite[]) ?? [],
+          reviews: (rev.data as Review[]) ?? [],
+        };
+      },
+      {
+        onCache: ({ invites, reviews }) => {
+          setInvites(invites);
+          setReviews(reviews);
+          setLoading(false);
+        },
+        onFresh: ({ invites, reviews }) => {
+          setInvites(invites);
+          setReviews(reviews);
+        },
+        onError: (err) => {
+          if (!isOffline()) {
+            toast({ title: "Erro ao carregar", description: (err as Error).message, variant: "destructive" });
+          }
+        },
+      },
+    );
     setLoading(false);
   };
 
