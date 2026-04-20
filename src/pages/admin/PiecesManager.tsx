@@ -836,6 +836,7 @@ export const PiecesManager = () => {
                   canMoveUp={!isFiltering && idx > 0}
                   canMoveDown={!isFiltering && idx < filteredPieces.length - 1}
                   disabled={isFiltering}
+                  dragDisabled={isMobile}
                   highlight={recentlyMovedId === p.id}
                   registerFlipNode={registerFlipNode}
                 />
