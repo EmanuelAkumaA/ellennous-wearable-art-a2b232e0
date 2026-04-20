@@ -4,7 +4,7 @@ import Autoplay from "embla-carousel-autoplay";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
-import { Quote, Star } from "lucide-react";
+import { Instagram, MapPin, Quote, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import t1 from "@/assets/testimonial-1.jpg";
 import t2 from "@/assets/testimonial-2.jpg";
@@ -19,15 +19,18 @@ interface CardData {
   role: string | null;
   quote: string;
   rating: number;
+  city: string | null;
+  state: string | null;
+  instagram: string | null;
 }
 
 const fallbackTestimonials: CardData[] = [
-  { image: t1, name: "Rafael M.", role: "Anime/Geek", quote: "Nunca usei nada que falasse tanto por mim sem precisar abrir a boca.", rating: 5 },
-  { image: t2, name: "Marina S.", role: "Floral", quote: "É arte que respira comigo. Cada flor parece pintada na minha pele.", rating: 5 },
-  { image: t3, name: "Lucas T.", role: "ScarType™", quote: "Não é roupa. É um manifesto que eu visto todo dia.", rating: 5 },
-  { image: t4, name: "Beatriz L.", role: "Exclusiva", quote: "Senti que finalmente alguém entendeu quem eu sou — e bordou isso em mim.", rating: 5 },
-  { image: t5, name: "Daniel K.", role: "Anime/Geek", quote: "É a única peça que eu tenho medo de tirar do corpo. Parece parte de mim.", rating: 5 },
-  { image: t6, name: "Helena V.", role: "Realismo", quote: "Quem entende, entende. Quem não entende, fica olhando.", rating: 5 },
+  { image: t1, name: "Rafael M.", role: "Anime/Geek", quote: "Nunca usei nada que falasse tanto por mim sem precisar abrir a boca.", rating: 5, city: "São Paulo", state: "SP", instagram: "@rafa.mtz" },
+  { image: t2, name: "Marina S.", role: "Floral", quote: "É arte que respira comigo. Cada flor parece pintada na minha pele.", rating: 5, city: "Curitiba", state: "PR", instagram: "@marina.sg" },
+  { image: t3, name: "Lucas T.", role: "ScarType™", quote: "Não é roupa. É um manifesto que eu visto todo dia.", rating: 5, city: "Belo Horizonte", state: "MG", instagram: "@lucas.tlr" },
+  { image: t4, name: "Beatriz L.", role: "Exclusiva", quote: "Senti que finalmente alguém entendeu quem eu sou — e bordou isso em mim.", rating: 5, city: "Rio de Janeiro", state: "RJ", instagram: "@bia.lps" },
+  { image: t5, name: "Daniel K.", role: "Anime/Geek", quote: "É a única peça que eu tenho medo de tirar do corpo. Parece parte de mim.", rating: 5, city: "Porto Alegre", state: "RS", instagram: "@dani.kbr" },
+  { image: t6, name: "Helena V.", role: "Realismo", quote: "Quem entende, entende. Quem não entende, fica olhando.", rating: 5, city: "Florianópolis", state: "SC", instagram: "@helena.vri" },
 ];
 
 const StarRating = ({ value }: { value: number }) => (
@@ -53,7 +56,7 @@ export const Testimonials = () => {
     queryFn: async (): Promise<CardData[]> => {
       const { data, error } = await supabase
         .from("reviews")
-        .select("client_name, client_role, content, rating, photo_url")
+        .select("client_name, client_role, content, rating, photo_url, city, state, instagram")
         .eq("status", "approved")
         .order("ordem", { ascending: true })
         .order("created_at", { ascending: false });
@@ -64,6 +67,9 @@ export const Testimonials = () => {
         role: r.client_role,
         quote: r.content,
         rating: r.rating,
+        city: r.city,
+        state: r.state,
+        instagram: r.instagram,
       }));
     },
   });
@@ -122,10 +128,27 @@ export const Testimonials = () => {
                         <p className="font-display italic text-lg md:text-xl text-foreground/90 leading-relaxed mb-6">
                           "{t.quote}"
                         </p>
-                        <div className="pt-4 border-t border-border/40">
+                        <div className="pt-4 border-t border-border/40 space-y-1.5">
                           <p className="font-accent text-lg text-foreground tracking-wide">{t.name}</p>
                           {t.role && (
                             <p className="text-xs text-muted-foreground tracking-wider">{t.role}</p>
+                          )}
+                          {(t.city || t.state) && (
+                            <p className="flex items-center gap-1 text-[11px] text-foreground/60">
+                              <MapPin className="h-3 w-3 text-primary-glow/70" strokeWidth={1.5} />
+                              {[t.city, t.state].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
+                          {t.instagram && (
+                            <a
+                              href={`https://instagram.com/${t.instagram.replace(/^@/, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] text-primary-glow/80 hover:text-primary-glow transition-colors"
+                            >
+                              <Instagram className="h-3 w-3" strokeWidth={1.5} />
+                              {t.instagram.startsWith("@") ? t.instagram : `@${t.instagram}`}
+                            </a>
                           )}
                         </div>
                       </div>
