@@ -207,7 +207,7 @@ const SidebarBody = ({
         className="w-full justify-start rounded-none font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-secondary/60"
       >
         <a
-          href="https://ellennous-wearable-art.vercel.app/"
+          href="https://ellennous-wearable-art-a2b232e0.vercel.app"
           target="_blank"
           rel="noopener noreferrer"
         >
