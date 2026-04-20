@@ -189,6 +189,89 @@ export type Database = {
           },
         ]
       }
+      review_invites: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          note: string | null
+          revoked: boolean
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          note?: string | null
+          revoked?: boolean
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          note?: string | null
+          revoked?: boolean
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
+      reviews: {
+        Row: {
+          client_name: string
+          client_role: string | null
+          content: string
+          created_at: string
+          id: string
+          invite_id: string | null
+          ordem: number
+          photo_storage_path: string | null
+          photo_url: string | null
+          rating: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_name: string
+          client_role?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          invite_id?: string | null
+          ordem?: number
+          photo_storage_path?: string | null
+          photo_url?: string | null
+          rating: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string
+          client_role?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          invite_id?: string | null
+          ordem?: number
+          photo_storage_path?: string | null
+          photo_url?: string | null
+          rating?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_invite_id_fkey"
+            columns: ["invite_id"]
+            isOneToOne: false
+            referencedRelation: "review_invites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
