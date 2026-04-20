@@ -1,42 +1,34 @@
 
 ## Plano
 
-Duas mudanças independentes.
+Dois ajustes pontuais.
 
-### 1. Slide animado ao reordenar obras
+### 1. Reverter imagem do Hero
 
-**Problema**: hoje o dnd-kit anima durante o drag, mas quando o usuário clica nas setas ↑/↓ o array muda via `setPieces` e os cards "saltam" instantaneamente, sem transição.
+Voltar para a imagem original do homem (`hero-ellennous.jpg` ou o arquivo anterior). Em `src/components/sections/Hero.tsx`:
+- Trocar `import heroImage from "@/assets/hero-ellennous-aero.png"` de volta para o asset original.
+- Restaurar o `alt` antigo.
 
-**Solução**: usar a técnica FLIP (First-Last-Invert-Play) sem instalar nada. Em `SortablePieceCard`:
+Preciso confirmar qual era o arquivo anterior — vou verificar o histórico/assets disponíveis ao executar. Pelo código atual o anterior era `@/assets/hero-ellennous.jpg`.
 
-- Manter um `ref` ao DOM node de cada card.
-- Antes de cada reordenação (no `movePiece`), capturar `getBoundingClientRect()` de todos os cards visíveis (via um Map indexado por `piece.id`).
-- Depois do `setPieces` (no `useLayoutEffect` do componente pai), comparar a nova posição com a antiga: aplicar `transform: translateY(deltaY)` instantâneo + `transition: none`, depois em `requestAnimationFrame` setar `transform: ''` + `transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1)` para o card deslizar suavemente até o novo lugar.
+### 2. Desativar drag por toque no mobile (apenas setas reordenam)
 
-Encapsular isso num pequeno hook `useFlipAnimation(items, getId)` em `src/hooks/use-flip-animation.ts`, alimentado com `pieces` e usado no container da lista mobile e do grid desktop.
+**Problema**: hoje o `SortablePieceCard` no mobile usa o `TouchSensor` do dnd-kit (long-press 1s). Mesmo com delay, isso pode interferir/segurar o scroll e o usuário não quer essa interação no celular — só as setas ↑/↓.
 
-A animação `animate-move-highlight` já existente (glow) continua disparando em paralelo — slide + flash combinam bem.
+**Solução em `src/pages/admin/PiecesManager.tsx`**:
+- Detectar se é mobile via `useIsMobile()` (hook já existe em `src/hooks/use-mobile.tsx`).
+- No mobile: **não** registrar `TouchSensor` nem aplicar `attributes`/`listeners` do dnd-kit nos cards. Renderizar os cards sem o wrapper sortable (ou com `disabled: true` no `useSortable`).
+- Remover `touch-action: none` / `touch-none` dos cards no mobile — assim o scroll vertical com o dedo funciona naturalmente em qualquer parte do card.
+- Manter `PointerSensor` ativo apenas no desktop (drag com mouse continua funcionando lá).
+- As setas ↑/↓ continuam sendo o único meio de reordenar no celular (já implementadas).
 
-### 2. Trocar imagem de fundo do Hero pela imagem enviada
+A animação FLIP de slide continua funcionando normalmente porque ela é independente do dnd-kit.
 
-A imagem enviada é a peça preta com o personagem branco/amarelo "Aero Por Vero". Vou:
-
-1. **Remover o fundo** da imagem usando o modelo Nano Banana (`google/gemini-2.5-flash-image`) com prompt do tipo "Remove background completely, keep only the jacket and person, transparent PNG, preserve all artwork details, sharp edges". Salvar o resultado como PNG transparente.
-2. Salvar em `src/assets/hero-ellennous-aero.png`.
-3. Atualizar `src/components/sections/Hero.tsx`:
-   - Trocar `import heroImage from "@/assets/hero-ellennous.jpg"` para o novo PNG.
-   - Manter exatamente o mesmo nível de sobreposição: `opacity-60` na `<img>` + o gradiente `bg-gradient-to-b from-background/30 via-background/60 to-background` por cima + o splash drift. Sem alterar tamanhos, posicionamento (`object-cover`), nem o glow roxo.
-   - Atualizar o `alt` para algo como "Jaqueta Ellennous com arte autoral 'Aero por Vero' em preto, branco e amarelo".
-
-A imagem original `hero-ellennous.jpg` fica preservada no repo (não excluo) caso seja útil depois.
-
-### Arquivos a modificar/criar
-- `src/hooks/use-flip-animation.ts` (novo)
-- `src/pages/admin/PiecesManager.tsx` (usar o hook na lista de obras)
-- `src/assets/hero-ellennous-aero.png` (novo, gerado via Nano Banana sem fundo)
-- `src/components/sections/Hero.tsx` (trocar import e alt)
+### Arquivos a modificar
+- `src/components/sections/Hero.tsx`
+- `src/pages/admin/PiecesManager.tsx`
 
 ### Validação
-1. **/admin/pieces no celular**: clicar ↑ ou ↓ — o card desliza suavemente até a nova posição (não salta) e ainda recebe o flash de highlight.
-2. **Desktop**: drag-and-drop continua animado normalmente; clicar e arrastar entre posições no grid também desliza.
-3. **Home (/)**: o hero passa a exibir a peça "Aero por Vero" sem fundo, com a mesma camada escura/gradiente — texto continua legível por cima.
+1. **Home (/)**: hero volta a mostrar a foto original do homem com a jaqueta.
+2. **/admin/pieces no celular**: passar o dedo verticalmente sobre qualquer card faz scroll normalmente, sem ativar drag. Só clicando nas setas ↑/↓ a obra muda de posição (com slide animado).
+3. **Desktop**: drag-and-drop com mouse continua funcionando normalmente.
