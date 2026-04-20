@@ -12,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const reviewSchema = z.object({
   client_name: z.string().trim().min(1, "Informe seu nome").max(120, "Máx. 120 caracteres"),
-  client_role: z.string().trim().max(60, "Máx. 60 caracteres").optional(),
   city: z.string().trim().max(80, "Máx. 80 caracteres").optional(),
   state: z.string().trim().max(40, "Máx. 40 caracteres").optional(),
   instagram: z.string().trim().max(60, "Máx. 60 caracteres").optional(),
@@ -74,7 +73,6 @@ const ReviewSubmit = () => {
   const [reason, setReason] = useState<string | null>(null);
 
   const [name, setName] = useState("");
-  const [role, setRole] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -134,7 +132,6 @@ const ReviewSubmit = () => {
     e.preventDefault();
     const parsed = reviewSchema.safeParse({
       client_name: name,
-      client_role: role || undefined,
       city: city || undefined,
       state: state || undefined,
       instagram: instagram || undefined,
@@ -175,7 +172,6 @@ const ReviewSubmit = () => {
         body: JSON.stringify({
           token,
           client_name: parsed.data.client_name,
-          client_role: parsed.data.client_role ?? null,
           city: parsed.data.city ?? null,
           state: parsed.data.state ?? null,
           instagram: parsed.data.instagram ?? null,
@@ -316,18 +312,6 @@ const ReviewSubmit = () => {
             maxLength={120}
             placeholder="Como devemos te chamar"
             required
-            className={inputCls}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="role" className={labelCls}>Como se descreve? (opcional)</Label>
-          <Input
-            id="role"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            maxLength={60}
-            placeholder="Ex: cliente, noiva, parceiro…"
             className={inputCls}
           />
         </div>
