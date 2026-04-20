@@ -47,6 +47,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { compressImage } from "@/lib/imageCompression";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
