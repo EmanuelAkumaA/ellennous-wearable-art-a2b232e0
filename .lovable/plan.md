@@ -2,51 +2,53 @@
 
 ## Plano
 
-5 ajustes pontuais. Tudo é frontend exceto o item 5 que envolve PWA.
+3 ajustes simples e localizados.
 
-### 1. Realtime nas avaliações (validação)
-Já implementado. Vou apenas confirmar que o canal está ativo após o build — sem código novo.
+### 1. Obras: voltar pra lista vertical + drag só com long-press
 
-### 2. Filtro de obras responsivo no mobile (imagem 28)
-Em `src/pages/admin/PiecesManager.tsx` (linhas 604-637) o container `glass-card rounded-full p-1.5` força tudo numa pílula. No mobile o `Select` "Todas as categorias" extrapola e o input de busca fica apertado.
+**Arquivo**: `src/pages/admin/PiecesManager.tsx`
 
-**Fix:** trocar o wrapper para `flex-col` no mobile com gap maior, remover `rounded-full` no container (manter só nos filhos), e dar `w-full` consistente em ambos no mobile.
+Hoje tem dois problemas no mobile:
+- Layout em **grid** + cards com `touch-none` — qualquer toque arrasta, impedindo scroll.
+- O drag handle no mobile usa `TouchSensor` com delay de 150ms, mas o card inteiro tem `touch-none`, então mesmo onde não tem handle o scroll trava.
 
-### 3. Link "Ver site público" → URL nova
-`src/components/admin/AdminShell.tsx` linha 210: trocar `https://ellennous-wearable-art.vercel.app/` por `https://ellennous-wearable-art-a2b232e0.vercel.app`.
+**Mudanças:**
+- Trocar grid (`grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`) por **lista vertical** (`flex flex-col gap-3`) no mobile, mantendo opção de grid só no desktop (`md:grid md:grid-cols-2 xl:grid-cols-3`).
+- Criar variante `ListPieceCard` (ou ajustar `SortablePieceCard`) com layout horizontal no mobile: thumb pequena à esquerda + nome/categoria/#ordem à direita + botões editar/excluir.
+- **Remover `touch-none`** do card raiz. Mover o `{...listeners}` do botão handle para o **card inteiro**, mas só ativar via `TouchSensor` com `delay: 1000ms` (1 segundo) e `tolerance: 5px`. Assim toque rápido faz scroll, toque longo de 1s ativa drag.
+- Manter `PointerSensor` com `distance: 5` para desktop (mouse continua arrastando normalmente).
+- Remover o handle visual `<GripVertical>` no mobile (fica redundante com long-press); manter no desktop.
 
-### 4. Numeração das obras começa em #02 — bug
-Banco: `ordem` começa em **1** (não 0). Código atual em `PiecesManager.tsx` linha 208: `piece.ordem + 1` → exibe #02 para a primeira obra.
+### 2. Avaliações: tabs em grid 2x2 no mobile
 
-**Fix:** mudar para `String(piece.ordem).padStart(2, "0")` (sem o `+ 1`). Resultado: #01, #02, #03…
+**Arquivo**: `src/pages/admin/ReviewsManager.tsx` (linhas 676-686)
 
-### 5. PWA do admin não funciona
-Causa principal: o `InstallPrompt` faz `if (isStandalone() || wasRecentlyDismissed()) return` **antes** de qualquer coisa, mas no preview do Lovable o SW nunca registra (correto). Em produção (Vercel) o problema real é:
+Hoje as 3 tabs ficam em linha e estouram no mobile.
 
-- O `beforeinstallprompt` só dispara se o SW estiver **realmente registrado e ativo** + manifest válido + critério "engagement" do Chrome.
-- O SW atual (`public/admin-sw.js`) tenta cachear `/admin` direto, mas como é SPA, o `fetch` para `/admin/pieces` etc. precisa cair no fallback. Já tem fallback, mas o **install** está falhando silenciosamente porque `cache.addAll` rejeita o array inteiro se **um único** recurso falhar (uso de `.catch(() => undefined)` por fora não salva — o `event.waitUntil` recebe a Promise rejeitada).
-- Além disso, o manifest tem `start_url: "/admin"` mas o SW só intercepta requests dentro de `/admin` — OK. Porém no Vercel sem `vercel.json` com SPA rewrite, `/admin` direto retorna 404 antes de chegar no React Router.
+**Mudança:** trocar `<TabsList>` para usar `grid grid-cols-2 sm:flex sm:w-auto h-auto gap-1 w-full`. Aprovadas ocupa as 2 colunas da primeira linha (`col-span-2`), Pendentes e Recusadas ficam lado a lado na segunda linha. Cada tab com `w-full` para preencher.
 
-**Fixes:**
-1. **`public/admin-sw.js`**: trocar `cache.addAll(APP_SHELL)` por loop individual `Promise.allSettled` para tolerar falhas de assets faltantes, e remover items que podem 404 (ex: `/admin/` com barra dupla).
-2. **`public/admin-sw.js`**: garantir que o fetch handler retorna o `index.html` (`/admin`) corretamente como fallback de navegação SPA.
-3. **`vercel.json`** (criar na raiz): adicionar SPA rewrite para todas as rotas caírem em `/index.html`. Sem isso, deep links como `/admin` quebram em refresh no Vercel — explicando por que o PWA "não funciona" (start_url 404 = sem instalação).
-4. **`InstallPrompt.tsx`**: melhorar o fallback iOS (já existe) e adicionar um log simples no console quando `beforeinstallprompt` não dispara em 5s no Android, para o usuário saber por quê.
+Resultado:
+```
+[      Aprovadas      ]
+[Pendentes][Recusadas ]
+```
 
-### 6. Sync GitHub
-Como expliquei antes: o sync é automático e em tempo real. Não há ação manual de commit a executar — mudanças vão pro repo conectado assim que eu salvar.
+### 3. "Gerar link de avaliação": reorganizar header
+
+**Arquivo**: `src/pages/admin/ReviewsManager.tsx` (linhas 539-549)
+
+Hoje o `CardHeader` usa `flex-row items-center justify-between`, fazendo o botão "Ver página base" ficar lado a lado com o título — quebra no mobile.
+
+**Mudança:** trocar para `flex-col gap-3` — título "Gerar link de avaliação" sozinho na primeira linha, e numa segunda linha um wrapper `flex justify-end` com o botão "Ver página base" alinhado à direita.
 
 ---
 
 ## Arquivos a modificar
-- `src/pages/admin/PiecesManager.tsx` — filtros responsivos + numeração #01
-- `src/components/admin/AdminShell.tsx` — URL "Ver site público"
-- `public/admin-sw.js` — install tolerante a falhas + fallback SPA robusto
-- `vercel.json` (novo) — SPA rewrite para Vercel
+- `src/pages/admin/PiecesManager.tsx` — lista vertical no mobile + long-press 1s pra drag
+- `src/pages/admin/ReviewsManager.tsx` — tabs em grid 2x2 no mobile + header do gerar link em 2 linhas
 
-## Como vou validar
-1. Mobile (390px): filtros empilhados, busca larga, select largo, sem corte.
-2. Cards mostrando #01, #02, #03 na ordem do banco.
-3. Sidebar → "Ver site público" abre nova URL.
-4. Após deploy Vercel: `/admin` em refresh funciona; aparece prompt "Instalar" no Chrome Android; ícone "EN" aparece centralizado na home screen.
+## Validação
+1. **Mobile (390px) em /admin/pieces**: scroll vertical funciona com toque normal; segurar 1s em cima de uma obra ativa o drag e permite reordenar.
+2. **Mobile em /admin/reviews**: tabs aparecem em grid 2x2; "Gerar link de avaliação" tem título em cima e botão "Ver página base" embaixo à direita.
+3. **Desktop**: tudo continua funcionando como antes (grid de obras, tabs em linha, header em uma linha).
 
