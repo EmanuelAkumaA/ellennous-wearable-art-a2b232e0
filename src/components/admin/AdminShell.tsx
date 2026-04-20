@@ -3,10 +3,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAdminProfile } from "@/hooks/useAdminProfile";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles } from "lucide-react";
+import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star } from "lucide-react";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
 
-export type AdminTab = "pieces" | "categories" | "stats" | "user";
+export type AdminTab = "pieces" | "categories" | "reviews" | "stats" | "user";
 
 interface NavItem {
   key: AdminTab;
@@ -18,6 +18,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { key: "pieces", label: "Obras", icon: ImageIcon, desc: "Catálogo, capas e galeria de cada peça" },
   { key: "categories", label: "Categorias", icon: Tags, desc: "Organização e ordem das coleções" },
+  { key: "reviews", label: "Avaliações", icon: Star, desc: "Convites de avaliação e moderação dos depoimentos" },
   { key: "stats", label: "Estatísticas", icon: BarChart3, desc: "Aberturas, conversão e tempo de visita" },
   { key: "user", label: "Conta", icon: UserCog, desc: "Acesso e segurança do administrador" },
 ];

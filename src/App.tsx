@@ -7,6 +7,7 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminLogin from "./pages/admin/Login";
 import AdminDashboard from "./pages/admin/Dashboard";
+import ReviewSubmit from "./pages/ReviewSubmit";
 import { ProtectedRoute } from "./components/admin/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/avaliar/:token" element={<ReviewSubmit />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route
             path="/admin"
