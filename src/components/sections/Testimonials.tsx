@@ -85,7 +85,7 @@ export const Testimonials = () => {
           </p>
         </div>
 
-        {!isLoading && (
+        {!isLoading && hasItems && (
           <div className="reveal">
             <Carousel
               opts={{ align: "start", loop: true }}
@@ -148,6 +148,20 @@ export const Testimonials = () => {
               <CarouselPrevious className="hidden md:flex -left-6 lg:-left-12 h-12 w-12 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow hover:text-foreground shadow-[0_0_30px_hsl(var(--primary)/0.3)]" />
               <CarouselNext className="hidden md:flex -right-6 lg:-right-12 h-12 w-12 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow hover:text-foreground shadow-[0_0_30px_hsl(var(--primary)/0.3)]" />
             </Carousel>
+          </div>
+        )}
+
+        {!isLoading && !hasItems && (
+          <div className="reveal max-w-2xl mx-auto text-center">
+            <div className="relative border border-primary/15 bg-background/40 backdrop-blur-sm p-12 md:p-16">
+              <Sparkles className="w-10 h-10 text-primary-glow/60 mx-auto mb-6" strokeWidth={1.2} />
+              <p className="font-display italic text-xl md:text-2xl text-foreground/85 leading-relaxed mb-4">
+                "As primeiras vozes estão sendo bordadas."
+              </p>
+              <p className="text-sm text-foreground/60 tracking-wider">
+                Em breve, quem veste a Ellennous fala por si — aqui mesmo.
+              </p>
+            </div>
           </div>
         )}
       </div>
