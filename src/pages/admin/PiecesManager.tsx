@@ -1079,6 +1079,16 @@ export const PiecesManager = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Display controls — only meaningful when there's an image to show */}
+                  {(editing.cover_url || editing.gallery_piece_images[0]?.url) && (
+                    <CoverDisplayControls
+                      imageUrl={editing.cover_url ?? editing.gallery_piece_images[0]?.url ?? ""}
+                      coverFit={(editing.cover_fit ?? "contain") as "contain" | "cover"}
+                      coverPosition={editing.cover_position ?? "50% 50%"}
+                      onChange={updateCoverDisplay}
+                    />
+                  )}
                 </section>
 
                 {/* Galeria */}
