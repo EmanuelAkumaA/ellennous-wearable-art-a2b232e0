@@ -1,47 +1,52 @@
 
 
-## Diagnóstico
-
-As avaliações **estão sendo retornadas** pela API (vi nos network logs: 6 avaliações aprovadas — Rafael, Marina, Lucas, Beatriz, Daniel, Helena, todas com status approved). O problema não é dados nem RLS.
-
-Olhando o console:
-```
-Warning: Function components cannot be given refs.
-Check the render method of `Testimonials`.
-at StarRating
-```
-
-E no `Testimonials.tsx`, o componente está envolto em `<section ref={ref}>` onde `ref` vem de `useReveal()`. A seção tem a classe `reveal` aplicada nos filhos. O `useReveal` provavelmente adiciona uma classe `is-visible` quando entra no viewport, mas como a section inteira só fica visível quando a animação dispara — e se o IntersectionObserver não disparar (ou se os elementos `.reveal` filhos começam com `opacity: 0`) — os cards ficam invisíveis mesmo estando no DOM.
-
-Preciso confirmar olhando `use-reveal.ts` e o CSS `.reveal` em `index.css`.
-
-## Causa provável
-
-Os elementos com classe `.reveal` começam com `opacity: 0` aguardando a classe `is-visible`. Se o carrossel está dentro de um `.reveal` que nunca recebe `is-visible` (ou recebe tarde porque o IntersectionObserver só dispara ao scrollar até lá), os cards ficam invisíveis. Mas como o usuário diz que "não aparece", pode ser um dos dois:
-
-1. **Animação reveal travada** — o div `<div className="reveal">` que envolve o `<Carousel>` nunca fica visível.
-2. **Warning do StarRating com ref** — improvável de quebrar render, mas vale corrigir junto.
-
 ## Plano
 
-Vou inspecionar os arquivos críticos antes de propor o fix definitivo:
-- `src/hooks/use-reveal.ts` — entender quando `is-visible` é adicionado
-- `src/index.css` — ver regras `.reveal`
-- Confirmar se o ref do `useReveal` está aplicado corretamente
+5 ajustes pontuais. Tudo é frontend exceto o item 5 que envolve PWA.
 
-### Correções a aplicar
+### 1. Realtime nas avaliações (validação)
+Já implementado. Vou apenas confirmar que o canal está ativo após o build — sem código novo.
 
-1. **Garantir que o carrossel sempre renderiza visível** — remover dependência de `.reveal` no wrapper do `<Carousel>` (ou forçar `opacity-100`), já que os dados já vêm do banco. A animação reveal pode ficar só no header.
-2. **Corrigir warning do `StarRating`** — não é a causa raiz mas limpa o console; envolver em `forwardRef` ou simplesmente garantir que nada passa ref pra ele (provável que o Carousel/Embla esteja injetando refs nos filhos diretos).
-3. **Adicionar fallback de loading visível** — se `isLoading` for `true`, mostrar skeleton em vez de tela vazia.
-4. **Forçar refetch on focus** — para garantir que mudanças no admin apareçam mesmo sem realtime.
+### 2. Filtro de obras responsivo no mobile (imagem 28)
+Em `src/pages/admin/PiecesManager.tsx` (linhas 604-637) o container `glass-card rounded-full p-1.5` força tudo numa pílula. No mobile o `Select` "Todas as categorias" extrapola e o input de busca fica apertado.
 
-## Resumo técnico
+**Fix:** trocar o wrapper para `flex-col` no mobile com gap maior, remover `rounded-full` no container (manter só nos filhos), e dar `w-full` consistente em ambos no mobile.
 
-- Investigar `use-reveal.ts` e CSS de `.reveal`
-- Em `Testimonials.tsx`: aplicar `useReveal` apenas no header (`text-center mb-16`), deixar o carrossel sempre visível
-- Adicionar estado de loading com skeleton (3 cards placeholder)
-- Manter realtime + query (já funciona)
+### 3. Link "Ver site público" → URL nova
+`src/components/admin/AdminShell.tsx` linha 210: trocar `https://ellennous-wearable-art.vercel.app/` por `https://ellennous-wearable-art-a2b232e0.vercel.app`.
 
-Resultado: as 6 avaliações reais aparecem imediatamente ao carregar a página, sem depender de animação de scroll.
+### 4. Numeração das obras começa em #02 — bug
+Banco: `ordem` começa em **1** (não 0). Código atual em `PiecesManager.tsx` linha 208: `piece.ordem + 1` → exibe #02 para a primeira obra.
+
+**Fix:** mudar para `String(piece.ordem).padStart(2, "0")` (sem o `+ 1`). Resultado: #01, #02, #03…
+
+### 5. PWA do admin não funciona
+Causa principal: o `InstallPrompt` faz `if (isStandalone() || wasRecentlyDismissed()) return` **antes** de qualquer coisa, mas no preview do Lovable o SW nunca registra (correto). Em produção (Vercel) o problema real é:
+
+- O `beforeinstallprompt` só dispara se o SW estiver **realmente registrado e ativo** + manifest válido + critério "engagement" do Chrome.
+- O SW atual (`public/admin-sw.js`) tenta cachear `/admin` direto, mas como é SPA, o `fetch` para `/admin/pieces` etc. precisa cair no fallback. Já tem fallback, mas o **install** está falhando silenciosamente porque `cache.addAll` rejeita o array inteiro se **um único** recurso falhar (uso de `.catch(() => undefined)` por fora não salva — o `event.waitUntil` recebe a Promise rejeitada).
+- Além disso, o manifest tem `start_url: "/admin"` mas o SW só intercepta requests dentro de `/admin` — OK. Porém no Vercel sem `vercel.json` com SPA rewrite, `/admin` direto retorna 404 antes de chegar no React Router.
+
+**Fixes:**
+1. **`public/admin-sw.js`**: trocar `cache.addAll(APP_SHELL)` por loop individual `Promise.allSettled` para tolerar falhas de assets faltantes, e remover items que podem 404 (ex: `/admin/` com barra dupla).
+2. **`public/admin-sw.js`**: garantir que o fetch handler retorna o `index.html` (`/admin`) corretamente como fallback de navegação SPA.
+3. **`vercel.json`** (criar na raiz): adicionar SPA rewrite para todas as rotas caírem em `/index.html`. Sem isso, deep links como `/admin` quebram em refresh no Vercel — explicando por que o PWA "não funciona" (start_url 404 = sem instalação).
+4. **`InstallPrompt.tsx`**: melhorar o fallback iOS (já existe) e adicionar um log simples no console quando `beforeinstallprompt` não dispara em 5s no Android, para o usuário saber por quê.
+
+### 6. Sync GitHub
+Como expliquei antes: o sync é automático e em tempo real. Não há ação manual de commit a executar — mudanças vão pro repo conectado assim que eu salvar.
+
+---
+
+## Arquivos a modificar
+- `src/pages/admin/PiecesManager.tsx` — filtros responsivos + numeração #01
+- `src/components/admin/AdminShell.tsx` — URL "Ver site público"
+- `public/admin-sw.js` — install tolerante a falhas + fallback SPA robusto
+- `vercel.json` (novo) — SPA rewrite para Vercel
+
+## Como vou validar
+1. Mobile (390px): filtros empilhados, busca larga, select largo, sem corte.
+2. Cards mostrando #01, #02, #03 na ordem do banco.
+3. Sidebar → "Ver site público" abre nova URL.
+4. Após deploy Vercel: `/admin` em refresh funciona; aparece prompt "Instalar" no Chrome Android; ícone "EN" aparece centralizado na home screen.
 
