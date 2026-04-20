@@ -5,6 +5,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { ArrowDown, ArrowUp, ArrowUpDown, Eye, MousePointerClick, TrendingUp, RefreshCw, Clock } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface EventRow {
   piece_id: string;
@@ -176,15 +177,15 @@ export const StatsManager = () => {
         ? "bg-brand-ice/15 text-brand-ice"
         : "bg-gradient-purple-wine text-white shadow-glow";
     return (
-      <div className="glass-panel p-6 relative overflow-hidden group hover:border-primary-glow/40 transition-colors">
+      <div className="glass-panel p-4 sm:p-6 relative overflow-hidden group hover:border-primary-glow/40 transition-colors">
         <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-primary/10 blur-[60px] group-hover:bg-primary/20 transition-colors" />
-        <div className="relative flex items-start justify-between">
-          <div>
-            <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-3">{label}</p>
-            <p className="font-display text-4xl text-gradient-light tabular-nums">{value}</p>
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-2 sm:mb-3">{label}</p>
+            <p className="font-display text-2xl sm:text-4xl text-gradient-light tabular-nums">{value}</p>
           </div>
-          <div className={`h-11 w-11 rounded-md flex items-center justify-center ${accentBg}`}>
-            <Icon className="h-5 w-5" />
+          <div className={`shrink-0 h-9 w-9 sm:h-11 sm:w-11 rounded-md flex items-center justify-center ${accentBg}`}>
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </div>
       </div>
@@ -194,18 +195,18 @@ export const StatsManager = () => {
   return (
     <div className="space-y-8">
       {/* Filters bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ToggleGroup
           type="single"
           value={period}
           onValueChange={(v) => v && setPeriod(v as Period)}
-          className="glass-card p-1 rounded-full"
+          className="glass-card p-1 rounded-full w-full sm:w-auto justify-center"
         >
           {(["7d", "30d", "90d", "all"] as Period[]).map((p) => (
             <ToggleGroupItem
               key={p}
               value={p}
-              className="rounded-full px-4 py-1.5 font-accent text-[10px] tracking-[0.2em] uppercase data-[state=on]:bg-gradient-purple-wine data-[state=on]:text-white data-[state=on]:shadow-glow"
+              className="flex-1 sm:flex-none rounded-full px-4 py-1.5 font-accent text-[10px] tracking-[0.2em] uppercase data-[state=on]:bg-gradient-purple-wine data-[state=on]:text-white data-[state=on]:shadow-glow"
             >
               {p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : p === "90d" ? "90 dias" : "Tudo"}
             </ToggleGroupItem>
@@ -215,7 +216,7 @@ export const StatsManager = () => {
           onClick={load}
           variant="ghost"
           size="sm"
-          className="rounded-full font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-primary/10 hover:text-primary-glow"
+          className="w-full sm:w-auto justify-center rounded-full font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-primary/10 hover:text-primary-glow"
         >
           <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />
           Atualizar
@@ -236,13 +237,13 @@ export const StatsManager = () => {
 
       {/* Detail table */}
       <div className="glass-panel overflow-hidden">
-        <div className="px-6 py-4 border-b border-border/30 flex items-center gap-3">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border/30 flex items-center gap-3">
           <Clock className="h-4 w-4 text-primary-glow" />
-          <h3 className="font-accent text-sm tracking-[0.25em] uppercase">Performance por obra</h3>
+          <h3 className="font-accent text-xs sm:text-sm tracking-[0.25em] uppercase">Performance por obra</h3>
         </div>
 
         {loading ? (
-          <div className="p-6 space-y-2">
+          <div className="p-4 sm:p-6 space-y-2">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="h-12 shimmer rounded-md" />
             ))}
@@ -253,95 +254,188 @@ export const StatsManager = () => {
             <p className="text-sm text-muted-foreground">Nenhum evento registrado neste período.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border/30 bg-secondary/20 hover:bg-secondary/20">
-                  <TableHead
-                    className="cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
-                    onClick={() => toggleSort("nome")}
-                  >
-                    Obra
-                    <SortIcon k="nome" />
-                  </TableHead>
-                  <TableHead className="font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground">
-                    Categoria
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground min-w-[160px]"
-                    onClick={() => toggleSort("opens")}
-                  >
-                    Aberturas
-                    <SortIcon k="opens" />
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
-                    onClick={() => toggleSort("ctas")}
-                  >
-                    CTA
-                    <SortIcon k="ctas" />
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
-                    onClick={() => toggleSort("avgMs")}
-                  >
-                    Tempo médio
-                    <SortIcon k="avgMs" />
-                  </TableHead>
-                  <TableHead
-                    className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
-                    onClick={() => toggleSort("conversion")}
-                  >
-                    Conversão
-                    <SortIcon k="conversion" />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <>
+            {/* Mobile: sort toolbar + cards */}
+            <div className="md:hidden p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                  <SelectTrigger className="flex-1 h-9 font-accent text-[10px] tracking-[0.2em] uppercase">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="opens">Aberturas</SelectItem>
+                    <SelectItem value="ctas">CTA</SelectItem>
+                    <SelectItem value="avgMs">Tempo médio</SelectItem>
+                    <SelectItem value="conversion">Conversão</SelectItem>
+                    <SelectItem value="nome">Nome</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                  className="h-9 px-3 rounded-md hover:bg-primary/10 hover:text-primary-glow"
+                  aria-label="Alternar ordem"
+                >
+                  {sortDir === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              <div className="space-y-2">
                 {sorted.map((s) => {
                   const pct = (s.opens / maxOpens) * 100;
                   return (
-                    <TableRow key={s.pieceId} className="border-border/20 hover:bg-primary/5">
-                      <TableCell className="font-display">{s.nome}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{s.categoria}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="relative h-1.5 w-20 bg-primary/10 rounded-full overflow-hidden">
-                            <div
-                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-primary-glow rounded-full shadow-[0_0_8px_hsl(var(--primary-glow))]"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className="tabular-nums font-medium text-foreground/90 min-w-[2ch]">{s.opens}</span>
+                    <div
+                      key={s.pieceId}
+                      className="rounded-lg border border-border/30 bg-secondary/10 p-3 space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display text-base leading-tight truncate">{s.nome}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{s.categoria}</p>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{s.ctas}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {formatMs(s.avgMs)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {s.opens ? (
-                          <span
-                            className={`font-medium ${
-                              s.conversion >= 0.2
-                                ? "text-primary-glow"
-                                : s.conversion >= 0.05
-                                ? "text-foreground"
+                        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-purple-wine text-white shadow-glow">
+                          <Eye className="h-3 w-3" />
+                          <span className="font-accent text-[11px] tabular-nums">{s.opens}</span>
+                        </div>
+                      </div>
+
+                      <div className="relative h-1.5 w-full bg-primary/10 rounded-full overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-primary-glow rounded-full shadow-[0_0_8px_hsl(var(--primary-glow))]"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/20">
+                        <div className="text-center flex-1">
+                          <p className="font-accent text-[9px] tracking-[0.2em] uppercase text-muted-foreground mb-0.5">
+                            CTA
+                          </p>
+                          <p className="tabular-nums text-sm font-medium">{s.ctas}</p>
+                        </div>
+                        <div className="text-center flex-1 border-x border-border/20">
+                          <p className="font-accent text-[9px] tracking-[0.2em] uppercase text-muted-foreground mb-0.5">
+                            Tempo
+                          </p>
+                          <p className="tabular-nums text-sm text-muted-foreground">{formatMs(s.avgMs)}</p>
+                        </div>
+                        <div className="text-center flex-1">
+                          <p className="font-accent text-[9px] tracking-[0.2em] uppercase text-muted-foreground mb-0.5">
+                            Conv.
+                          </p>
+                          <p
+                            className={`tabular-nums text-sm font-medium ${
+                              s.opens
+                                ? s.conversion >= 0.2
+                                  ? "text-primary-glow"
+                                  : s.conversion >= 0.05
+                                  ? "text-foreground"
+                                  : "text-muted-foreground"
                                 : "text-muted-foreground"
                             }`}
                           >
-                            {(s.conversion * 100).toFixed(1)}%
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                    </TableRow>
+                            {s.opens ? `${(s.conversion * 100).toFixed(1)}%` : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-              </TableBody>
-            </Table>
-          </div>
+              </div>
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/30 bg-secondary/20 hover:bg-secondary/20">
+                    <TableHead
+                      className="cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
+                      onClick={() => toggleSort("nome")}
+                    >
+                      Obra
+                      <SortIcon k="nome" />
+                    </TableHead>
+                    <TableHead className="font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground">
+                      Categoria
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground min-w-[160px]"
+                      onClick={() => toggleSort("opens")}
+                    >
+                      Aberturas
+                      <SortIcon k="opens" />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
+                      onClick={() => toggleSort("ctas")}
+                    >
+                      CTA
+                      <SortIcon k="ctas" />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
+                      onClick={() => toggleSort("avgMs")}
+                    >
+                      Tempo médio
+                      <SortIcon k="avgMs" />
+                    </TableHead>
+                    <TableHead
+                      className="text-right cursor-pointer select-none font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground"
+                      onClick={() => toggleSort("conversion")}
+                    >
+                      Conversão
+                      <SortIcon k="conversion" />
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sorted.map((s) => {
+                    const pct = (s.opens / maxOpens) * 100;
+                    return (
+                      <TableRow key={s.pieceId} className="border-border/20 hover:bg-primary/5">
+                        <TableCell className="font-display">{s.nome}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{s.categoria}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="relative h-1.5 w-20 bg-primary/10 rounded-full overflow-hidden">
+                              <div
+                                className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-primary-glow rounded-full shadow-[0_0_8px_hsl(var(--primary-glow))]"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="tabular-nums font-medium text-foreground/90 min-w-[2ch]">{s.opens}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{s.ctas}</TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {formatMs(s.avgMs)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {s.opens ? (
+                            <span
+                              className={`font-medium ${
+                                s.conversion >= 0.2
+                                  ? "text-primary-glow"
+                                  : s.conversion >= 0.05
+                                  ? "text-foreground"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {(s.conversion * 100).toFixed(1)}%
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </div>
     </div>
