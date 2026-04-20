@@ -22,6 +22,8 @@ import {
   Search,
   Sparkles,
   Flame,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   DndContext,
@@ -126,11 +128,19 @@ const SortablePieceCard = ({
   piece,
   onEdit,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
   disabled,
 }: {
   piece: Piece;
   onEdit: (p: Piece) => void;
   onDelete: (id: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   disabled?: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
@@ -164,6 +174,32 @@ const SortablePieceCard = ({
               <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
             </div>
           )}
+        </div>
+        <div className="flex flex-col gap-1 shrink-0 justify-center">
+          <Button
+            size="icon"
+            variant="outline"
+            disabled={!canMoveUp || disabled}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+            aria-label="Mover para cima"
+            title="Mover para cima"
+            className="h-7 w-7 rounded-md border-border/50"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            disabled={!canMoveDown || disabled}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+            aria-label="Mover para baixo"
+            title="Mover para baixo"
+            className="h-7 w-7 rounded-md border-border/50"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-between">
           <div className="min-w-0">
@@ -606,6 +642,29 @@ export const PiecesManager = () => {
     }
   };
 
+  const movePiece = async (pieceId: string, direction: "up" | "down") => {
+    if (isOffline()) {
+      toast({ title: "Sem conexão", description: "Mudanças desabilitadas no modo offline.", variant: "destructive" });
+      return;
+    }
+    const oldIdx = pieces.findIndex((p) => p.id === pieceId);
+    if (oldIdx === -1) return;
+    const newIdx = direction === "up" ? oldIdx - 1 : oldIdx + 1;
+    if (newIdx < 0 || newIdx >= pieces.length) return;
+    const reordered = arrayMove(pieces, oldIdx, newIdx).map((p, idx) => ({ ...p, ordem: idx }));
+    const prev = pieces;
+    setPieces(reordered);
+    const updates = reordered
+      .filter((p, idx) => prev[idx]?.id !== p.id || prev[idx]?.ordem !== p.ordem)
+      .map((p) => supabase.from("gallery_pieces").update({ ordem: p.ordem }).eq("id", p.id));
+    const results = await Promise.all(updates);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      toast({ title: "Erro ao reordenar", description: failed.error.message, variant: "destructive" });
+      load();
+    }
+  };
+
   const handleAddCategoryInline = async () => {
     const name = newCategoryName.trim();
     if (!name) return toast({ title: "Nome obrigatório", variant: "destructive" });
@@ -727,12 +786,16 @@ export const PiecesManager = () => {
             disabled={isFiltering}
           >
             <div className="flex flex-col gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 md:gap-4">
-              {filteredPieces.map((p) => (
+              {filteredPieces.map((p, idx) => (
                 <SortablePieceCard
                   key={p.id}
                   piece={p}
                   onEdit={openEdit}
                   onDelete={handleDelete}
+                  onMoveUp={() => movePiece(p.id, "up")}
+                  onMoveDown={() => movePiece(p.id, "down")}
+                  canMoveUp={!isFiltering && idx > 0}
+                  canMoveDown={!isFiltering && idx < filteredPieces.length - 1}
                   disabled={isFiltering}
                 />
               ))}
