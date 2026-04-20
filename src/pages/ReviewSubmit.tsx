@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dragon } from "@/components/Dragon";
 import { useToast } from "@/hooks/use-toast";
+import brandIcon from "@/assets/brand-icon.png";
 
 const reviewSchema = z.object({
   client_name: z.string().trim().min(1, "Informe seu nome").max(120, "Máx. 120 caracteres"),
@@ -291,6 +292,11 @@ const ReviewSubmit = () => {
         )}
 
         <div className="text-center space-y-3 mb-2">
+          <img
+            src={brandIcon}
+            alt="Ellennous"
+            className="h-12 w-12 mx-auto object-contain drop-shadow-[0_0_18px_hsl(var(--primary-glow)/0.45)]"
+          />
           <p className="font-accent text-[10px] tracking-[0.4em] uppercase text-primary-glow">
             Ellennous · Avaliação{isPreview && " · Prévia"}
           </p>
