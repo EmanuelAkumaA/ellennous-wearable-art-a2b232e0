@@ -664,6 +664,8 @@ export const PiecesManager = () => {
       load();
     }
   };
+
+  const handleAddCategoryInline = async () => {
     const name = newCategoryName.trim();
     if (!name) return toast({ title: "Nome obrigatório", variant: "destructive" });
     setSavingCategory(true);
