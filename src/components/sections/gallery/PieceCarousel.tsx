@@ -10,6 +10,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import { getOptimizedImageUrl, preloadImage } from "@/lib/imageOptimization";
 
 interface PieceCarouselProps {
   images: string[];
