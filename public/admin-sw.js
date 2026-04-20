@@ -1,8 +1,7 @@
 // Ellennous Admin — minimal service worker scoped to /admin
-const CACHE = "ellennous-admin-v2";
+const CACHE = "ellennous-admin-v3";
 const APP_SHELL = [
   "/admin",
-  "/admin/",
   "/brand-icon.png",
   "/admin-icon-192.png",
   "/admin-icon-512.png",
@@ -13,7 +12,16 @@ const APP_SHELL = [
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL).catch(() => undefined))
+    caches.open(CACHE).then(async (cache) => {
+      // Use Promise.allSettled so one missing asset doesn't abort install
+      await Promise.allSettled(
+        APP_SHELL.map((url) =>
+          fetch(url, { cache: "reload" })
+            .then((res) => (res && res.ok ? cache.put(url, res.clone()) : undefined))
+            .catch(() => undefined)
+        )
+      );
+    })
   );
 });
 
@@ -30,11 +38,30 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // Only handle same-origin requests within /admin scope
   if (url.origin !== self.location.origin) return;
-  if (!url.pathname.startsWith("/admin") && !url.pathname.startsWith("/brand-icon")) return;
 
-  // Network-first with cache fallback (good for SPA navigations)
+  const isAdminScope =
+    url.pathname.startsWith("/admin") || url.pathname.startsWith("/brand-icon");
+  if (!isAdminScope) return;
+
+  // Navigation requests (SPA deep links): network first, fallback to cached /admin
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put("/admin", copy)).catch(() => undefined);
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match("/admin");
+          return cached || Response.error();
+        })
+    );
+    return;
+  }
+
+  // Other GETs: network-first with cache fallback
   event.respondWith(
     fetch(req)
       .then((res) => {
@@ -42,8 +69,6 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => undefined);
         return res;
       })
-      .catch(() =>
-        caches.match(req).then((cached) => cached || caches.match("/admin"))
-      )
+      .catch(() => caches.match(req).then((cached) => cached || Response.error()))
   );
 });
