@@ -426,6 +426,19 @@ export const ReviewsManager = () => {
     load();
   };
 
+  const updateReview = async (
+    id: string,
+    patch: Partial<Pick<Review, "client_name" | "city" | "state" | "instagram">>,
+  ) => {
+    const { error } = await supabase.from("reviews").update(patch).eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Avaliação atualizada" });
+    load();
+  };
+
   const grouped = {
     pending: reviews.filter((r) => r.status === "pending"),
     approved: reviews.filter((r) => r.status === "approved"),
@@ -644,6 +657,7 @@ export const ReviewsManager = () => {
                     tab="pending"
                     onStatus={setReviewStatus}
                     onDelete={deleteReview}
+                    onUpdate={updateReview}
                   />
                 ))
               )}
@@ -680,6 +694,7 @@ export const ReviewsManager = () => {
                             tab="approved"
                             onStatus={setReviewStatus}
                             onDelete={deleteReview}
+                            onUpdate={updateReview}
                             draggable={!approvedSearch}
                           />
                         ))}
@@ -701,6 +716,7 @@ export const ReviewsManager = () => {
                     tab="rejected"
                     onStatus={setReviewStatus}
                     onDelete={deleteReview}
+                    onUpdate={updateReview}
                   />
                 ))
               )}
