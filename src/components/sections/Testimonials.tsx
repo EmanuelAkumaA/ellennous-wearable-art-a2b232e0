@@ -32,9 +32,26 @@ const StarRating = ({ value }: { value: number }) => (
 
 export const Testimonials = () => {
   const ref = useReveal();
+  const queryClient = useQueryClient();
   const autoplay = useRef(
     Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })
   );
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("public-reviews-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reviews" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["approved-reviews"] });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const { data: cards, isLoading } = useQuery({
     queryKey: ["approved-reviews"],
