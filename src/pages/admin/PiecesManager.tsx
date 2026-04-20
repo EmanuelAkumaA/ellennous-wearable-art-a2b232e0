@@ -642,7 +642,28 @@ export const PiecesManager = () => {
     }
   };
 
-  const handleAddCategoryInline = async () => {
+  const movePiece = async (pieceId: string, direction: "up" | "down") => {
+    if (isOffline()) {
+      toast({ title: "Sem conexão", description: "Mudanças desabilitadas no modo offline.", variant: "destructive" });
+      return;
+    }
+    const oldIdx = pieces.findIndex((p) => p.id === pieceId);
+    if (oldIdx === -1) return;
+    const newIdx = direction === "up" ? oldIdx - 1 : oldIdx + 1;
+    if (newIdx < 0 || newIdx >= pieces.length) return;
+    const reordered = arrayMove(pieces, oldIdx, newIdx).map((p, idx) => ({ ...p, ordem: idx }));
+    const prev = pieces;
+    setPieces(reordered);
+    const updates = reordered
+      .filter((p, idx) => prev[idx]?.id !== p.id || prev[idx]?.ordem !== p.ordem)
+      .map((p) => supabase.from("gallery_pieces").update({ ordem: p.ordem }).eq("id", p.id));
+    const results = await Promise.all(updates);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      toast({ title: "Erro ao reordenar", description: failed.error.message, variant: "destructive" });
+      load();
+    }
+  };
     const name = newCategoryName.trim();
     if (!name) return toast({ title: "Nome obrigatório", variant: "destructive" });
     setSavingCategory(true);
