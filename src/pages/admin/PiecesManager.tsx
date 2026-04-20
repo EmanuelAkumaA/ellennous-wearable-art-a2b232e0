@@ -205,7 +205,7 @@ const SortablePieceCard = ({
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
           <span className="text-[10px] font-accent tracking-[0.25em] uppercase text-muted-foreground/60">
-            #{String(piece.ordem + 1).padStart(2, "0")}
+            #{String(piece.ordem).padStart(2, "0")}
           </span>
           <div className="flex items-center gap-1">
             <Button
