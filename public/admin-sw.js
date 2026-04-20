@@ -1,6 +1,14 @@
 // Ellennous Admin — minimal service worker scoped to /admin
-const CACHE = "ellennous-admin-v1";
-const APP_SHELL = ["/admin", "/admin/", "/brand-icon.png", "/admin-manifest.webmanifest"];
+const CACHE = "ellennous-admin-v2";
+const APP_SHELL = [
+  "/admin",
+  "/admin/",
+  "/brand-icon.png",
+  "/admin-icon-192.png",
+  "/admin-icon-512.png",
+  "/admin-splash.png",
+  "/admin-manifest.webmanifest",
+];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
