@@ -9,6 +9,7 @@ import { PieceCarousel } from "./PieceCarousel";
 import { ZoomOverlay } from "./ZoomOverlay";
 import { useGalleryData, type PieceData } from "./useGalleryData";
 import { trackPieceEvent } from "@/lib/analytics";
+import { getOptimizedImageUrl, getOptimizedSrcSet } from "@/lib/imageOptimization";
 
 const MOBILE_STEP = 5;
 const DESKTOP_STEP = 6;
@@ -152,18 +153,26 @@ export const Gallery = () => {
             {visible.map((piece, idx) => {
               const isNew = idx >= animateFromRef.current;
               const delay = isNew ? (idx - animateFromRef.current) * 150 : 0;
+              const rawSrc = piece.capa || piece.imagens[0];
+              const isAboveFold = idx < 3;
+              const optimizedSrc = getOptimizedImageUrl(rawSrc, { width: 600, quality: 70 });
+              const srcSet = getOptimizedSrcSet(rawSrc, [400, 600, 900], 70);
               return (
                 <button
                   key={piece.id}
                   ref={idx === step - 1 ? lastInitialItemRef : undefined}
                   onClick={() => handleSelectPiece(piece)}
                   style={isNew ? { animationDelay: `${delay}ms` } : undefined}
-                  className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
+                  className={`group relative aspect-[4/5] overflow-hidden bg-muted/40 border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
                 >
                   <img
-                    src={piece.capa || piece.imagens[0]}
+                    src={optimizedSrc}
+                    srcSet={srcSet || undefined}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     alt={`${piece.nome} — ${piece.categoria}`}
-                    loading="lazy"
+                    loading={isAboveFold ? "eager" : "lazy"}
+                    decoding="async"
+                    {...(isAboveFold ? { fetchpriority: "high" as const } : {})}
                     width={1024}
                     height={1280}
                     className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { getOptimizedImageUrl } from "@/lib/imageOptimization";
 
 interface ZoomOverlayProps {
   images: string[];
@@ -44,7 +45,7 @@ export const ZoomOverlay = ({ images, index, onClose, onPrev, onNext }: ZoomOver
       aria-label="Imagem ampliada"
     >
       <img
-        src={images[index]}
+        src={getOptimizedImageUrl(images[index], { width: 1600, quality: 85, resize: "contain" })}
         alt={`Visualização ampliada ${index + 1} de ${images.length}`}
         onClick={(e) => e.stopPropagation()}
         className="max-w-full max-h-full object-contain shadow-2xl border border-primary/20 select-none"
