@@ -1,54 +1,59 @@
 
 
-## Plano
+## Plano — Responsividade das Estatísticas no mobile
 
-3 ajustes simples e localizados.
+Olhando a imagem 32 e o código de `src/pages/admin/StatsManager.tsx`:
 
-### 1. Obras: voltar pra lista vertical + drag só com long-press
+### Problemas
+1. **Tabela apertada no mobile** — 6 colunas (Obra, Categoria, Aberturas, CTA, Tempo médio, Conversão) num viewport de 390px. Nomes quebram em 3 linhas ("Sombra do Monarca"), categoria some, colunas CTA / Tempo médio / Conversão ficam escondidas no scroll horizontal.
+2. **Filtros (ToggleGroup + botão Atualizar)** podem estourar no mobile — pílula com 4 períodos + botão lado a lado.
+3. **KPIs** já usam `grid-cols-1 sm:grid-cols-3` — OK, mas o card tem `p-6` e `text-4xl`, ocupando muito espaço vertical no mobile.
 
-**Arquivo**: `src/pages/admin/PiecesManager.tsx`
+### Correções em `src/pages/admin/StatsManager.tsx`
 
-Hoje tem dois problemas no mobile:
-- Layout em **grid** + cards com `touch-none` — qualquer toque arrasta, impedindo scroll.
-- O drag handle no mobile usa `TouchSensor` com delay de 150ms, mas o card inteiro tem `touch-none`, então mesmo onde não tem handle o scroll trava.
+**1. Filtros responsivos**
+- Wrapper: `flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`
+- ToggleGroup: `w-full sm:w-auto justify-center`, com itens `flex-1 sm:flex-none`
+- Botão Atualizar: `w-full sm:w-auto justify-center`
 
-**Mudanças:**
-- Trocar grid (`grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`) por **lista vertical** (`flex flex-col gap-3`) no mobile, mantendo opção de grid só no desktop (`md:grid md:grid-cols-2 xl:grid-cols-3`).
-- Criar variante `ListPieceCard` (ou ajustar `SortablePieceCard`) com layout horizontal no mobile: thumb pequena à esquerda + nome/categoria/#ordem à direita + botões editar/excluir.
-- **Remover `touch-none`** do card raiz. Mover o `{...listeners}` do botão handle para o **card inteiro**, mas só ativar via `TouchSensor` com `delay: 1000ms` (1 segundo) e `tolerance: 5px`. Assim toque rápido faz scroll, toque longo de 1s ativa drag.
-- Manter `PointerSensor` com `distance: 5` para desktop (mouse continua arrastando normalmente).
-- Remover o handle visual `<GripVertical>` no mobile (fica redundante com long-press); manter no desktop.
+**2. KPIs mais compactos no mobile**
+- Card: `p-4 sm:p-6`
+- Valor: `text-2xl sm:text-4xl`
+- Label: manter, mas `mb-2 sm:mb-3`
+- Ícone: `h-9 w-9 sm:h-11 sm:w-11`
 
-### 2. Avaliações: tabs em grid 2x2 no mobile
+**3. Tabela → cards no mobile (lista)**
+A tabela com 6 colunas é inviável em 390px. Estratégia: **esconder a `<Table>` no mobile** (`hidden md:block`) e renderizar uma **lista de cards** acima (`md:hidden`).
 
-**Arquivo**: `src/pages/admin/ReviewsManager.tsx` (linhas 676-686)
-
-Hoje as 3 tabs ficam em linha e estouram no mobile.
-
-**Mudança:** trocar `<TabsList>` para usar `grid grid-cols-2 sm:flex sm:w-auto h-auto gap-1 w-full`. Aprovadas ocupa as 2 colunas da primeira linha (`col-span-2`), Pendentes e Recusadas ficam lado a lado na segunda linha. Cada tab com `w-full` para preencher.
-
-Resultado:
+Cada card mobile mostra:
 ```
-[      Aprovadas      ]
-[Pendentes][Recusadas ]
+┌──────────────────────────────────────┐
+│ Sombra do Monarca         [#1 opens] │
+│ Anime / Geek                          │
+│ ▓▓▓▓▓▓░░░░░░░░░░  (barra aberturas) │
+├──────────────────────────────────────┤
+│ CTA: 0   ·   Tempo: —   ·   Conv: —  │
+└──────────────────────────────────────┘
 ```
 
-### 3. "Gerar link de avaliação": reorganizar header
+- Header: nome (font-display, truncate ou wrap normal) + badge contagem de aberturas à direita
+- Subtítulo: categoria em muted
+- Barra de progresso full-width (largura ∝ opens/maxOpens) com mesmo gradient
+- Footer: 3 métricas em flex justify-between (CTA, Tempo médio, Conversão) com label minúsculo accent + valor
 
-**Arquivo**: `src/pages/admin/ReviewsManager.tsx` (linhas 539-549)
+**4. Toolbar de ordenação no mobile**
+Como a tabela some, adicionar acima da lista um pequeno seletor de ordenação (Select com 5 opções: Nome, Aberturas, CTA, Tempo médio, Conversão) + botão asc/desc. Só no mobile (`md:hidden`).
 
-Hoje o `CardHeader` usa `flex-row items-center justify-between`, fazendo o botão "Ver página base" ficar lado a lado com o título — quebra no mobile.
+**5. Cabeçalho da seção "Performance por obra"**
+Trocar `px-6 py-4` por `px-4 sm:px-6 py-3 sm:py-4` e `text-sm` para `text-xs sm:text-sm` para caber bem.
 
-**Mudança:** trocar para `flex-col gap-3` — título "Gerar link de avaliação" sozinho na primeira linha, e numa segunda linha um wrapper `flex justify-end` com o botão "Ver página base" alinhado à direita.
+### Arquivos a modificar
+- `src/pages/admin/StatsManager.tsx` — único arquivo
 
----
-
-## Arquivos a modificar
-- `src/pages/admin/PiecesManager.tsx` — lista vertical no mobile + long-press 1s pra drag
-- `src/pages/admin/ReviewsManager.tsx` — tabs em grid 2x2 no mobile + header do gerar link em 2 linhas
-
-## Validação
-1. **Mobile (390px) em /admin/pieces**: scroll vertical funciona com toque normal; segurar 1s em cima de uma obra ativa o drag e permite reordenar.
-2. **Mobile em /admin/reviews**: tabs aparecem em grid 2x2; "Gerar link de avaliação" tem título em cima e botão "Ver página base" embaixo à direita.
-3. **Desktop**: tudo continua funcionando como antes (grid de obras, tabs em linha, header em uma linha).
+### Validação (390px)
+- Filtros empilhados: período full-width, botão Atualizar abaixo
+- 3 KPIs empilhados, mais compactos
+- Lista de cards substitui tabela; cada obra mostra todas as 4 métricas legíveis
+- Ordenação acessível via Select no topo da lista
+- Desktop ≥ md: layout original (tabela 6 colunas) intacto
 
