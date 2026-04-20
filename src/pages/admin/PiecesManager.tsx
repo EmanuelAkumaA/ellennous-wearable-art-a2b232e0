@@ -376,10 +376,12 @@ export const PiecesManager = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
 
+  const isMobile = useIsMobile();
+
+  // No mobile: NÃO registrar TouchSensor — toque vertical sempre rola a página.
+  // Reordenação no celular acontece apenas pelas setas ↑/↓.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    // Mobile: long-press 1s para ativar drag, permitindo scroll vertical normal
-    useSensor(TouchSensor, { activationConstraint: { delay: 1000, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
