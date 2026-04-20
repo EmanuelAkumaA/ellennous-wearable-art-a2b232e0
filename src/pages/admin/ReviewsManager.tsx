@@ -12,8 +12,10 @@ import {
   Copy,
   ExternalLink,
   GripVertical,
+  Instagram,
   Link2,
   Loader2,
+  MapPin,
   MessageCircle,
   RefreshCw,
   Star,
@@ -61,6 +63,9 @@ interface Review {
   status: "pending" | "approved" | "rejected";
   ordem: number;
   created_at: string;
+  city: string | null;
+  state: string | null;
+  instagram: string | null;
 }
 
 const generateToken = () => {
@@ -146,6 +151,22 @@ const ReviewCard = ({ r, tab, onStatus, onDelete, draggable }: ReviewCardProps) 
           )}
           <StarsRow rating={r.rating} />
         </div>
+        {(r.city || r.state || r.instagram) && (
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            {(r.city || r.state) && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-primary-glow/70" />
+                {[r.city, r.state].filter(Boolean).join(" · ")}
+              </span>
+            )}
+            {r.instagram && (
+              <span className="inline-flex items-center gap-1 text-primary-glow/80">
+                <Instagram className="h-3 w-3" />
+                {r.instagram.startsWith("@") ? r.instagram : `@${r.instagram}`}
+              </span>
+            )}
+          </div>
+        )}
         <p className="text-sm text-foreground/80 whitespace-pre-wrap">{r.content}</p>
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
           {new Date(r.created_at).toLocaleString("pt-BR")}
