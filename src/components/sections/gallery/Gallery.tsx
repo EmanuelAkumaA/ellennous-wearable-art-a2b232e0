@@ -157,13 +157,14 @@ export const Gallery = () => {
               const isAboveFold = idx < 3;
               const optimizedSrc = getOptimizedImageUrl(rawSrc, { width: 600, quality: 70 });
               const srcSet = getOptimizedSrcSet(rawSrc, [400, 600, 900], 70);
+              const isContain = piece.coverFit === "contain";
               return (
                 <button
                   key={piece.id}
                   ref={idx === step - 1 ? lastInitialItemRef : undefined}
                   onClick={() => handleSelectPiece(piece)}
                   style={isNew ? { animationDelay: `${delay}ms` } : undefined}
-                  className={`group relative aspect-[4/5] overflow-hidden bg-muted/40 border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
+                  className={`group relative aspect-[3/4] overflow-hidden bg-secondary/40 border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
                 >
                   <img
                     src={optimizedSrc}
@@ -175,9 +176,13 @@ export const Gallery = () => {
                     {...(isAboveFold ? { fetchpriority: "high" as const } : {})}
                     width={1024}
                     height={1280}
-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                    style={{ objectPosition: piece.coverPosition }}
+                    className={`w-full h-full transition-transform duration-1000 group-hover:scale-105 ${
+                      isContain ? "object-contain" : "object-cover"
+                    }`}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
+                  {/* Bottom info gradient — kept subtle so the piece stays visible */}
+                  <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-2/5 bg-gradient-to-t from-background via-background/70 to-transparent" />
                   <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
                     {piece.novo && (
                       <span className="font-accent text-xs tracking-[0.15em] uppercase bg-primary/90 text-primary-foreground px-3 py-1">

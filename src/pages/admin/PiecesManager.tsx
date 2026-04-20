@@ -47,6 +47,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { compressImage } from "@/lib/imageCompression";
+import { CoverDisplayControls } from "@/components/admin/CoverDisplayControls";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
@@ -63,6 +65,8 @@ interface Piece {
   ordem: number;
   cover_url?: string | null;
   cover_storage_path?: string | null;
+  cover_fit?: string | null;
+  cover_position?: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Image[];
 }
@@ -515,9 +519,10 @@ export const PiecesManager = () => {
       let i = 0;
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("image/")) continue;
-        const ext = file.name.split(".").pop() ?? "jpg";
+        const compressed = await compressImage(file, { maxWidth: 2000, quality: 0.85 });
+        const ext = compressed.name.split(".").pop() ?? "jpg";
         const path = `pieces/${editing.id}/${Date.now()}-${i}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { upsert: false });
+        const { error: upErr } = await supabase.storage.from("gallery").upload(path, compressed, { upsert: false });
         if (upErr) throw upErr;
         const { data: pub } = supabase.storage.from("gallery").getPublicUrl(path);
         const { error: insErr } = await supabase
@@ -526,7 +531,7 @@ export const PiecesManager = () => {
         if (insErr) throw insErr;
         i++;
       }
-      toast({ title: "Upload concluído" });
+      toast({ title: "Imagens comprimidas e enviadas" });
       await refreshEditing(editing.id);
       load();
     } catch (err) {
@@ -546,9 +551,10 @@ export const PiecesManager = () => {
       if (editing.cover_storage_path) {
         await supabase.storage.from("gallery").remove([editing.cover_storage_path]);
       }
-      const ext = file.name.split(".").pop() ?? "jpg";
+      const compressed = await compressImage(file, { maxWidth: 2000, quality: 0.85 });
+      const ext = compressed.name.split(".").pop() ?? "jpg";
       const path = `pieces/${editing.id}/cover-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { upsert: false });
+      const { error: upErr } = await supabase.storage.from("gallery").upload(path, compressed, { upsert: false });
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("gallery").getPublicUrl(path);
       const { error: updErr } = await supabase
@@ -556,7 +562,7 @@ export const PiecesManager = () => {
         .update({ cover_url: pub.publicUrl, cover_storage_path: path })
         .eq("id", editing.id);
       if (updErr) throw updErr;
-      toast({ title: "Capa atualizada" });
+      toast({ title: "Capa comprimida e enviada" });
       await refreshEditing(editing.id);
       load();
     } catch (err) {
@@ -564,6 +570,22 @@ export const PiecesManager = () => {
     } finally {
       setCoverUploading(false);
       if (coverRef.current) coverRef.current.value = "";
+    }
+  };
+
+  const updateCoverDisplay = async (patch: { cover_fit?: string; cover_position?: string }) => {
+    if (!editing) return;
+    // Optimistic UI
+    setEditing({ ...editing, ...patch });
+    const { error } = await supabase
+      .from("gallery_pieces")
+      .update(patch)
+      .eq("id", editing.id);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      await refreshEditing(editing.id);
+    } else {
+      load();
     }
   };
 
@@ -1058,6 +1080,16 @@ export const PiecesManager = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Display controls — only meaningful when there's an image to show */}
+                  {(editing.cover_url || editing.gallery_piece_images[0]?.url) && (
+                    <CoverDisplayControls
+                      imageUrl={editing.cover_url ?? editing.gallery_piece_images[0]?.url ?? ""}
+                      coverFit={(editing.cover_fit ?? "contain") as "contain" | "cover"}
+                      coverPosition={editing.cover_position ?? "50% 50%"}
+                      onChange={updateCoverDisplay}
+                    />
+                  )}
                 </section>
 
                 {/* Galeria */}

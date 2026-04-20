@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export type CoverFit = "contain" | "cover";
+
 export interface PieceData {
   id: string;
   nome: string;
@@ -14,6 +16,8 @@ export interface PieceData {
   destaque: boolean;
   novo: boolean;
   ordem: number;
+  coverFit: CoverFit;
+  coverPosition: string;
 }
 
 export const useGalleryData = () => {
@@ -27,17 +31,22 @@ export const useGalleryData = () => {
         supabase.from("gallery_categories").select("nome").order("ordem", { ascending: true }),
         supabase
           .from("gallery_pieces")
-          .select("id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, cover_url, gallery_categories(nome), gallery_piece_images(id, url, ordem)")
+          .select("id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, cover_url, cover_fit, cover_position, gallery_categories(nome), gallery_piece_images(id, url, ordem)")
           .order("ordem", { ascending: true }),
       ]);
       if (catsRes.data) setCategories(catsRes.data.map((c) => c.nome));
       if (piecesRes.data) {
         setPieces(
           piecesRes.data.map((p) => {
-            const pAny = p as typeof p & { cover_url?: string | null };
+            const pAny = p as typeof p & {
+              cover_url?: string | null;
+              cover_fit?: string | null;
+              cover_position?: string | null;
+            };
             const sortedImages = [...(p.gallery_piece_images ?? [])].sort((a, b) => a.ordem - b.ordem);
             const urls = sortedImages.map((i) => i.url);
             const capa = pAny.cover_url ?? urls[0] ?? "";
+            const coverFit: CoverFit = pAny.cover_fit === "cover" ? "cover" : "contain";
             return {
               id: p.id,
               nome: p.nome,
@@ -51,6 +60,8 @@ export const useGalleryData = () => {
               destaque: p.destaque,
               novo: p.novo,
               ordem: p.ordem,
+              coverFit,
+              coverPosition: pAny.cover_position ?? "50% 50%",
             };
           }),
         );
