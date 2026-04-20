@@ -239,32 +239,53 @@ export const Gallery = () => {
               <div className="p-8 flex flex-col">
                 <p className="font-accent text-xs tracking-[0.15em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
                 <h3 className="font-display text-3xl md:text-4xl mb-6 text-foreground">{selected.nome}</h3>
-                <div className="space-y-5 text-sm">
+                <Accordion
+                  type="single"
+                  collapsible
+                  defaultValue={selected.descricao ? "descricao" : selected.conceito ? "conceito" : selected.historia ? "historia" : selected.tempo ? "tempo" : undefined}
+                  className="text-sm"
+                >
                   {selected.descricao && (
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Descrição</p>
-                      <p className="text-foreground/90 leading-relaxed">{selected.descricao}</p>
-                    </div>
+                    <AccordionItem value="descricao" className="border-border/40">
+                      <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline hover:text-foreground py-3">
+                        Descrição
+                      </AccordionTrigger>
+                      <AccordionContent className="text-foreground/90 leading-relaxed pb-4">
+                        {selected.descricao}
+                      </AccordionContent>
+                    </AccordionItem>
                   )}
                   {selected.conceito && (
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Conceito</p>
-                      <p className="text-foreground/90 leading-relaxed">{selected.conceito}</p>
-                    </div>
+                    <AccordionItem value="conceito" className="border-border/40">
+                      <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline hover:text-foreground py-3">
+                        Conceito
+                      </AccordionTrigger>
+                      <AccordionContent className="text-foreground/90 leading-relaxed pb-4">
+                        {selected.conceito}
+                      </AccordionContent>
+                    </AccordionItem>
                   )}
                   {selected.historia && (
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">História</p>
-                      <p className="text-foreground/90 leading-relaxed whitespace-pre-line">{selected.historia}</p>
-                    </div>
+                    <AccordionItem value="historia" className="border-border/40">
+                      <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline hover:text-foreground py-3">
+                        História
+                      </AccordionTrigger>
+                      <AccordionContent className="text-foreground/90 leading-relaxed whitespace-pre-line pb-4">
+                        {selected.historia}
+                      </AccordionContent>
+                    </AccordionItem>
                   )}
                   {selected.tempo && (
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Tempo de produção</p>
-                      <p className="text-foreground/90">{selected.tempo}</p>
-                    </div>
+                    <AccordionItem value="tempo" className="border-border/40">
+                      <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline hover:text-foreground py-3">
+                        Tempo de produção
+                      </AccordionTrigger>
+                      <AccordionContent className="text-foreground/90 leading-relaxed pb-4">
+                        {selected.tempo}
+                      </AccordionContent>
+                    </AccordionItem>
                   )}
-                </div>
+                </Accordion>
                 <Button
                   asChild
                   className="font-accent text-base tracking-[0.2em] uppercase mt-8 bg-gradient-purple-wine border border-primary-glow/40 hover:shadow-glow text-white rounded-none h-12"
