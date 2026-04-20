@@ -2,50 +2,76 @@
 
 ## Plano
 
-Dois itens:
-1. Editar nome/cidade/estado/Instagram inline no card de avaliação (admin).
-2. Substituir o favicon/ícone da marca pela nova logo "EN" (gradiente roxo→vermelho) em: site público, plataforma admin e página de avaliação.
+Três itens:
+1. **Logo Ellennous na tela de login** (substituir o blob branco atual pela logo "EN" colorida da marca, que já temos em `src/assets/brand-icon.png`).
+2. **Mostrar/ocultar senha + "Lembrar de mim"** no formulário de login.
+3. **Transformar APENAS a área `/admin` em PWA instalável** (site público continua web normal).
 
 ---
 
-### 1. Edição inline no card de avaliação (`ReviewsManager.tsx`)
+### 1. Logo no login (`src/pages/admin/Login.tsx`)
 
-No `ReviewCard`, adicionar botão "Editar" (ícone `Pencil`) ao lado de "Aprovar/Recusar/Excluir".
-
-Ao clicar, o card alterna para modo edição mostrando 4 inputs compactos:
-- **Nome** (`client_name`, obrigatório)
-- **Cidade** (`city`)
-- **Estado** (`state`)
-- **Instagram** (`instagram` — sanitizado: remove `@` na entrada, salva com `@` prefixado se houver valor)
-
-Botões "Salvar" e "Cancelar". Salvar dispara `supabase.from("reviews").update({...}).eq("id", r.id)` e recarrega via `load()`. Toast de feedback.
-
-Funciona para qualquer aba (pendentes, aprovadas, recusadas) — útil para corrigir typos antes/depois de aprovar.
-
-**Implementação técnica:**
-- Estado local `editing: boolean` + form controlado dentro do `ReviewCard`.
-- Receber novo prop `onUpdate(id, patch)` do parent que faz o update no Supabase.
-- Inputs herdam classes existentes (`bg-background/40`, etc.) para manter o visual.
-- Drag handle desabilitado enquanto editando para não conflitar com clicks/typing.
+Trocar o import `logo-ellennous.svg` por `brand-icon.png` (mesmo que já está no header do admin). Manter o glow roxo atrás. Resultado: o "EN" gradiente aparece centralizado no topo do card de login, em vez do círculo branco vazio.
 
 ---
 
-### 2. Novo ícone da marca (logo "EN" gradiente)
+### 2. Ver senha + Lembrar de mim (`src/pages/admin/Login.tsx`)
 
-A logo enviada (`Ellennous-5.png`) é o "EN" com gradiente roxo→vermelho — combina perfeitamente com `--gradient-purple-wine` da marca.
+**Ver senha:**
+- Estado `showPassword: boolean`.
+- Botão ícone (`Eye` / `EyeOff` do lucide-react) absoluto à direita do input de senha (espelhando o ícone `Lock` da esquerda).
+- `type={showPassword ? "text" : "password"}`.
 
-**Passos:**
-1. Copiar `user-uploads://Ellennous-5.png` → `public/brand-icon.png` (favicon principal, alta resolução).
-2. Também copiar para `src/assets/brand-icon.png` para uso em componentes React.
-3. Atualizar `index.html`:
-   - `<link rel="icon" type="image/png" href="/brand-icon.png" />`
-   - `<link rel="apple-touch-icon" href="/brand-icon.png" />`
-   - Adicionar `<meta property="og:image" content="/brand-icon.png" />` para preview em redes sociais.
-4. (Opcional/recomendado) Trocar o avatar circular roxo "EL" no header do `AdminShell` (PalettePhoto fallback) e o ícone do canto da página `ReviewSubmit` para mostrar a nova logo discretamente — mantém DNA visual sem poluir.
-   - No `AdminShell`: pequeno badge `<img src={brandIcon} className="h-6 w-6" />` no topo da sidebar junto ao "Atelier · Ellennous".
-   - No `ReviewSubmit` `Shell`: pequeno `<img>` acima do título "Conte sua experiência" (h-10, com glow sutil).
+**Lembrar de mim:**
+- Checkbox (componente `@/components/ui/checkbox` já existe) abaixo dos campos, alinhada com label "Lembrar neste dispositivo".
+- Estado `remember: boolean`, default `true`.
+- Persistência: armazenar `localStorage["ellennous_remember_email"]` quando `remember && signin sucesso`. No mount, pré-preencher email se existir. Se desmarcado, remover do storage.
+- (A sessão Supabase já persiste em `localStorage` via `client.ts` — "remember" aqui controla apenas o auto-fill do email; senha nunca é salva por segurança.)
 
-A aba do navegador (mostrada na imagem 25) passa a mostrar o "EN" colorido em vez do dragão escuro atual.
+---
+
+### 3. PWA instalável APENAS para `/admin` (e sub-rotas)
+
+**Estratégia:** manifest + service worker dedicados, com `start_url` e `scope` apontando para `/admin`. Assim o "Instalar app" só aparece quando o usuário está navegando dentro do admin — o site público (`/`, `/avaliar/...`) permanece web puro.
+
+**Arquivos novos:**
+
+- `public/admin-manifest.webmanifest`:
+  ```json
+  {
+    "name": "Ellennous Atelier",
+    "short_name": "Ellennous",
+    "description": "Painel administrativo Ellennous",
+    "start_url": "/admin",
+    "scope": "/admin",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0A0A0F",
+    "theme_color": "#0A0A0F",
+    "icons": [
+      { "src": "/brand-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+      { "src": "/brand-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    ]
+  }
+  ```
+
+- `public/admin-sw.js`: service worker minimalista — faz `skipWaiting`/`clientsClaim` e cacheia o app shell do `/admin` para funcionamento offline básico (network-first com fallback para cache em navegação dentro de `/admin`). Não interfere com rotas fora de `/admin`.
+
+**Registro condicional** (no `AdminShell.tsx`, dentro de um `useEffect`):
+- Só executa quando `location.pathname.startsWith("/admin")`.
+- Detecta iframe / preview Lovable (`id-preview--`, `lovableproject.com`) e **NÃO registra** nesses contextos (evita poluir o editor — conforme a guideline interna de PWA).
+- Em produção (vercel/domínio próprio): `navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin" })`.
+- Injeta dinamicamente `<link rel="manifest" href="/admin-manifest.webmanifest">` no `<head>` (em vez de colocar no `index.html`, para evitar que o Chrome ofereça instalar quando o usuário está só no site público).
+
+**Prompt de instalação automático** (`src/components/admin/InstallPrompt.tsx`):
+- Captura o evento `beforeinstallprompt`, previne o default e guarda em estado.
+- Renderiza um banner discreto no topo do `AdminShell` (apenas em mobile e se ainda não instalado): "Instalar Ellennous Atelier no seu celular" + botão "Instalar" + "Agora não".
+- "Instalar" → chama `deferredPrompt.prompt()`.
+- "Agora não" → marca em `localStorage["admin_install_dismissed"] = timestamp` e some por 7 dias.
+- Detecta iOS Safari (que não dispara `beforeinstallprompt`) → mostra instrução: "Toque em Compartilhar → Adicionar à Tela de Início".
+- Detecta `display-mode: standalone` → não mostra nada (já instalado).
+
+**Apple touch icon específico do admin:** o `apple-touch-icon` global no `index.html` já aponta para `/brand-icon.png` — perfeito para iOS pegar a logo certa quando adicionar à tela inicial a partir de `/admin`.
 
 ---
 
@@ -53,15 +79,16 @@ A aba do navegador (mostrada na imagem 25) passa a mostrar o "EN" colorido em ve
 
 | Arquivo | Mudança |
 |---|---|
-| `src/pages/admin/ReviewsManager.tsx` | Adicionar modo edição inline no `ReviewCard` (nome, cidade, estado, IG) + handler `updateReview` |
-| `public/brand-icon.png` | (Novo) Logo EN copiada do upload |
-| `src/assets/brand-icon.png` | (Novo) Mesma logo para imports React |
-| `index.html` | Trocar `<link rel="icon">`, adicionar apple-touch-icon e og:image |
-| `src/components/admin/AdminShell.tsx` | Pequeno badge da logo no header da sidebar |
-| `src/pages/ReviewSubmit.tsx` | Logo pequena acima do título (estados valid/submitted) |
+| `src/pages/admin/Login.tsx` | Logo `brand-icon.png`, toggle ver senha (Eye/EyeOff), checkbox "Lembrar neste dispositivo" + auto-fill email |
+| `public/admin-manifest.webmanifest` | (Novo) Manifest com `scope:/admin`, `start_url:/admin`, ícones |
+| `public/admin-sw.js` | (Novo) Service worker mínimo, escopo `/admin`, cache app shell |
+| `src/components/admin/InstallPrompt.tsx` | (Novo) Banner de instalação + handler `beforeinstallprompt` + fallback iOS |
+| `src/components/admin/AdminShell.tsx` | Registro condicional do SW (só prod, fora de iframe/preview), injeção do `<link rel="manifest">`, render `<InstallPrompt />` |
 
 ### Validação
-1. `/admin` → Avaliações → clicar Editar em qualquer card → alterar nome/cidade/estado/IG → Salvar → confere que site público (`/`) reflete a mudança.
-2. Aba do navegador mostra o ícone "EN" colorido em todas as rotas (site, admin, avaliação).
-3. Compartilhar link em WhatsApp/redes mostra a nova logo no preview.
+1. `/admin/login` → logo "EN" colorida visível, ícone do olho alterna senha, checkbox lembra email no próximo acesso.
+2. **No preview/editor Lovable**: SW NÃO registra (evita stale content) — verificar no DevTools → Application → Service Workers (vazio).
+3. **Em produção (Vercel)**: ao abrir `/admin` no Chrome do celular, banner "Instalar" aparece após 1-2 segundos. Tocar instala como app standalone, abre direto em `/admin`.
+4. **No iOS Safari**: aparece instrução "Compartilhar → Adicionar à Tela de Início"; após adicionar, ícone é a logo "EN".
+5. Site público (`/`) continua sem prompt de instalação e sem service worker — comportamento web normal preservado.
 
