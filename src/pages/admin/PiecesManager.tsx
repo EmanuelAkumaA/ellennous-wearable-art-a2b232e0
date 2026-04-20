@@ -22,6 +22,8 @@ import {
   Search,
   Sparkles,
   Flame,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   DndContext,
