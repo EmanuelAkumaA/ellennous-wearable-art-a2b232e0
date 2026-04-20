@@ -645,8 +645,7 @@ export const PiecesManager = () => {
     if (oldIdx === -1 || newIdx === -1) return;
     const reordered = arrayMove(pieces, oldIdx, newIdx).map((p, idx) => ({ ...p, ordem: idx }));
     setPieces(reordered);
-    const updates = reordered
-      .filter((p, idx) => pieces[idx]?.id !== p.id || pieces[idx]?.ordem !== p.ordem)
+    flashMoved(String(active.id));
       .map((p) => supabase.from("gallery_pieces").update({ ordem: p.ordem }).eq("id", p.id));
     const results = await Promise.all(updates);
     const failed = results.find((r) => r.error);
