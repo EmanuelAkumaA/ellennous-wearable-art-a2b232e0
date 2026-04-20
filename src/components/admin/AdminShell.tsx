@@ -237,6 +237,7 @@ interface AdminShellProps {
 export const AdminShell = ({ active, onSelect, headerAction, children }: AdminShellProps) => {
   const { user, signOut } = useAuth();
   const { profile } = useAdminProfile();
+  const online = useOnlineStatus();
   const [mobileOpen, setMobileOpen] = useState(false);
   const current = NAV.find((n) => n.key === active) ?? NAV[0];
   const Icon = current.icon;
@@ -291,7 +292,20 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
                 </div>
               </div>
 
-              {headerAction && <div className="ml-auto">{headerAction}</div>}
+              <div className="ml-auto flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-accent tracking-[0.25em] uppercase transition-colors ${
+                    online
+                      ? "border-primary/30 bg-primary/10 text-primary-glow"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                  }`}
+                  title={online ? "Conectado" : "Sem conexão — exibindo dados em cache local"}
+                >
+                  {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                  <span className="hidden sm:inline">{online ? "Online" : "Offline · cache"}</span>
+                </span>
+                {headerAction}
+              </div>
             </div>
 
             {/* Page hero */}
