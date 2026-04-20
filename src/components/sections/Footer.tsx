@@ -8,12 +8,19 @@ export const Footer = () => (
     <div className="max-w-6xl mx-auto flex flex-col items-center gap-10 md:flex-row md:items-center md:justify-between text-center md:text-left">
       {/* Logo */}
       <div className="flex flex-col items-center md:items-start gap-3">
-        <img
-          src={logoEllennous}
-          alt="ELLENNOUS — arte vestível"
-          loading="lazy"
-          className="h-16 sm:h-20 md:h-24 w-auto object-contain text-center"
-        />
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Voltar ao topo"
+          className="group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-glow focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-transform duration-300 hover:scale-[1.03] cursor-pointer"
+        >
+          <img
+            src={logoEllennous}
+            alt="ELLENNOUS — arte vestível"
+            loading="lazy"
+            className="h-16 sm:h-20 md:h-24 w-auto object-contain text-center"
+          />
+        </button>
         <p className="font-accent text-xs sm:text-sm text-muted-foreground tracking-[0.15em] uppercase max-w-xs">
           Arte vestível · Peças únicas feitas à mão
         </p>
