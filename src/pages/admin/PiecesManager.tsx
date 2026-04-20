@@ -341,6 +341,18 @@ export const PiecesManager = () => {
   const [coverUploading, setCoverUploading] = useState(false);
   const [activeImageId, setActiveImageId] = useState<string | null>(null);
   const [activePieceId, setActivePieceId] = useState<string | null>(null);
+  const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
+
+  const flashMoved = (id: string) => {
+    setRecentlyMovedId(null);
+    // re-trigger animation on consecutive moves of the same id
+    requestAnimationFrame(() => {
+      setRecentlyMovedId(id);
+      window.setTimeout(() => {
+        setRecentlyMovedId((curr) => (curr === id ? null : curr));
+      }, 950);
+    });
+  };
   const [newCategoryName, setNewCategoryName] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
