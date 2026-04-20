@@ -282,6 +282,22 @@
   .animate-orb-drift { animation: orb-drift 14s ease-in-out infinite; }
   .animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
 
+  @keyframes move-highlight {
+    0% {
+      box-shadow: 0 0 0 0 hsl(var(--primary-glow) / 0);
+      background-color: hsl(var(--primary) / 0);
+    }
+    25% {
+      box-shadow: 0 0 30px -2px hsl(var(--primary-glow) / 0.7), 0 0 0 2px hsl(var(--primary-glow) / 0.6);
+      background-color: hsl(var(--primary) / 0.12);
+    }
+    100% {
+      box-shadow: 0 0 0 0 hsl(var(--primary-glow) / 0);
+      background-color: hsl(var(--primary) / 0);
+    }
+  }
+  .animate-move-highlight { animation: move-highlight 900ms ease-out; }
+
   .shimmer {
     background: linear-gradient(
       90deg,
