@@ -4,14 +4,8 @@ import Autoplay from "embla-carousel-autoplay";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
-import { Instagram, MapPin, Quote, Star } from "lucide-react";
+import { Instagram, MapPin, Quote, Sparkles, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import t1 from "@/assets/testimonial-1.jpg";
-import t2 from "@/assets/testimonial-2.jpg";
-import t3 from "@/assets/testimonial-3.jpg";
-import t4 from "@/assets/testimonial-4.jpg";
-import t5 from "@/assets/testimonial-5.jpg";
-import t6 from "@/assets/testimonial-6.jpg";
 
 interface CardData {
   image: string | null;
@@ -23,15 +17,6 @@ interface CardData {
   state: string | null;
   instagram: string | null;
 }
-
-const fallbackTestimonials: CardData[] = [
-  { image: t1, name: "Rafael M.", role: "Anime/Geek", quote: "Nunca usei nada que falasse tanto por mim sem precisar abrir a boca.", rating: 5, city: "São Paulo", state: "SP", instagram: "@rafa.mtz" },
-  { image: t2, name: "Marina S.", role: "Floral", quote: "É arte que respira comigo. Cada flor parece pintada na minha pele.", rating: 5, city: "Curitiba", state: "PR", instagram: "@marina.sg" },
-  { image: t3, name: "Lucas T.", role: "ScarType™", quote: "Não é roupa. É um manifesto que eu visto todo dia.", rating: 5, city: "Belo Horizonte", state: "MG", instagram: "@lucas.tlr" },
-  { image: t4, name: "Beatriz L.", role: "Exclusiva", quote: "Senti que finalmente alguém entendeu quem eu sou — e bordou isso em mim.", rating: 5, city: "Rio de Janeiro", state: "RJ", instagram: "@bia.lps" },
-  { image: t5, name: "Daniel K.", role: "Anime/Geek", quote: "É a única peça que eu tenho medo de tirar do corpo. Parece parte de mim.", rating: 5, city: "Porto Alegre", state: "RS", instagram: "@dani.kbr" },
-  { image: t6, name: "Helena V.", role: "Realismo", quote: "Quem entende, entende. Quem não entende, fica olhando.", rating: 5, city: "Florianópolis", state: "SC", instagram: "@helena.vri" },
-];
 
 const StarRating = ({ value }: { value: number }) => (
   <div className="flex gap-0.5 mb-3">
