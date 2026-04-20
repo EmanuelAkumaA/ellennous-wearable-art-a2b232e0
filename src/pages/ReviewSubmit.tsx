@@ -135,6 +135,9 @@ const ReviewSubmit = () => {
     const parsed = reviewSchema.safeParse({
       client_name: name,
       client_role: role || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      instagram: instagram || undefined,
       rating,
       content,
     });
@@ -173,6 +176,9 @@ const ReviewSubmit = () => {
           token,
           client_name: parsed.data.client_name,
           client_role: parsed.data.client_role ?? null,
+          city: parsed.data.city ?? null,
+          state: parsed.data.state ?? null,
+          instagram: parsed.data.instagram ?? null,
           rating: parsed.data.rating,
           content: parsed.data.content,
           photo_url,
