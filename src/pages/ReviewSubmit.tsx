@@ -13,6 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 const reviewSchema = z.object({
   client_name: z.string().trim().min(1, "Informe seu nome").max(120, "Máx. 120 caracteres"),
   client_role: z.string().trim().max(60, "Máx. 60 caracteres").optional(),
+  city: z.string().trim().max(80, "Máx. 80 caracteres").optional(),
+  state: z.string().trim().max(40, "Máx. 40 caracteres").optional(),
+  instagram: z.string().trim().max(60, "Máx. 60 caracteres").optional(),
   rating: z.number().int().min(1, "Selecione de 1 a 5").max(5),
   content: z.string().trim().min(10, "Conte um pouco mais (mín. 10)").max(2000, "Máx. 2000 caracteres"),
 });
@@ -72,6 +75,9 @@ const ReviewSubmit = () => {
 
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [content, setContent] = useState("");
@@ -129,6 +135,9 @@ const ReviewSubmit = () => {
     const parsed = reviewSchema.safeParse({
       client_name: name,
       client_role: role || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      instagram: instagram || undefined,
       rating,
       content,
     });
@@ -167,6 +176,9 @@ const ReviewSubmit = () => {
           token,
           client_name: parsed.data.client_name,
           client_role: parsed.data.client_role ?? null,
+          city: parsed.data.city ?? null,
+          state: parsed.data.state ?? null,
+          instagram: parsed.data.instagram ?? null,
           rating: parsed.data.rating,
           content: parsed.data.content,
           photo_url,
@@ -316,6 +328,43 @@ const ReviewSubmit = () => {
             onChange={(e) => setRole(e.target.value)}
             maxLength={60}
             placeholder="Ex: cliente, noiva, parceiro…"
+            className={inputCls}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="city" className={labelCls}>Cidade (opcional)</Label>
+            <Input
+              id="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              maxLength={80}
+              placeholder="Ex: São Paulo"
+              className={inputCls}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="state" className={labelCls}>UF</Label>
+            <Input
+              id="state"
+              value={state}
+              onChange={(e) => setState(e.target.value.toUpperCase())}
+              maxLength={2}
+              placeholder="SP"
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="instagram" className={labelCls}>Instagram (opcional)</Label>
+          <Input
+            id="instagram"
+            value={instagram}
+            onChange={(e) => setInstagram(e.target.value)}
+            maxLength={60}
+            placeholder="@seu.user"
             className={inputCls}
           />
         </div>
