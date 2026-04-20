@@ -148,84 +148,142 @@ const SortablePieceCard = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group glass-card overflow-hidden touch-none transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] ${
+      {...attributes}
+      {...listeners}
+      className={`group glass-card overflow-hidden transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] select-none ${
         isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-      }`}
+      } ${disabled ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
-      {/* Cover */}
-      <div className="relative aspect-[4/3] bg-secondary/30 overflow-hidden">
-        {thumbUrl ? (
-          <img
-            src={thumbUrl}
-            alt={piece.nome}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
+      {/* MOBILE: list layout */}
+      <div className="flex md:hidden items-stretch gap-3 p-3">
+        <div className="relative w-20 h-20 shrink-0 rounded-md overflow-hidden bg-secondary/30">
+          {thumbUrl ? (
+            <img src={thumbUrl} alt={piece.nome} className="w-full h-full object-cover pointer-events-none" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-between">
+          <div className="min-w-0">
+            <p className="font-display text-sm leading-tight line-clamp-2">{piece.nome}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 font-accent tracking-[0.15em] uppercase truncate">
+              #{String(piece.ordem).padStart(2, "0")} · {piece.gallery_categories?.nome ?? "Sem categoria"}
+            </p>
+            <div className="flex gap-1 mt-1">
+              {piece.novo && (
+                <span className="text-[8px] font-accent tracking-[0.2em] uppercase bg-primary/20 text-primary-glow px-1.5 py-0.5 rounded">
+                  Novo
+                </span>
+              )}
+              {piece.destaque && (
+                <span className="text-[8px] font-accent tracking-[0.2em] uppercase bg-brand-red/25 text-brand-red px-1.5 py-0.5 rounded">
+                  Destaque
+                </span>
+              )}
+            </div>
           </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent opacity-90 pointer-events-none" />
-
-        {/* Drag handle pill */}
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          disabled={disabled}
-          className="absolute top-3 left-3 z-10 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center text-muted-foreground hover:text-primary-glow cursor-grab active:cursor-grabbing disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          title={disabled ? "Reordenação desativada com filtros" : "Arrastar para reordenar"}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-
-        {/* Tags top-right */}
-        <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
-          {piece.novo && (
-            <span className="text-[9px] font-accent tracking-[0.2em] uppercase bg-primary/20 backdrop-blur text-primary-glow px-2 py-1 rounded shadow-[0_0_15px_hsl(var(--primary)/0.4)] flex items-center gap-1">
-              <Sparkles className="h-2.5 w-2.5" /> Novo
-            </span>
-          )}
-          {piece.destaque && (
-            <span className="text-[9px] font-accent tracking-[0.2em] uppercase bg-brand-red/25 backdrop-blur text-brand-red px-2 py-1 rounded shadow-[0_0_15px_hsl(var(--accent-red)/0.3)] flex items-center gap-1">
-              <Flame className="h-2.5 w-2.5" /> Destaque
-            </span>
-          )}
+        </div>
+        <div className="flex flex-col gap-1 shrink-0 justify-center">
+          <Button
+            size="icon"
+            variant="ghost"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onEdit(piece); }}
+            title="Editar"
+            className="h-8 w-8 hover:bg-primary/15 hover:text-primary-glow"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onDelete(piece.id); }}
+            title="Excluir"
+            className="h-8 w-8 hover:bg-destructive/15 hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="p-4 space-y-3">
-        <div>
-          <p className="font-display text-base leading-tight line-clamp-2">{piece.nome}</p>
-          <p className="text-[11px] text-muted-foreground mt-1 font-accent tracking-[0.15em] uppercase">
-            {piece.gallery_categories?.nome ?? "Sem categoria"} · {piece.gallery_piece_images.length} img
-          </p>
+      {/* DESKTOP: card layout */}
+      <div className="hidden md:block">
+        {/* Cover */}
+        <div className="relative aspect-[4/3] bg-secondary/30 overflow-hidden">
+          {thumbUrl ? (
+            <img
+              src={thumbUrl}
+              alt={piece.nome}
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent opacity-90 pointer-events-none" />
+
+          {/* Drag handle pill (desktop visual cue) */}
+          <div
+            className="absolute top-3 left-3 z-10 h-8 w-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center text-muted-foreground pointer-events-none"
+            title={disabled ? "Reordenação desativada com filtros" : "Arrastar para reordenar"}
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+
+          {/* Tags top-right */}
+          <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
+            {piece.novo && (
+              <span className="text-[9px] font-accent tracking-[0.2em] uppercase bg-primary/20 backdrop-blur text-primary-glow px-2 py-1 rounded shadow-[0_0_15px_hsl(var(--primary)/0.4)] flex items-center gap-1">
+                <Sparkles className="h-2.5 w-2.5" /> Novo
+              </span>
+            )}
+            {piece.destaque && (
+              <span className="text-[9px] font-accent tracking-[0.2em] uppercase bg-brand-red/25 backdrop-blur text-brand-red px-2 py-1 rounded shadow-[0_0_15px_hsl(var(--accent-red)/0.3)] flex items-center gap-1">
+                <Flame className="h-2.5 w-2.5" /> Destaque
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
-          <span className="text-[10px] font-accent tracking-[0.25em] uppercase text-muted-foreground/60">
-            #{String(piece.ordem).padStart(2, "0")}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onEdit(piece)}
-              title="Editar"
-              className="h-8 w-8 hover:bg-primary/15 hover:text-primary-glow"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onDelete(piece.id)}
-              title="Excluir"
-              className="h-8 w-8 hover:bg-destructive/15 hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+        {/* Body */}
+        <div className="p-4 space-y-3">
+          <div>
+            <p className="font-display text-base leading-tight line-clamp-2">{piece.nome}</p>
+            <p className="text-[11px] text-muted-foreground mt-1 font-accent tracking-[0.15em] uppercase">
+              {piece.gallery_categories?.nome ?? "Sem categoria"} · {piece.gallery_piece_images.length} img
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
+            <span className="text-[10px] font-accent tracking-[0.25em] uppercase text-muted-foreground/60">
+              #{String(piece.ordem).padStart(2, "0")}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onEdit(piece); }}
+                title="Editar"
+                className="h-8 w-8 hover:bg-primary/15 hover:text-primary-glow"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onDelete(piece.id); }}
+                title="Excluir"
+                className="h-8 w-8 hover:bg-destructive/15 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
