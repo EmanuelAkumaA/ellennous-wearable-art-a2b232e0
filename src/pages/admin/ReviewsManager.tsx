@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Copy,
+  ExternalLink,
+  GripVertical,
   Link2,
   Loader2,
   MessageCircle,
@@ -22,6 +23,23 @@ import {
   Clock,
   ShieldAlert,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Invite {
   id: string;
@@ -75,6 +93,88 @@ const StarsRow = ({ rating }: { rating: number }) => (
   </div>
 );
 
+interface ReviewCardProps {
+  r: Review;
+  tab: "pending" | "approved" | "rejected";
+  onStatus: (id: string, status: Review["status"]) => void;
+  onDelete: (id: string) => void;
+  draggable?: boolean;
+}
+
+const ReviewCard = ({ r, tab, onStatus, onDelete, draggable }: ReviewCardProps) => {
+  const sortable = useSortable({ id: r.id, disabled: !draggable });
+  const style = draggable
+    ? {
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+        opacity: sortable.isDragging ? 0.5 : 1,
+      }
+    : undefined;
+
+  return (
+    <div
+      ref={draggable ? sortable.setNodeRef : undefined}
+      style={style}
+      className="flex flex-col sm:flex-row gap-4 p-4 rounded-md border border-border/40 bg-background/40"
+    >
+      {draggable && (
+        <button
+          {...sortable.attributes}
+          {...sortable.listeners}
+          className="hidden sm:flex items-center text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+          aria-label="Arrastar para reordenar"
+        >
+          <GripVertical className="h-5 w-5" />
+        </button>
+      )}
+      {r.photo_url ? (
+        <img
+          src={r.photo_url}
+          alt={r.client_name}
+          className="h-16 w-16 rounded-full object-cover shrink-0"
+        />
+      ) : (
+        <div className="h-16 w-16 rounded-full bg-secondary/40 flex items-center justify-center shrink-0 font-display text-lg">
+          {r.client_name.slice(0, 2).toUpperCase()}
+        </div>
+      )}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-medium">{r.client_name}</p>
+          {r.client_role && (
+            <span className="text-xs text-muted-foreground">· {r.client_role}</span>
+          )}
+          <StarsRow rating={r.rating} />
+        </div>
+        <p className="text-sm text-foreground/80 whitespace-pre-wrap">{r.content}</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          {new Date(r.created_at).toLocaleString("pt-BR")}
+        </p>
+      </div>
+      <div className="flex sm:flex-col gap-2 shrink-0">
+        {tab !== "approved" && (
+          <Button size="sm" variant="default" onClick={() => onStatus(r.id, "approved")}>
+            <Check className="h-3.5 w-3.5 mr-1" /> Aprovar
+          </Button>
+        )}
+        {tab !== "rejected" && (
+          <Button size="sm" variant="outline" onClick={() => onStatus(r.id, "rejected")}>
+            <XIcon className="h-3.5 w-3.5 mr-1" /> Recusar
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onDelete(r.id)}
+          className="text-destructive hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const ReviewsManager = () => {
   const { toast } = useToast();
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -82,10 +182,14 @@ export const ReviewsManager = () => {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
-  // form gerar link
   const [validity, setValidity] = useState(24);
   const [unit, setUnit] = useState<"hours" | "days">("hours");
   const [note, setNote] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const activeInvites = useMemo(
     () =>
@@ -102,7 +206,11 @@ export const ReviewsManager = () => {
     setLoading(true);
     const [inv, rev] = await Promise.all([
       supabase.from("review_invites").select("*").order("created_at", { ascending: false }),
-      supabase.from("reviews").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("reviews")
+        .select("*")
+        .order("ordem", { ascending: true })
+        .order("created_at", { ascending: false }),
     ]);
     if (inv.data) setInvites(inv.data as Invite[]);
     if (rev.data) setReviews(rev.data as Review[]);
@@ -193,6 +301,35 @@ export const ReviewsManager = () => {
     rejected: reviews.filter((r) => r.status === "rejected"),
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const approved = grouped.approved;
+    const oldIndex = approved.findIndex((r) => r.id === active.id);
+    const newIndex = approved.findIndex((r) => r.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(approved, oldIndex, newIndex);
+    // Optimistic update
+    setReviews((prev) => {
+      const others = prev.filter((r) => r.status !== "approved");
+      return [...reordered.map((r, i) => ({ ...r, ordem: i })), ...others];
+    });
+
+    try {
+      await Promise.all(
+        reordered.map((r, i) =>
+          supabase.from("reviews").update({ ordem: i }).eq("id", r.id),
+        ),
+      );
+      toast({ title: "Ordem atualizada" });
+    } catch (err: any) {
+      toast({ title: "Erro ao salvar ordem", description: err.message, variant: "destructive" });
+      load();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -205,11 +342,16 @@ export const ReviewsManager = () => {
     <div className="space-y-8">
       {/* Gerar link */}
       <Card className="bg-card/40 border-border/40 backdrop-blur-xl">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="font-display text-xl flex items-center gap-2">
             <Link2 className="h-5 w-5 text-primary-glow" />
             Gerar link de avaliação
           </CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <a href="/avaliar/preview" target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3.5 w-3.5 mr-2" /> Ver página base
+            </a>
+          </Button>
         </CardHeader>
         <CardContent className="space-y-5">
           {activeInvites.length > 0 && (
@@ -349,65 +491,63 @@ export const ReviewsManager = () => {
               </TabsTrigger>
             </TabsList>
 
-            {(["pending", "approved", "rejected"] as const).map((key) => (
-              <TabsContent key={key} value={key} className="mt-4 space-y-3">
-                {grouped[key].length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-6 text-center">Nada por aqui ainda.</p>
-                ) : (
-                  grouped[key].map((r) => (
-                    <div
-                      key={r.id}
-                      className="flex flex-col sm:flex-row gap-4 p-4 rounded-md border border-border/40 bg-background/40"
-                    >
-                      {r.photo_url ? (
-                        <img
-                          src={r.photo_url}
-                          alt={r.client_name}
-                          className="h-16 w-16 rounded-full object-cover shrink-0"
+            <TabsContent value="pending" className="mt-4 space-y-3">
+              {grouped.pending.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Nada por aqui ainda.</p>
+              ) : (
+                grouped.pending.map((r) => (
+                  <ReviewCard
+                    key={r.id}
+                    r={r}
+                    tab="pending"
+                    onStatus={setReviewStatus}
+                    onDelete={deleteReview}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="approved" className="mt-4 space-y-3">
+              {grouped.approved.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Nada por aqui ainda.</p>
+              ) : (
+                <>
+                  <p className="text-[11px] text-muted-foreground tracking-wider mb-2">
+                    Arraste pelo ícone <GripVertical className="inline h-3 w-3" /> para reordenar como aparecem no site.
+                  </p>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={grouped.approved.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                      {grouped.approved.map((r) => (
+                        <ReviewCard
+                          key={r.id}
+                          r={r}
+                          tab="approved"
+                          onStatus={setReviewStatus}
+                          onDelete={deleteReview}
+                          draggable
                         />
-                      ) : (
-                        <div className="h-16 w-16 rounded-full bg-secondary/40 flex items-center justify-center shrink-0 font-display text-lg">
-                          {r.client_name.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium">{r.client_name}</p>
-                          {r.client_role && (
-                            <span className="text-xs text-muted-foreground">· {r.client_role}</span>
-                          )}
-                          <StarsRow rating={r.rating} />
-                        </div>
-                        <p className="text-sm text-foreground/80 whitespace-pre-wrap">{r.content}</p>
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                          {new Date(r.created_at).toLocaleString("pt-BR")}
-                        </p>
-                      </div>
-                      <div className="flex sm:flex-col gap-2 shrink-0">
-                        {key !== "approved" && (
-                          <Button size="sm" variant="default" onClick={() => setReviewStatus(r.id, "approved")}>
-                            <Check className="h-3.5 w-3.5 mr-1" /> Aprovar
-                          </Button>
-                        )}
-                        {key !== "rejected" && (
-                          <Button size="sm" variant="outline" onClick={() => setReviewStatus(r.id, "rejected")}>
-                            <XIcon className="h-3.5 w-3.5 mr-1" /> Recusar
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => deleteReview(r.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </TabsContent>
-            ))}
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="rejected" className="mt-4 space-y-3">
+              {grouped.rejected.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Nada por aqui ainda.</p>
+              ) : (
+                grouped.rejected.map((r) => (
+                  <ReviewCard
+                    key={r.id}
+                    r={r}
+                    tab="rejected"
+                    onStatus={setReviewStatus}
+                    onDelete={deleteReview}
+                  />
+                ))
+              )}
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
