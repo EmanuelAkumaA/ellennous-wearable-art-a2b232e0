@@ -1,9 +1,10 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminProfile } from "@/hooks/useAdminProfile";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star } from "lucide-react";
+import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star, Wifi, WifiOff } from "lucide-react";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
 import { InstallPrompt } from "@/components/admin/InstallPrompt";
 import brandIcon from "@/assets/brand-icon.png";
@@ -38,7 +39,7 @@ const registerAdminPWA = () => {
     return;
   }
 
-  // Inject manifest link only inside /admin so the public site stays a normal web app
+  // Inject manifest + iOS PWA meta tags only inside /admin so the public site stays a normal web app
   if (!document.querySelector('link[rel="manifest"][data-admin]')) {
     const link = document.createElement("link");
     link.rel = "manifest";
@@ -46,6 +47,37 @@ const registerAdminPWA = () => {
     link.setAttribute("data-admin", "true");
     document.head.appendChild(link);
   }
+  const addOnce = (selector: string, build: () => HTMLElement) => {
+    if (!document.head.querySelector(selector)) document.head.appendChild(build());
+  };
+  addOnce('meta[name="apple-mobile-web-app-capable"][data-admin]', () => {
+    const m = document.createElement("meta");
+    m.name = "apple-mobile-web-app-capable";
+    m.content = "yes";
+    m.setAttribute("data-admin", "true");
+    return m;
+  });
+  addOnce('meta[name="apple-mobile-web-app-status-bar-style"][data-admin]', () => {
+    const m = document.createElement("meta");
+    m.name = "apple-mobile-web-app-status-bar-style";
+    m.content = "black-translucent";
+    m.setAttribute("data-admin", "true");
+    return m;
+  });
+  addOnce('meta[name="apple-mobile-web-app-title"][data-admin]', () => {
+    const m = document.createElement("meta");
+    m.name = "apple-mobile-web-app-title";
+    m.content = "Ellennous";
+    m.setAttribute("data-admin", "true");
+    return m;
+  });
+  addOnce('link[rel="apple-touch-startup-image"][data-admin]', () => {
+    const l = document.createElement("link");
+    l.rel = "apple-touch-startup-image";
+    l.href = "/admin-splash.png";
+    l.setAttribute("data-admin", "true");
+    return l;
+  });
 
   navigator.serviceWorker
     .register("/admin-sw.js", { scope: "/admin" })
@@ -205,6 +237,7 @@ interface AdminShellProps {
 export const AdminShell = ({ active, onSelect, headerAction, children }: AdminShellProps) => {
   const { user, signOut } = useAuth();
   const { profile } = useAdminProfile();
+  const online = useOnlineStatus();
   const [mobileOpen, setMobileOpen] = useState(false);
   const current = NAV.find((n) => n.key === active) ?? NAV[0];
   const Icon = current.icon;
@@ -259,7 +292,20 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
                 </div>
               </div>
 
-              {headerAction && <div className="ml-auto">{headerAction}</div>}
+              <div className="ml-auto flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-accent tracking-[0.25em] uppercase transition-colors ${
+                    online
+                      ? "border-primary/30 bg-primary/10 text-primary-glow"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                  }`}
+                  title={online ? "Conectado" : "Sem conexão — exibindo dados em cache local"}
+                >
+                  {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                  <span className="hidden sm:inline">{online ? "Online" : "Offline · cache"}</span>
+                </span>
+                {headerAction}
+              </div>
             </div>
 
             {/* Page hero */}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { cacheStaleWhileRevalidate, isOffline } from "@/lib/offlineCache";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -260,22 +261,40 @@ export const PiecesManager = () => {
 
   const load = async () => {
     setLoading(true);
-    const [piecesRes, catsRes] = await Promise.all([
-      supabase
-        .from("gallery_pieces")
-        .select("*, gallery_categories(nome), gallery_piece_images(id, url, storage_path, ordem)")
-        .order("ordem", { ascending: true }),
-      supabase.from("gallery_categories").select("id, nome").order("ordem", { ascending: true }),
-    ]);
-    if (piecesRes.error) toast({ title: "Erro", description: piecesRes.error.message, variant: "destructive" });
-    else {
-      const sorted = (piecesRes.data ?? []).map((p) => ({
-        ...p,
-        gallery_piece_images: [...(p.gallery_piece_images ?? [])].sort((a, b) => a.ordem - b.ordem),
-      })) as Piece[];
-      setPieces(sorted);
-    }
-    if (catsRes.data) setCategories(catsRes.data);
+    await cacheStaleWhileRevalidate<{ pieces: Piece[]; categories: Category[] }>(
+      "admin:pieces+categories",
+      async () => {
+        const [piecesRes, catsRes] = await Promise.all([
+          supabase
+            .from("gallery_pieces")
+            .select("*, gallery_categories(nome), gallery_piece_images(id, url, storage_path, ordem)")
+            .order("ordem", { ascending: true }),
+          supabase.from("gallery_categories").select("id, nome").order("ordem", { ascending: true }),
+        ]);
+        if (piecesRes.error) throw piecesRes.error;
+        const sorted = (piecesRes.data ?? []).map((p) => ({
+          ...p,
+          gallery_piece_images: [...(p.gallery_piece_images ?? [])].sort((a, b) => a.ordem - b.ordem),
+        })) as Piece[];
+        return { pieces: sorted, categories: (catsRes.data as Category[]) ?? [] };
+      },
+      {
+        onCache: ({ pieces, categories }) => {
+          setPieces(pieces);
+          setCategories(categories);
+          setLoading(false);
+        },
+        onFresh: ({ pieces, categories }) => {
+          setPieces(pieces);
+          setCategories(categories);
+        },
+        onError: (err) => {
+          if (!isOffline()) {
+            toast({ title: "Erro", description: (err as Error).message, variant: "destructive" });
+          }
+        },
+      },
+    );
     setLoading(false);
   };
 
@@ -313,7 +332,16 @@ export const PiecesManager = () => {
 
   const closeForm = () => { setCreating(false); setEditing(null); setForm(emptyForm); };
 
+  const guardOffline = () => {
+    if (isOffline()) {
+      toast({ title: "Sem conexão", description: "Mudanças desabilitadas no modo offline.", variant: "destructive" });
+      return true;
+    }
+    return false;
+  };
+
   const handleSave = async () => {
+    if (guardOffline()) return;
     if (!form.nome.trim()) return toast({ title: "Nome obrigatório", variant: "destructive" });
     if (!form.categoria_id) return toast({ title: "Selecione uma categoria", variant: "destructive" });
     setSaving(true);
@@ -339,6 +367,7 @@ export const PiecesManager = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (guardOffline()) return;
     if (!confirm("Remover esta obra e todas as imagens?")) return;
     const piece = pieces.find((p) => p.id === id);
     if (piece) {
@@ -353,6 +382,7 @@ export const PiecesManager = () => {
   };
 
   const handleUpload = async (files: FileList | null) => {
+    if (guardOffline()) return;
     if (!files || !editing) return;
     setUploading(true);
     try {
