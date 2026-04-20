@@ -17,7 +17,9 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  Pencil,
   RefreshCw,
+  Save,
   Search,
   Star,
   Trash2,
@@ -104,11 +106,50 @@ interface ReviewCardProps {
   tab: "pending" | "approved" | "rejected";
   onStatus: (id: string, status: Review["status"]) => void;
   onDelete: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<Pick<Review, "client_name" | "city" | "state" | "instagram">>) => Promise<void>;
   draggable?: boolean;
 }
 
-const ReviewCard = ({ r, tab, onStatus, onDelete, draggable }: ReviewCardProps) => {
+const sanitizeInstagramInput = (raw: string) => raw.replace(/^@+/, "").trim();
+const formatInstagramForSave = (raw: string) => {
+  const clean = sanitizeInstagramInput(raw);
+  if (!clean) return null;
+  return `@${clean}`;
+};
+
+const ReviewCard = ({ r, tab, onStatus, onDelete, onUpdate, draggable }: ReviewCardProps) => {
   const sortable = useSortable({ id: r.id, disabled: !draggable });
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState(r.client_name);
+  const [city, setCity] = useState(r.city ?? "");
+  const [state, setState] = useState(r.state ?? "");
+  const [instagram, setInstagram] = useState((r.instagram ?? "").replace(/^@+/, ""));
+
+  const startEdit = () => {
+    setName(r.client_name);
+    setCity(r.city ?? "");
+    setState(r.state ?? "");
+    setInstagram((r.instagram ?? "").replace(/^@+/, ""));
+    setEditing(true);
+  };
+
+  const cancelEdit = () => setEditing(false);
+
+  const saveEdit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    await onUpdate(r.id, {
+      client_name: name.trim(),
+      city: city.trim() || null,
+      state: state.trim() || null,
+      instagram: formatInstagramForSave(instagram),
+    });
+    setSaving(false);
+    setEditing(false);
+  };
+
+  const allowDrag = draggable && !editing;
   const style = draggable
     ? {
         transform: CSS.Transform.toString(sortable.transform),
@@ -125,9 +166,10 @@ const ReviewCard = ({ r, tab, onStatus, onDelete, draggable }: ReviewCardProps) 
     >
       {draggable && (
         <button
-          {...sortable.attributes}
-          {...sortable.listeners}
-          className="hidden sm:flex items-center text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+          {...(allowDrag ? sortable.attributes : {})}
+          {...(allowDrag ? sortable.listeners : {})}
+          disabled={!allowDrag}
+          className="hidden sm:flex items-center text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Arrastar para reordenar"
         >
           <GripVertical className="h-5 w-5" />
@@ -145,53 +187,119 @@ const ReviewCard = ({ r, tab, onStatus, onDelete, draggable }: ReviewCardProps) 
         </div>
       )}
       <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium">{r.client_name}</p>
-          {r.client_role && (
-            <span className="text-xs text-muted-foreground">· {r.client_role}</span>
-          )}
-          <StarsRow rating={r.rating} />
-        </div>
-        {(r.city || r.state || r.instagram) && (
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            {(r.city || r.state) && (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3 w-3 text-primary-glow/70" />
-                {[r.city, r.state].filter(Boolean).join(" · ")}
-              </span>
-            )}
-            {r.instagram && (
-              <span className="inline-flex items-center gap-1 text-primary-glow/80">
-                <Instagram className="h-3 w-3" />
-                {r.instagram.startsWith("@") ? r.instagram : `@${r.instagram}`}
-              </span>
-            )}
+        {editing ? (
+          <div className="space-y-2">
+            <div>
+              <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Nome *</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="h-8 text-sm"
+                maxLength={120}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.2fr] gap-2">
+              <div>
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Cidade</Label>
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="h-8 text-sm"
+                  maxLength={80}
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Estado</Label>
+                <Input
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  className="h-8 text-sm"
+                  maxLength={40}
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Instagram</Label>
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">@</span>
+                  <Input
+                    value={instagram}
+                    onChange={(e) => setInstagram(sanitizeInstagramInput(e.target.value))}
+                    className="h-8 text-sm pl-6"
+                    maxLength={60}
+                    placeholder="usuario"
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-foreground/80 whitespace-pre-wrap pt-1">{r.content}</p>
           </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium">{r.client_name}</p>
+              {r.client_role && (
+                <span className="text-xs text-muted-foreground">· {r.client_role}</span>
+              )}
+              <StarsRow rating={r.rating} />
+            </div>
+            {(r.city || r.state || r.instagram) && (
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                {(r.city || r.state) && (
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="h-3 w-3 text-primary-glow/70" />
+                    {[r.city, r.state].filter(Boolean).join(" · ")}
+                  </span>
+                )}
+                {r.instagram && (
+                  <span className="inline-flex items-center gap-1 text-primary-glow/80">
+                    <Instagram className="h-3 w-3" />
+                    {r.instagram.startsWith("@") ? r.instagram : `@${r.instagram}`}
+                  </span>
+                )}
+              </div>
+            )}
+            <p className="text-sm text-foreground/80 whitespace-pre-wrap">{r.content}</p>
+          </>
         )}
-        <p className="text-sm text-foreground/80 whitespace-pre-wrap">{r.content}</p>
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
           {new Date(r.created_at).toLocaleString("pt-BR")}
         </p>
       </div>
       <div className="flex sm:flex-col gap-2 shrink-0">
-        {tab !== "approved" && (
-          <Button size="sm" variant="default" onClick={() => onStatus(r.id, "approved")}>
-            <Check className="h-3.5 w-3.5 mr-1" /> Aprovar
-          </Button>
+        {editing ? (
+          <>
+            <Button size="sm" variant="default" onClick={saveEdit} disabled={saving || !name.trim()}>
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" /> Salvar</>}
+            </Button>
+            <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
+              <XIcon className="h-3.5 w-3.5 mr-1" /> Cancelar
+            </Button>
+          </>
+        ) : (
+          <>
+            {tab !== "approved" && (
+              <Button size="sm" variant="default" onClick={() => onStatus(r.id, "approved")}>
+                <Check className="h-3.5 w-3.5 mr-1" /> Aprovar
+              </Button>
+            )}
+            {tab !== "rejected" && (
+              <Button size="sm" variant="outline" onClick={() => onStatus(r.id, "rejected")}>
+                <XIcon className="h-3.5 w-3.5 mr-1" /> Recusar
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={startEdit} title="Editar dados do cliente">
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDelete(r.id)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </>
         )}
-        {tab !== "rejected" && (
-          <Button size="sm" variant="outline" onClick={() => onStatus(r.id, "rejected")}>
-            <XIcon className="h-3.5 w-3.5 mr-1" /> Recusar
-          </Button>
-        )}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => onDelete(r.id)}
-          className="text-destructive hover:text-destructive"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
       </div>
     </div>
   );
@@ -315,6 +423,19 @@ export const ReviewsManager = () => {
       return;
     }
     toast({ title: "Avaliação excluída" });
+    load();
+  };
+
+  const updateReview = async (
+    id: string,
+    patch: Partial<Pick<Review, "client_name" | "city" | "state" | "instagram">>,
+  ) => {
+    const { error } = await supabase.from("reviews").update(patch).eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Avaliação atualizada" });
     load();
   };
 
@@ -536,6 +657,7 @@ export const ReviewsManager = () => {
                     tab="pending"
                     onStatus={setReviewStatus}
                     onDelete={deleteReview}
+                    onUpdate={updateReview}
                   />
                 ))
               )}
@@ -572,6 +694,7 @@ export const ReviewsManager = () => {
                             tab="approved"
                             onStatus={setReviewStatus}
                             onDelete={deleteReview}
+                            onUpdate={updateReview}
                             draggable={!approvedSearch}
                           />
                         ))}
@@ -593,6 +716,7 @@ export const ReviewsManager = () => {
                     tab="rejected"
                     onStatus={setReviewStatus}
                     onDelete={deleteReview}
+                    onUpdate={updateReview}
                   />
                 ))
               )}

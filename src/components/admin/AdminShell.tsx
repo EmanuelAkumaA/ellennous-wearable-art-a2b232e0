@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star } from "lucide-react";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
+import brandIcon from "@/assets/brand-icon.png";
 
 export type AdminTab = "pieces" | "categories" | "reviews" | "stats" | "user";
 
@@ -100,9 +101,12 @@ const SidebarBody = ({
     <div className="px-6 pt-8 pb-6 border-b border-border/40">
       <div className="flex items-center gap-3">
         <PalettePhoto size="sm" src={avatarUrl ?? undefined} initials={initials} colors={paletteColors} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-display text-lg leading-none text-gradient-light truncate" title={fallback}>{fallback}</p>
-          <p className="font-accent text-[10px] tracking-[0.4em] text-primary-glow/70 uppercase mt-1">Atelier · Ellennous</p>
+          <div className="flex items-center gap-1.5 mt-1">
+            <img src={brandIcon} alt="" className="h-3.5 w-3.5 object-contain opacity-90" />
+            <p className="font-accent text-[10px] tracking-[0.4em] text-primary-glow/70 uppercase">Atelier · Ellennous</p>
+          </div>
         </div>
       </div>
     </div>
