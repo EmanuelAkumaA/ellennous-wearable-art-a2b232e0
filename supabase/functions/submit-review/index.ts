@@ -15,6 +15,9 @@ interface SubmitBody {
   content?: string;
   photo_url?: string | null;
   photo_storage_path?: string | null;
+  city?: string | null;
+  state?: string | null;
+  instagram?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -85,6 +88,10 @@ Deno.serve(async (req) => {
     const content = (body.content ?? "").trim();
     const photo_url = body.photo_url?.trim() || null;
     const photo_storage_path = body.photo_storage_path?.trim() || null;
+    const city = body.city?.trim().slice(0, 80) || null;
+    const state = body.state?.trim().slice(0, 40) || null;
+    const rawIg = body.instagram?.trim().replace(/^@+/, "").slice(0, 60) || null;
+    const instagram = rawIg ? `@${rawIg}` : null;
 
     if (
       !token ||
@@ -141,6 +148,9 @@ Deno.serve(async (req) => {
       content,
       photo_url,
       photo_storage_path,
+      city,
+      state,
+      instagram,
       status: "pending",
     });
     if (insertErr) {

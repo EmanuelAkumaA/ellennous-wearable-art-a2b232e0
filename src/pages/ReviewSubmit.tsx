@@ -13,6 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 const reviewSchema = z.object({
   client_name: z.string().trim().min(1, "Informe seu nome").max(120, "Máx. 120 caracteres"),
   client_role: z.string().trim().max(60, "Máx. 60 caracteres").optional(),
+  city: z.string().trim().max(80, "Máx. 80 caracteres").optional(),
+  state: z.string().trim().max(40, "Máx. 40 caracteres").optional(),
+  instagram: z.string().trim().max(60, "Máx. 60 caracteres").optional(),
   rating: z.number().int().min(1, "Selecione de 1 a 5").max(5),
   content: z.string().trim().min(10, "Conte um pouco mais (mín. 10)").max(2000, "Máx. 2000 caracteres"),
 });
@@ -72,6 +75,9 @@ const ReviewSubmit = () => {
 
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [content, setContent] = useState("");
