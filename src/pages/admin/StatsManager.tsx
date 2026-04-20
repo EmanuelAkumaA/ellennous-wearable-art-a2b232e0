@@ -195,18 +195,18 @@ export const StatsManager = () => {
   return (
     <div className="space-y-8">
       {/* Filters bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ToggleGroup
           type="single"
           value={period}
           onValueChange={(v) => v && setPeriod(v as Period)}
-          className="glass-card p-1 rounded-full"
+          className="glass-card p-1 rounded-full w-full sm:w-auto justify-center"
         >
           {(["7d", "30d", "90d", "all"] as Period[]).map((p) => (
             <ToggleGroupItem
               key={p}
               value={p}
-              className="rounded-full px-4 py-1.5 font-accent text-[10px] tracking-[0.2em] uppercase data-[state=on]:bg-gradient-purple-wine data-[state=on]:text-white data-[state=on]:shadow-glow"
+              className="flex-1 sm:flex-none rounded-full px-4 py-1.5 font-accent text-[10px] tracking-[0.2em] uppercase data-[state=on]:bg-gradient-purple-wine data-[state=on]:text-white data-[state=on]:shadow-glow"
             >
               {p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : p === "90d" ? "90 dias" : "Tudo"}
             </ToggleGroupItem>
@@ -216,7 +216,7 @@ export const StatsManager = () => {
           onClick={load}
           variant="ghost"
           size="sm"
-          className="rounded-full font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-primary/10 hover:text-primary-glow"
+          className="w-full sm:w-auto justify-center rounded-full font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-primary/10 hover:text-primary-glow"
         >
           <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />
           Atualizar
