@@ -201,6 +201,16 @@ const ReviewSubmit = () => {
 
         {status === "valid" && (
           <form onSubmit={handleSubmit} className="space-y-6">
+            {isPreview && (
+              <div className="rounded-md border border-primary-glow/40 bg-primary/10 px-4 py-3 text-center">
+                <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-primary-glow">
+                  Modo demonstração
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Esta é uma prévia da página de avaliação — nada será enviado.
+                </p>
+              </div>
+            )}
             <div className="text-center space-y-2 mb-2">
               <p className="font-accent text-[10px] tracking-[0.4em] uppercase text-primary-glow">
                 Ellennous · Avaliação {isPreview && "· Prévia"}
