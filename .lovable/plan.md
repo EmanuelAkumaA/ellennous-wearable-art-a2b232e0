@@ -1,55 +1,42 @@
 
 ## Plano
 
-O usuário quer botões de mover ↑/↓ ao lado de cada obra no mobile, como alternativa ao long-press drag (que é menos descoberto). Ao clicar na seta, a obra troca de posição com a vizinha (acima ou abaixo).
+Duas mudanças independentes.
 
-### Mudanças em `src/pages/admin/PiecesManager.tsx`
+### 1. Slide animado ao reordenar obras
 
-**1. Adicionar handler de "mover por clique"**
-Já existe a função `handleDragEnd` que usa `arrayMove` e persiste via `update_pieces_order`. Vou criar uma função reutilizável:
+**Problema**: hoje o dnd-kit anima durante o drag, mas quando o usuário clica nas setas ↑/↓ o array muda via `setPieces` e os cards "saltam" instantaneamente, sem transição.
 
-```ts
-const movePiece = (currentIndex: number, direction: "up" | "down") => {
-  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-  if (targetIndex < 0 || targetIndex >= filteredPieces.length) return;
-  // arrayMove + persist (mesmo fluxo do handleDragEnd)
-};
-```
+**Solução**: usar a técnica FLIP (First-Last-Invert-Play) sem instalar nada. Em `SortablePieceCard`:
 
-Importante: como há filtro/busca, mover deve operar sobre a lista **filtrada visível** mas persistir respeitando os ids — mesma lógica do drag atual.
+- Manter um `ref` ao DOM node de cada card.
+- Antes de cada reordenação (no `movePiece`), capturar `getBoundingClientRect()` de todos os cards visíveis (via um Map indexado por `piece.id`).
+- Depois do `setPieces` (no `useLayoutEffect` do componente pai), comparar a nova posição com a antiga: aplicar `transform: translateY(deltaY)` instantâneo + `transition: none`, depois em `requestAnimationFrame` setar `transform: ''` + `transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1)` para o card deslizar suavemente até o novo lugar.
 
-**2. Adicionar 2 botões ao card (variante mobile)**
-Ao lado da thumb/handle, na coluna mobile, dois botões pequenos empilhados:
-- `<ChevronUp>` — desabilitado se for o primeiro
-- `<ChevronDown>` — desabilitado se for o último
+Encapsular isso num pequeno hook `useFlipAnimation(items, getId)` em `src/hooks/use-flip-animation.ts`, alimentado com `pieces` e usado no container da lista mobile e do grid desktop.
 
-Tamanho compacto (`h-7 w-7` cada), `variant="outline"`, com `aria-label="Mover para cima/baixo"`.
+A animação `animate-move-highlight` já existente (glow) continua disparando em paralelo — slide + flash combinam bem.
 
-**3. Manter long-press drag funcionando**
-Os botões são adicionais, não substituem. Quem preferir arrastar segura 1s; quem preferir clicar usa as setas. No desktop, manter o `GripVertical` + drag normal.
+### 2. Trocar imagem de fundo do Hero pela imagem enviada
 
-**4. Posicionamento no card mobile**
-Layout horizontal atual: `[thumb] [info] [editar][excluir]`. Vou inserir as setas entre info e os botões de ação, ou logo após a thumb. Decisão: **após a thumb**, alinhadas verticalmente, para virar o "controle de ordem" claro.
+A imagem enviada é a peça preta com o personagem branco/amarelo "Aero Por Vero". Vou:
 
-```
-┌─────────────────────────────────────────────┐
-│ [thumb] [↑] Nome da obra        [edit][del] │
-│         [↓] Categoria · #01                 │
-└─────────────────────────────────────────────┘
-```
+1. **Remover o fundo** da imagem usando o modelo Nano Banana (`google/gemini-2.5-flash-image`) com prompt do tipo "Remove background completely, keep only the jacket and person, transparent PNG, preserve all artwork details, sharp edges". Salvar o resultado como PNG transparente.
+2. Salvar em `src/assets/hero-ellennous-aero.png`.
+3. Atualizar `src/components/sections/Hero.tsx`:
+   - Trocar `import heroImage from "@/assets/hero-ellennous.jpg"` para o novo PNG.
+   - Manter exatamente o mesmo nível de sobreposição: `opacity-60` na `<img>` + o gradiente `bg-gradient-to-b from-background/30 via-background/60 to-background` por cima + o splash drift. Sem alterar tamanhos, posicionamento (`object-cover`), nem o glow roxo.
+   - Atualizar o `alt` para algo como "Jaqueta Ellennous com arte autoral 'Aero por Vero' em preto, branco e amarelo".
 
-No desktop (grid de cards), manter como está — só drag handle, sem setas (espaço já é grande e drag funciona bem com mouse).
+A imagem original `hero-ellennous.jpg` fica preservada no repo (não excluo) caso seja útil depois.
 
-**5. Feedback visual**
-Reutilizar o mesmo `setItems` otimista + `update_pieces_order` que o drag já faz. Toast de sucesso/erro idêntico.
+### Arquivos a modificar/criar
+- `src/hooks/use-flip-animation.ts` (novo)
+- `src/pages/admin/PiecesManager.tsx` (usar o hook na lista de obras)
+- `src/assets/hero-ellennous-aero.png` (novo, gerado via Nano Banana sem fundo)
+- `src/components/sections/Hero.tsx` (trocar import e alt)
 
-### Arquivo a modificar
-- `src/pages/admin/PiecesManager.tsx`
-
-### Validação (390px, /admin/pieces)
-- Cada obra tem ↑ e ↓ ao lado da thumb
-- Clicar ↑ na primeira obra: botão desabilitado (não faz nada)
-- Clicar ↓ na última obra: botão desabilitado
-- Clicar ↑ no meio: troca com a obra acima, número #N atualiza, persiste no banco
-- Long-press drag continua funcionando em paralelo
-- Desktop sem mudanças visuais nos cards
+### Validação
+1. **/admin/pieces no celular**: clicar ↑ ou ↓ — o card desliza suavemente até a nova posição (não salta) e ainda recebe o flash de highlight.
+2. **Desktop**: drag-and-drop continua animado normalmente; clicar e arrastar entre posições no grid também desliza.
+3. **Home (/)**: o hero passa a exibir a peça "Aero por Vero" sem fundo, com a mesma camada escura/gradiente — texto continua legível por cima.
