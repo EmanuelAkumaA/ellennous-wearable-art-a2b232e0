@@ -1,91 +1,70 @@
 
 
-## Plano — Aba Avaliações com links únicos e moderação
+## Plano — Formulário público de avaliação + integração com site + reordenação
 
-### Conceito
-Nova aba "Avaliações" no admin onde o administrador gera **links únicos com validade configurável** (padrão 24h, ajustável). Cada link abre uma página pública de avaliação para o cliente preencher. Avaliações enviadas ficam **pendentes**, e o admin aprova/recusa — só as aprovadas aparecem na seção "Quem veste a Ellennous" do site público.
+### 1. Página pública `/avaliar/:token` (formulário completo)
 
-### 1. Schema (migration)
+Substituir o stub atual do `ReviewSubmit.tsx` por um formulário completo, mantendo o pré-check do token via GET na edge function.
 
-**Tabela `review_invites`** — links gerados:
-| coluna | tipo | descrição |
-|---|---|---|
-| `id` | uuid PK | |
-| `token` | text unique | string aleatória da URL |
-| `expires_at` | timestamptz | validade |
-| `used_at` | timestamptz null | quando o cliente enviou |
-| `revoked` | boolean default false | admin pode invalidar |
-| `created_at` | timestamptz | |
-| `note` | text null | nota interna (ex: nome do cliente) |
+**Estrutura do formulário** (aparece só quando `status === "valid"`):
+- **Nome do cliente** (input, obrigatório, max 120)
+- **Papel/relação** (input opcional, ex: "cliente", "noiva", "tatuador parceiro", max 60)
+- **Avaliação em estrelas** (1–5) — componente custom com 5 ícones `Star` clicáveis (hover preview + estado selecionado), cor `primary-glow`.
+- **Depoimento** (textarea, obrigatório, max 2000, com contador)
+- **Foto opcional** — input file (image/*, max 5MB). Preview circular. Upload direto ao bucket `reviews` (público) com nome `public/{token}-{timestamp}.{ext}`. Como o bucket é público e RLS de storage permite insert anônimo? Vou conferir — se não permitir, faço upload via FormData para a edge function (extensão da mesma) ou crio policy de insert no bucket `reviews` para `anon`.
+- **Botão Enviar** (disabled enquanto envia)
 
-**Tabela `reviews`** — avaliações:
-| coluna | tipo | descrição |
-|---|---|---|
-| `id` | uuid PK | |
-| `invite_id` | uuid FK → review_invites | |
-| `client_name` | text | nome de quem avalia |
-| `client_role` | text null | "cliente", "noiva", etc (opcional) |
-| `rating` | int 1–5 | |
-| `content` | text | depoimento |
-| `photo_url` | text null | foto opcional |
-| `photo_storage_path` | text null | |
-| `status` | text default 'pending' | `pending` / `approved` / `rejected` |
-| `ordem` | int default 0 | ordem na seção pública |
-| `created_at`, `updated_at` | timestamptz | |
+**Validação client-side**: zod schema com trim + limites + rating 1–5.
 
-**RLS**:
-- `review_invites`: admin full CRUD; **público pode SELECT por token** (validar link).
-- `reviews`: admin full CRUD; **público pode INSERT** se invite válido (via edge function que valida); **público pode SELECT só os `approved`** (para aparecer no site).
+**Envio**: POST para `submit-review` com `{ token, client_name, client_role, rating, content, photo_url, photo_storage_path }`. Em sucesso: troca o estado para `submitted` e mostra tela de agradecimento ("Obrigado! Sua avaliação foi recebida e aparecerá após aprovação."). Em erro: toast com a mensagem mapeada (`invite_used`, `invite_expired`, `invite_revoked`, `insert_failed`).
 
-**Bucket storage**: reusar `gallery` ou criar `reviews` (público).
+**Storage RLS**: vou precisar adicionar policy no bucket `reviews` permitindo INSERT a `anon` no path `public/*` (com limite de tamanho). Migration nova.
 
-### 2. Edge function `submit-review`
-Valida o token (não expirado, não usado, não revogado), marca invite como `used_at = now()`, insere review com `status='pending'`. Evita que cliente insira diretamente sem passar pela validação.
+### 2. Testimonials puxando do banco
 
-### 3. Aba "Avaliações" no admin
+Refatorar `Testimonials.tsx`:
+- Query: `supabase.from("reviews").select("*").eq("status","approved").order("ordem").order("created_at", { ascending: false })`.
+- Mapear para o formato existente do card. Como o schema atual não tem `city`, `category`, nem `handle`, vou:
+  - **Remover** o badge de categoria e a linha do Instagram (não temos esses dados ainda).
+  - **Manter**: foto (photo_url), nome, papel (client_role no lugar da cidade), depoimento, rating (renderizar 5 estrelas baseadas no `rating`).
+- **Fallback**: se a query retornar 0 resultados, manter os 6 mocks atuais como conteúdo estático (já existe no arquivo). Boolean `useStatic = data.length === 0`.
+- Estado: `useQuery` do react-query (já tem `QueryClient` no app).
+- Loading: skeleton simples ou nada (carrossel só aparece quando carrega).
 
-**Arquivos**:
-- `src/components/admin/AdminShell.tsx` — adicionar nav item `reviews` (ícone `Star`).
-- `src/pages/admin/Dashboard.tsx` — montar `<ReviewsManager />` quando `tab === "reviews"`.
-- `src/pages/admin/ReviewsManager.tsx` — NOVO.
+### 3. Reordenar avaliações aprovadas (drag-and-drop)
 
-**UI ReviewsManager** (3 seções em tabs internos ou colapsáveis):
+No `ReviewsManager.tsx`, na aba "Aprovadas":
+- Usar **`@dnd-kit/core` + `@dnd-kit/sortable`** (libs leves, padrão React).
+- Cada card vira `SortableItem` com handle de arrasto (ícone `GripVertical`).
+- Ao soltar: recalcular `ordem` (0..N) localmente, atualizar UI otimista, fazer `supabase.from("reviews").update({ ordem }).eq("id", id)` em batch (Promise.all).
+- Em pendentes/recusadas: sem drag (só ordem por data).
 
-a) **Gerar link**:
-- Input "Validade" (number) + select "horas/dias" (default 24h).
-- Input opcional "Nota interna" (ex: nome do cliente).
-- Botão "Gerar link" → cria invite, mostra URL pronta `https://.../avaliar/{token}` com botão copiar e botão WhatsApp (`wa.me/?text=...`).
-- Aviso se já existir invite ativo (não usado e não expirado): mostra esse e oferece "Revogar e gerar novo".
+**Dependência nova**: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`.
 
-b) **Links ativos**:
-- Lista compacta: nota, expira em X, copiar, revogar.
+### 4. Botão "Visualizar página de avaliação"
 
-c) **Avaliações recebidas**:
-- Tabs: Pendentes / Aprovadas / Recusadas.
-- Card por avaliação: foto, nome, estrelas, texto, data.
-- Ações: Aprovar / Recusar / Excluir / reordenar (drag nas aprovadas).
+No `ReviewsManager.tsx`, no topo (perto do gerador de link), adicionar um botão secundário **"Ver página base"** que abre `/avaliar/preview` em nova aba.
 
-### 4. Página pública (placeholder agora, completa no próximo passo)
-Apenas reservar a rota `/avaliar/:token` em `App.tsx` apontando para um `<ReviewSubmit />` stub. A construção completa vem na próxima etapa, conforme combinado.
-
-### 5. Integração com Testimonials
-Apenas garantir que `Testimonials.tsx` consiga ler `reviews` aprovadas (query simples via supabase). Refactor pleno fica para depois — o foco agora é o admin.
+**Como funcionar sem token real**: 
+- Opção A: rota especial `/avaliar/preview` que renderiza o mesmo formulário em modo demo (não envia nada, só mostra a UI). Vou por essa — adiciono check no `ReviewSubmit`: se `token === "preview"` pula a validação e marca `status = "valid"` + `previewMode = true`. No submit, em vez de chamar a função, mostra toast "Modo demonstração — nada foi enviado".
+- Botão usa `<a href="/avaliar/preview" target="_blank">`.
 
 ### Arquivos afetados
+
 | Arquivo | Mudança |
 |---|---|
-| migration nova | tabelas + RLS + storage |
-| edge `submit-review/index.ts` | NOVO |
-| `src/components/admin/AdminShell.tsx` | nav item "Avaliações" |
-| `src/pages/admin/Dashboard.tsx` | render ReviewsManager |
-| `src/pages/admin/ReviewsManager.tsx` | NOVO — gerar/listar/moderar |
-| `src/App.tsx` | rota `/avaliar/:token` (stub) |
-| `src/pages/ReviewSubmit.tsx` | NOVO stub |
+| migration nova | RLS de storage no bucket `reviews` para INSERT anônimo no prefixo `public/` |
+| `package.json` (auto via add) | `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` |
+| `src/pages/ReviewSubmit.tsx` | Formulário completo + modo preview + upload de foto |
+| `src/components/sections/Testimonials.tsx` | Fetch de reviews aprovadas + fallback para mocks |
+| `src/pages/admin/ReviewsManager.tsx` | Drag-and-drop nas aprovadas + botão "Ver página base" |
+| `src/App.tsx` | (já cobre `/avaliar/:token`, `preview` é só um valor de token) |
 
 ### Validação
-1. Aba "Avaliações" aparece na sidebar.
-2. Gerar link com 24h → URL copiável e funcional (abre stub).
-3. Link expirado/usado/revogado não permite envio.
-4. Lista de avaliações pendentes recebe novos envios.
-5. Aprovar avaliação → fica disponível para a seção pública.
+1. `/admin` → Avaliações → clicar "Ver página base" → abre nova aba mostrando o formulário em modo demo.
+2. Gerar link real → abrir → preencher nome, papel, 4 estrelas, texto, foto → enviar → tela de obrigado.
+3. Voltar ao admin → avaliação aparece em "Pendentes" com a foto.
+4. Aprovar → conferir na home (`/`) seção "Quem veste a Ellennous": carrossel mostra a nova avaliação no lugar dos mocks.
+5. Aprovar 3+ avaliações → arrastar para reordenar → recarregar → ordem persiste.
+6. Tentar reusar o mesmo link → erro "já utilizado".
 
