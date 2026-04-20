@@ -786,12 +786,16 @@ export const PiecesManager = () => {
             disabled={isFiltering}
           >
             <div className="flex flex-col gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 md:gap-4">
-              {filteredPieces.map((p) => (
+              {filteredPieces.map((p, idx) => (
                 <SortablePieceCard
                   key={p.id}
                   piece={p}
                   onEdit={openEdit}
                   onDelete={handleDelete}
+                  onMoveUp={() => movePiece(p.id, "up")}
+                  onMoveDown={() => movePiece(p.id, "down")}
+                  canMoveUp={!isFiltering && idx > 0}
+                  canMoveDown={!isFiltering && idx < filteredPieces.length - 1}
                   disabled={isFiltering}
                 />
               ))}
