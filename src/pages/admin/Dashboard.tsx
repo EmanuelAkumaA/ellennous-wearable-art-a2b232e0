@@ -5,19 +5,24 @@ import { PiecesManager } from "./PiecesManager";
 import { UserSettings } from "./UserSettings";
 import { StatsManager } from "./StatsManager";
 import { ReviewsManager } from "./ReviewsManager";
-import { useBackButtonExitConfirm } from "@/hooks/useBackButtonExitConfirm";
+import { useAdminBackNavigation } from "@/hooks/useAdminBackNavigation";
+
+const ROOT_TAB: AdminTab = "pieces";
 
 const AdminDashboard = () => {
-  const [tab, setTab] = useState<AdminTab>("pieces");
-
-  useBackButtonExitConfirm();
+  const [tab, setTab] = useState<AdminTab>(ROOT_TAB);
+  const { selectTab } = useAdminBackNavigation<AdminTab>({
+    active: tab,
+    onChange: setTab,
+    rootTab: ROOT_TAB,
+  });
 
   useEffect(() => {
     document.title = "Atelier · Ellennous Admin";
   }, []);
 
   return (
-    <AdminShell active={tab} onSelect={setTab}>
+    <AdminShell active={tab} onSelect={selectTab}>
       {tab === "pieces" && <PiecesManager />}
       {tab === "categories" && <CategoriesManager />}
       {tab === "reviews" && <ReviewsManager />}

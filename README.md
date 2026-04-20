@@ -31,6 +31,7 @@ npm run bump major "redesign total"   # +1 major (zera minor + patch)
 | 0.1.1  | troca de tipografia para Playfair + Bebas Neue + Inter |
 | 0.4.3  | reorganiza card de obra no admin em 3 linhas (nome, categoria, tags + ações) |
 | 0.4.4  | redesign premium do admin (sidebar, glassmorphism, KPIs, sheet de edição, login imersivo) |
+| 0.4.5  | voltar inteligente no PWA + vibração háptica |
 
 ## Estrutura
 
