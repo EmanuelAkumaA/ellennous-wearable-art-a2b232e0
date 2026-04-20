@@ -1,54 +1,37 @@
 
 
-## Plano: Corrigir saída do PWA + depoimentos travados em alguns celulares
+## Plano: Transformar campos da obra em accordion
 
-### Problema 1 — Confirmação de saída não funciona
+### Comportamento
 
-A lógica atual de `useAdminBackNavigation` tem três falhas que somadas quebram a confirmação dupla no Android/PWA:
+No modal de detalhes da obra (Galeria), os 4 campos de texto vão virar um accordion:
 
-1. **`window.close()` é chamado mas não funciona em PWA standalone** — só funciona em janelas abertas via `window.open`. Falha silenciosamente.
-2. **Após `window.close()`, chamamos `history.go(-1)`** — isso dispara *outro* `popstate`, que entra de novo no handler com `pendingExit` já resetado e mostra o toast novamente em loop.
-3. **Falta de readiness flag**: quando o usuário muda de aba pela UI logo após o boot, há uma corrida entre o sentinel inicial e o primeiro `pushState` do `selectTab`, deixando a pilha do browser desalinhada da nossa pilha interna.
+- **Descrição** — aberto por padrão
+- **Conceito** — fechado
+- **História** — fechado
+- **Tempo de produção** — fechado
 
-**Correção:**
-- Trocar `window.close()` por `window.history.back()` real, marcando `exitingRef = true` para o handler ignorar o popstate seguinte (o que efetivamente fecha o app).
-- Garantir que sempre haja **exatamente um sentinel "à frente"** no histórico, repondo após cada popstate consumido.
-- Adicionar fallback: se `history.length <= 2` e o exit foi confirmado, chamar `window.history.go(-(history.length - 1))` para forçar saída do escopo do PWA.
-- Aumentar a janela de confirmação para 2.5s (mais confortável em mobile).
-- Mostrar o toast com estilo destacado (ícone + bg) para o usuário entender que precisa apertar de novo.
+Comportamento "single": ao clicar em um item, ele abre e os outros fecham automaticamente. Clicar no item já aberto também fecha (permitindo todos fechados).
 
-### Problema 2 — Depoimentos não abrem em alguns celulares
+Visual: cada item mantém o label em maiúsculas (`tracking-wider`, `text-muted-foreground`) que já existe, agora clicável com um chevron à direita que rotaciona ao abrir. Borda sutil entre itens para separação visual.
 
-Identificadas três causas prováveis:
+### Implementação
 
-1. **Autoplay agressivo briga com swipe touch** — `Autoplay({ stopOnInteraction: false })` continua animando enquanto o usuário tenta arrastar, fazendo o carrossel "pular" e parecer travado em celulares mais lentos.
-2. **Sem indicadores nem botões em mobile** — `CarouselPrevious/Next` são `hidden md:flex`. Se o swipe falhar (por causa do autoplay ou por gesto não reconhecido), o usuário não tem alternativa de navegação.
-3. **Sem fallback de erro na query** — se o `select` do Supabase falhar (rede instável, RLS edge case), o componente fica eternamente em `isLoading=false` + `hasItems=false`, e o usuário só vê o estado vazio "As primeiras vozes…" mesmo quando há depoimentos.
+**Arquivo único modificado**: `src/components/sections/gallery/Gallery.tsx`
 
-**Correção:**
-- Trocar autoplay para `stopOnInteraction: true` + `stopOnFocusIn: true` — para de competir com o usuário no primeiro toque.
-- Adicionar **dots de paginação clicáveis** visíveis em mobile (bolinhas embaixo do carrossel) usando a API do Embla.
-- Adicionar **botões de seta também em mobile** (menores, posicionados sobre o card) como redundância.
-- Adicionar tratamento de erro no `useQuery`: se falhar, mostrar mensagem "Não foi possível carregar agora — toque para tentar de novo" com botão de retry, em vez do estado vazio enganoso.
-- Adicionar `retry: 2` + `retryDelay` exponencial na query para tolerar rede instável.
+- Importar `Accordion`, `AccordionItem`, `AccordionTrigger`, `AccordionContent` de `@/components/ui/accordion` (já existe no projeto).
+- Substituir o bloco `<div className="space-y-5 text-sm">` (linhas que renderizam os 4 campos) por um `<Accordion type="single" collapsible defaultValue="descricao">`.
+- Cada campo vira um `<AccordionItem value="...">` renderizado **somente se o conteúdo existir** (mantém a lógica condicional atual).
+- O `AccordionTrigger` recebe o label estilizado (uppercase, tracking, cor muted) — sobrescrevendo o `font-medium hover:underline` padrão para combinar com o design existente.
+- O `AccordionContent` recebe o texto com as classes atuais (`text-foreground/90 leading-relaxed`, e `whitespace-pre-line` para a história).
+- Bordas: usar a `border-b` que o `AccordionItem` já traz; ajustar a cor para `border-border/40` via className para combinar com o tom da modal.
 
-### Atualização global do sistema
+### Detalhes técnicos
 
-- `npm run bump "fix saída PWA + depoimentos resilientes em mobile"` → versão `0.4.6` → `0.4.7`.
-- Bumpar `CACHE` em `public/admin-sw.js` de `ellennous-admin-v4` → `v5`. Isso força os PWAs já instalados a baixar a nova versão na próxima abertura online (o SW já tem `skipWaiting()` + `clients.claim()`).
-- Site público não tem service worker — atualiza automaticamente via Vercel CDN (sem cache no HTML).
+- `defaultValue="descricao"` garante que descrição abre por padrão. Se a obra **não tiver descrição**, o accordion abre vazio (nenhum item) — isso é aceitável e consistente com o comportamento atual de não renderizar campos vazios.
+- `collapsible` permite fechar o item ativo clicando nele de novo.
+- O chevron padrão do `AccordionTrigger` (já existe no componente shadcn) é mantido — combina bem com o estilo minimalista.
 
-### Validação após deploy
-
-1. **Saída do PWA**: abrir admin instalado, voltar → toast + vibração; voltar de novo em 2.5s → app fecha. Esperar 3s e voltar → toast aparece de novo (não fecha direto).
-2. **Navegação interna**: trocar para Categorias → Estatísticas → voltar volta para Categorias, voltar volta para Obras, voltar mostra toast.
-3. **Depoimentos em mobile**: abrir o site público no celular → depoimentos carregam, swipe funciona sem brigas com autoplay, dots embaixo permitem navegar manualmente, setas funcionam também.
-4. **Erro de rede**: simular offline → seção mostra mensagem de erro com botão de retry, não mais o estado vazio enganoso.
-
-### Arquivos modificados
-
-- `src/hooks/useAdminBackNavigation.ts` — refatorar lógica de exit
-- `src/components/sections/Testimonials.tsx` — autoplay menos agressivo, dots mobile, setas mobile, tratamento de erro, retry
-- `public/admin-sw.js` — bump cache v4 → v5
-- `package.json` + `README.md` — bump 0.4.6 → 0.4.7
+### Arquivo
+- `src/components/sections/gallery/Gallery.tsx`
 
