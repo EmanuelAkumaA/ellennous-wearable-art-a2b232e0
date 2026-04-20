@@ -64,6 +64,8 @@ interface Piece {
   ordem: number;
   cover_url?: string | null;
   cover_storage_path?: string | null;
+  cover_fit?: string | null;
+  cover_position?: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Image[];
 }
