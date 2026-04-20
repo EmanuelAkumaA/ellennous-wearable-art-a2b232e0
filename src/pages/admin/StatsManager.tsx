@@ -177,15 +177,15 @@ export const StatsManager = () => {
         ? "bg-brand-ice/15 text-brand-ice"
         : "bg-gradient-purple-wine text-white shadow-glow";
     return (
-      <div className="glass-panel p-6 relative overflow-hidden group hover:border-primary-glow/40 transition-colors">
+      <div className="glass-panel p-4 sm:p-6 relative overflow-hidden group hover:border-primary-glow/40 transition-colors">
         <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-primary/10 blur-[60px] group-hover:bg-primary/20 transition-colors" />
-        <div className="relative flex items-start justify-between">
-          <div>
-            <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-3">{label}</p>
-            <p className="font-display text-4xl text-gradient-light tabular-nums">{value}</p>
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-2 sm:mb-3">{label}</p>
+            <p className="font-display text-2xl sm:text-4xl text-gradient-light tabular-nums">{value}</p>
           </div>
-          <div className={`h-11 w-11 rounded-md flex items-center justify-center ${accentBg}`}>
-            <Icon className="h-5 w-5" />
+          <div className={`shrink-0 h-9 w-9 sm:h-11 sm:w-11 rounded-md flex items-center justify-center ${accentBg}`}>
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </div>
       </div>
