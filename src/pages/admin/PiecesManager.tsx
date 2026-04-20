@@ -726,7 +726,7 @@ export const PiecesManager = () => {
             strategy={verticalListSortingStrategy}
             disabled={isFiltering}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 md:gap-4">
               {filteredPieces.map((p) => (
                 <SortablePieceCard
                   key={p.id}
