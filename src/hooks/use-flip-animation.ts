@@ -10,8 +10,10 @@ import { useCallback, useLayoutEffect, useRef } from "react";
  *     <Card key={item.id} ref={(el) => registerNode(item.id, el)} />
  *   ))}
  *
- * Whenever `items` changes order, each tracked node smoothly slides from its
- * previous position to its new one — no jumping.
+ * Animation runs ONLY when the order of ids actually changes between renders.
+ * Re-renders triggered by scrolling, focus, hover, or unrelated state updates
+ * will NOT cause any animation — even though `getBoundingClientRect()` returns
+ * viewport-relative coordinates that shift on scroll.
  */
 export function useFlipAnimation<T>(
   items: T[],
@@ -23,6 +25,7 @@ export function useFlipAnimation<T>(
 
   const nodes = useRef<Map<string, HTMLElement>>(new Map());
   const prevRects = useRef<Map<string, DOMRect>>(new Map());
+  const prevOrder = useRef<string[]>([]);
   // Tracks running animations so we can cancel before re-applying
   const inFlight = useRef<Map<string, Animation>>(new Map());
 
@@ -42,26 +45,45 @@ export function useFlipAnimation<T>(
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   useLayoutEffect(() => {
-    if (prefersReduced) {
-      // Still record positions so future moves work if pref toggles
-      const snapshot = new Map<string, DOMRect>();
-      for (const item of items) {
-        const id = getId(item);
+    const currentIds = items.map(getId);
+
+    // Snapshot helper — always runs to keep refs fresh
+    const snapshot = () => {
+      const next = new Map<string, DOMRect>();
+      for (const id of currentIds) {
         const el = nodes.current.get(id);
-        if (el) snapshot.set(id, el.getBoundingClientRect());
+        if (el) next.set(id, el.getBoundingClientRect());
       }
-      prevRects.current = snapshot;
+      prevRects.current = next;
+      prevOrder.current = currentIds;
+    };
+
+    // Detect whether the id order actually changed (ignoring add/remove only).
+    const prev = prevOrder.current;
+    let orderChanged = false;
+    if (prev.length === currentIds.length) {
+      for (let i = 0; i < prev.length; i++) {
+        if (prev[i] !== currentIds[i]) {
+          orderChanged = true;
+          break;
+        }
+      }
+    } else {
+      // Length changed (add/remove) — refresh snapshot but do not animate.
+      snapshot();
       return;
     }
 
-    const next = new Map<string, DOMRect>();
-    for (const item of items) {
-      const id = getId(item);
+    if (!orderChanged || prefersReduced) {
+      snapshot();
+      return;
+    }
+
+    // Order changed — run FLIP for nodes whose previous rect is known.
+    for (const id of currentIds) {
       const el = nodes.current.get(id);
       if (!el) continue;
       const newRect = el.getBoundingClientRect();
-      next.set(id, newRect);
-
       const oldRect = prevRects.current.get(id);
       if (!oldRect) continue;
 
@@ -69,7 +91,6 @@ export function useFlipAnimation<T>(
       const dy = oldRect.top - newRect.top;
       if (dx === 0 && dy === 0) continue;
 
-      // Cancel any animation already running for this node
       const existing = inFlight.current.get(id);
       if (existing) existing.cancel();
 
@@ -82,11 +103,12 @@ export function useFlipAnimation<T>(
       );
       inFlight.current.set(id, anim);
       anim.onfinish = () => {
-        anim.cancel(); // clear fill so transforms from CSS (e.g. dnd-kit) are not blocked
+        anim.cancel(); // clear fill so CSS transforms (e.g. dnd-kit) aren't blocked
         if (inFlight.current.get(id) === anim) inFlight.current.delete(id);
       };
     }
-    prevRects.current = next;
+
+    snapshot();
   }, [items, getId, duration, easing, prefersReduced]);
 
   return { registerNode };
