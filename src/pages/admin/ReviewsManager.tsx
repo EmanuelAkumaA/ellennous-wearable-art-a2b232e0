@@ -428,6 +428,7 @@ export const ReviewsManager = () => {
   };
 
   const revokeInvite = async (id: string) => {
+    if (guardOffline()) return;
     const { error } = await supabase.from("review_invites").update({ revoked: true }).eq("id", id);
     if (error) {
       toast({ title: "Erro ao revogar", description: error.message, variant: "destructive" });
@@ -438,6 +439,7 @@ export const ReviewsManager = () => {
   };
 
   const setReviewStatus = async (id: string, status: Review["status"]) => {
+    if (guardOffline()) return;
     const { error } = await supabase.from("reviews").update({ status }).eq("id", id);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -451,6 +453,7 @@ export const ReviewsManager = () => {
   };
 
   const deleteReview = async (id: string) => {
+    if (guardOffline()) return;
     if (!confirm("Excluir esta avaliação? Esta ação não pode ser desfeita.")) return;
     const { error } = await supabase.from("reviews").delete().eq("id", id);
     if (error) {
@@ -465,6 +468,7 @@ export const ReviewsManager = () => {
     id: string,
     patch: Partial<Pick<Review, "client_name" | "city" | "state" | "instagram">>,
   ) => {
+    if (guardOffline()) return;
     const { error } = await supabase.from("reviews").update(patch).eq("id", id);
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
