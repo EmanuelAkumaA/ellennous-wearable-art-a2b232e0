@@ -33,6 +33,7 @@ npm run bump major "redesign total"   # +1 major (zera minor + patch)
 | 0.4.4  | redesign premium do admin (sidebar, glassmorphism, KPIs, sheet de edição, login imersivo) |
 | 0.4.5  | voltar inteligente no PWA + vibração háptica |
 | 0.4.6  | persistir última aba do admin em localStorage |
+| 0.4.7  | fix saída PWA + depoimentos resilientes em mobile |
 
 ## Estrutura
 

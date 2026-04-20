@@ -10,6 +10,7 @@ const isStandalone = () => {
 };
 
 const SENTINEL_KEY = "__adminNav";
+const EXIT_WINDOW_MS = 2500;
 
 interface Options<T extends string> {
   active: T;
@@ -33,6 +34,7 @@ export const useAdminBackNavigation = <T extends string>({
 }: Options<T>) => {
   const stackRef = useRef<T[]>([rootTab]);
   const pendingExitRef = useRef(false);
+  const exitingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastIdRef = useRef<string | number | null>(null);
   const enabledRef = useRef(false);
@@ -61,10 +63,16 @@ export const useAdminBackNavigation = <T extends string>({
 
     enabledRef.current = true;
 
-    // Seed sentinel for the root tab.
+    // Seed sentinel for the root tab so the first back gesture is intercepted.
     window.history.pushState({ [SENTINEL_KEY]: rootTab }, "", window.location.href);
 
     const handlePopState = () => {
+      // If we triggered the exit via history.back(), let this popstate pass through.
+      if (exitingRef.current) {
+        exitingRef.current = false;
+        return;
+      }
+
       const stack = stackRef.current;
 
       if (stack.length > 1) {
@@ -82,12 +90,14 @@ export const useAdminBackNavigation = <T extends string>({
       // At root — handle exit confirmation.
       if (pendingExitRef.current) {
         resetPendingExit();
+        exitingRef.current = true;
+        // Real exit: walk back out of our pushed sentinels.
         try {
-          window.close();
+          // history.length includes our sentinel; go back to actually leave the app scope.
+          window.history.back();
         } catch {
           /* noop */
         }
-        window.history.go(-1);
         return;
       }
 
@@ -97,16 +107,20 @@ export const useAdminBackNavigation = <T extends string>({
       } catch {
         /* noop */
       }
-      toastIdRef.current = toast("Aperte voltar novamente para sair do aplicativo", {
-        duration: 2000,
+      toastIdRef.current = toast("Aperte voltar novamente para sair", {
+        description: "Toque no botão voltar mais uma vez para fechar o aplicativo.",
+        duration: EXIT_WINDOW_MS,
         position: "bottom-center",
+        icon: "👋",
       });
+      // Re-add a sentinel so the next back gesture is captured (otherwise the
+      // very next back press would actually leave the app without confirmation).
       window.history.pushState({ [SENTINEL_KEY]: rootTab }, "", window.location.href);
       timerRef.current = setTimeout(() => {
         pendingExitRef.current = false;
         timerRef.current = null;
         toastIdRef.current = null;
-      }, 2000);
+      }, EXIT_WINDOW_MS);
     };
 
     window.addEventListener("popstate", handlePopState);
