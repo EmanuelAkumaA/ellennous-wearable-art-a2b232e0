@@ -209,6 +209,10 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
   const current = NAV.find((n) => n.key === active) ?? NAV[0];
   const Icon = current.icon;
 
+  useEffect(() => {
+    registerAdminPWA();
+  }, []);
+
   const handleSelect = (k: AdminTab) => {
     onSelect(k);
     setMobileOpen(false);
@@ -217,6 +221,7 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
   return (
     <div className="min-h-screen relative text-foreground">
       <Atmosphere />
+      <InstallPrompt />
 
       <div className="lg:grid lg:grid-cols-[280px_1fr] min-h-screen">
         {/* Desktop sidebar */}
