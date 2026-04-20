@@ -5,9 +5,12 @@ import { PiecesManager } from "./PiecesManager";
 import { UserSettings } from "./UserSettings";
 import { StatsManager } from "./StatsManager";
 import { ReviewsManager } from "./ReviewsManager";
+import { useBackButtonExitConfirm } from "@/hooks/useBackButtonExitConfirm";
 
 const AdminDashboard = () => {
   const [tab, setTab] = useState<AdminTab>("pieces");
+
+  useBackButtonExitConfirm();
 
   useEffect(() => {
     document.title = "Atelier · Ellennous Admin";
