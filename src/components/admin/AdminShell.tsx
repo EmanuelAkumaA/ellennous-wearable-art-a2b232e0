@@ -1,9 +1,10 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminProfile } from "@/hooks/useAdminProfile";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star } from "lucide-react";
+import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star, Wifi, WifiOff } from "lucide-react";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
 import { InstallPrompt } from "@/components/admin/InstallPrompt";
 import brandIcon from "@/assets/brand-icon.png";
@@ -38,7 +39,7 @@ const registerAdminPWA = () => {
     return;
   }
 
-  // Inject manifest link only inside /admin so the public site stays a normal web app
+  // Inject manifest + iOS PWA meta tags only inside /admin so the public site stays a normal web app
   if (!document.querySelector('link[rel="manifest"][data-admin]')) {
     const link = document.createElement("link");
     link.rel = "manifest";
@@ -46,6 +47,37 @@ const registerAdminPWA = () => {
     link.setAttribute("data-admin", "true");
     document.head.appendChild(link);
   }
+  const addOnce = (selector: string, build: () => HTMLElement) => {
+    if (!document.head.querySelector(selector)) document.head.appendChild(build());
+  };
+  addOnce('meta[name="apple-mobile-web-app-capable"][data-admin]', () => {
+    const m = document.createElement("meta");
+    m.name = "apple-mobile-web-app-capable";
+    m.content = "yes";
+    m.setAttribute("data-admin", "true");
+    return m;
+  });
+  addOnce('meta[name="apple-mobile-web-app-status-bar-style"][data-admin]', () => {
+    const m = document.createElement("meta");
+    m.name = "apple-mobile-web-app-status-bar-style";
+    m.content = "black-translucent";
+    m.setAttribute("data-admin", "true");
+    return m;
+  });
+  addOnce('meta[name="apple-mobile-web-app-title"][data-admin]', () => {
+    const m = document.createElement("meta");
+    m.name = "apple-mobile-web-app-title";
+    m.content = "Ellennous";
+    m.setAttribute("data-admin", "true");
+    return m;
+  });
+  addOnce('link[rel="apple-touch-startup-image"][data-admin]', () => {
+    const l = document.createElement("link");
+    l.rel = "apple-touch-startup-image";
+    l.href = "/admin-splash.png";
+    l.setAttribute("data-admin", "true");
+    return l;
+  });
 
   navigator.serviceWorker
     .register("/admin-sw.js", { scope: "/admin" })
