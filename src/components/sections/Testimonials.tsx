@@ -6,6 +6,7 @@ import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
 import { Instagram, MapPin, Quote, Sparkles, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CardData {
   image: string | null;
@@ -57,6 +58,7 @@ export const Testimonials = () => {
     queryKey: ["approved-reviews"],
     staleTime: 60_000,
     refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<CardData[]> => {
       const { data, error } = await supabase
         .from("reviews")
@@ -102,8 +104,23 @@ export const Testimonials = () => {
           </p>
         </div>
 
+        {isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="border border-primary/15 bg-background/40 backdrop-blur-sm">
+                <Skeleton className="aspect-[3/4] w-full rounded-none" />
+                <div className="p-8 space-y-4">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {!isLoading && hasItems && (
-          <div className="reveal">
+          <div>
             <Carousel
               opts={{ align: "start", loop: true }}
               plugins={[autoplay.current]}
@@ -175,7 +192,7 @@ export const Testimonials = () => {
         )}
 
         {!isLoading && !hasItems && (
-          <div className="reveal max-w-2xl mx-auto text-center">
+          <div className="max-w-2xl mx-auto text-center">
             <div className="relative border border-primary/15 bg-background/40 backdrop-blur-sm p-12 md:p-16">
               <Sparkles className="w-10 h-10 text-primary-glow/60 mx-auto mb-6" strokeWidth={1.2} />
               <p className="font-display italic text-xl md:text-2xl text-foreground/85 leading-relaxed mb-4">
