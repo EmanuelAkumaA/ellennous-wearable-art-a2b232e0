@@ -205,7 +205,7 @@ const SortablePieceCard = ({
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30">
           <span className="text-[10px] font-accent tracking-[0.25em] uppercase text-muted-foreground/60">
-            #{String(piece.ordem + 1).padStart(2, "0")}
+            #{String(piece.ordem).padStart(2, "0")}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -600,19 +600,19 @@ export const PiecesManager = () => {
         </Button>
       </div>
 
-      {/* Filter bar — pill style */}
-      <div className="glass-card rounded-full p-1.5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+      {/* Filter bar — pill on desktop, stacked on mobile */}
+      <div className="glass-card rounded-2xl sm:rounded-full p-3 sm:p-1.5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome…"
-            className="pl-11 rounded-full border-0 bg-transparent h-10 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="pl-11 rounded-full border-0 bg-secondary/30 sm:bg-transparent h-10 w-full focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <Select value={filterCat} onValueChange={setFilterCat}>
-          <SelectTrigger className="rounded-full border-border/40 bg-secondary/40 h-10 w-full sm:w-52">
+          <SelectTrigger className="rounded-full border-border/40 bg-secondary/40 h-10 w-full sm:w-52 min-w-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -629,7 +629,7 @@ export const PiecesManager = () => {
             variant="ghost"
             size="sm"
             onClick={() => { setSearch(""); setFilterCat("all"); }}
-            className="rounded-full font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-destructive/10 hover:text-destructive"
+            className="rounded-full font-accent tracking-[0.2em] uppercase text-[10px] hover:bg-destructive/10 hover:text-destructive w-full sm:w-auto"
           >
             <X className="h-3.5 w-3.5 mr-1" /> Limpar
           </Button>

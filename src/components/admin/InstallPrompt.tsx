@@ -52,7 +52,19 @@ export const InstallPrompt = () => {
       };
     }
 
-    return () => window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+    // Android/Chrome diagnostic: warn if beforeinstallprompt never fires
+    const diag = setTimeout(() => {
+      if (!deferred) {
+        console.info(
+          "[Ellennous PWA] beforeinstallprompt não disparou. Verifique: 1) HTTPS ativo, 2) manifest válido em /admin-manifest.webmanifest, 3) service worker registrado em /admin, 4) navegador suporta instalação (Chrome/Edge Android/Desktop)."
+        );
+      }
+    }, 5000);
+
+    return () => {
+      clearTimeout(diag);
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+    };
   }, []);
 
   const dismiss = () => {
