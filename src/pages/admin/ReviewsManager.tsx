@@ -378,7 +378,16 @@ export const ReviewsManager = () => {
     load();
   }, []);
 
+  const guardOffline = () => {
+    if (isOffline()) {
+      toast({ title: "Sem conexão", description: "Mudanças desabilitadas no modo offline.", variant: "destructive" });
+      return true;
+    }
+    return false;
+  };
+
   const handleCreate = async () => {
+    if (guardOffline()) return;
     if (validity <= 0) {
       toast({ title: "Validade inválida", variant: "destructive" });
       return;

@@ -332,7 +332,16 @@ export const PiecesManager = () => {
 
   const closeForm = () => { setCreating(false); setEditing(null); setForm(emptyForm); };
 
+  const guardOffline = () => {
+    if (isOffline()) {
+      toast({ title: "Sem conexão", description: "Mudanças desabilitadas no modo offline.", variant: "destructive" });
+      return true;
+    }
+    return false;
+  };
+
   const handleSave = async () => {
+    if (guardOffline()) return;
     if (!form.nome.trim()) return toast({ title: "Nome obrigatório", variant: "destructive" });
     if (!form.categoria_id) return toast({ title: "Selecione uma categoria", variant: "destructive" });
     setSaving(true);
@@ -358,6 +367,7 @@ export const PiecesManager = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (guardOffline()) return;
     if (!confirm("Remover esta obra e todas as imagens?")) return;
     const piece = pieces.find((p) => p.id === id);
     if (piece) {
@@ -372,6 +382,7 @@ export const PiecesManager = () => {
   };
 
   const handleUpload = async (files: FileList | null) => {
+    if (guardOffline()) return;
     if (!files || !editing) return;
     setUploading(true);
     try {
