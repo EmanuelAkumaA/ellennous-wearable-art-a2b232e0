@@ -221,44 +221,53 @@ export type Database = {
       }
       reviews: {
         Row: {
+          city: string | null
           client_name: string
           client_role: string | null
           content: string
           created_at: string
           id: string
+          instagram: string | null
           invite_id: string | null
           ordem: number
           photo_storage_path: string | null
           photo_url: string | null
           rating: number
+          state: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          city?: string | null
           client_name: string
           client_role?: string | null
           content: string
           created_at?: string
           id?: string
+          instagram?: string | null
           invite_id?: string | null
           ordem?: number
           photo_storage_path?: string | null
           photo_url?: string | null
           rating: number
+          state?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          city?: string | null
           client_name?: string
           client_role?: string | null
           content?: string
           created_at?: string
           id?: string
+          instagram?: string | null
           invite_id?: string | null
           ordem?: number
           photo_storage_path?: string | null
           photo_url?: string | null
           rating?: number
+          state?: string | null
           status?: string
           updated_at?: string
         }
