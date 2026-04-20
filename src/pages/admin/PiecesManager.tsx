@@ -28,7 +28,6 @@ import {
 import {
   DndContext,
   PointerSensor,
-  TouchSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
