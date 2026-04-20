@@ -1,12 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Autoplay from "embla-carousel-autoplay";
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
+import {
+  Carousel,
+  CarouselApi,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
-import { Instagram, MapPin, Quote, Sparkles, Star } from "lucide-react";
+import { AlertCircle, Instagram, MapPin, Quote, RefreshCw, Sparkles, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface CardData {
   image: string | null;
@@ -35,8 +44,11 @@ export const Testimonials = () => {
   const ref = useReveal();
   const queryClient = useQueryClient();
   const autoplay = useRef(
-    Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })
+    Autoplay({ delay: 4500, stopOnInteraction: true, stopOnFocusIn: true, stopOnMouseEnter: true })
   );
+  const [api, setApi] = useState<CarouselApi>();
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [snapCount, setSnapCount] = useState(0);
 
   useEffect(() => {
     const channel = supabase
@@ -54,11 +66,13 @@ export const Testimonials = () => {
     };
   }, [queryClient]);
 
-  const { data: cards, isLoading } = useQuery({
+  const { data: cards, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["approved-reviews"],
     staleTime: 60_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     queryFn: async (): Promise<CardData[]> => {
       const { data, error } = await supabase
         .from("reviews")
@@ -82,6 +96,21 @@ export const Testimonials = () => {
 
   const items = cards ?? [];
   const hasItems = items.length > 0;
+
+  useEffect(() => {
+    if (!api) return;
+    const update = () => {
+      setSelectedIndex(api.selectedScrollSnap());
+      setSnapCount(api.scrollSnapList().length);
+    };
+    update();
+    api.on("select", update);
+    api.on("reInit", update);
+    return () => {
+      api.off("select", update);
+      api.off("reInit", update);
+    };
+  }, [api]);
 
   return (
     <section
@@ -119,9 +148,33 @@ export const Testimonials = () => {
           </div>
         )}
 
-        {!isLoading && hasItems && (
-          <div>
+        {!isLoading && isError && (
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="relative border border-primary/15 bg-background/40 backdrop-blur-sm p-12 md:p-16">
+              <AlertCircle className="w-10 h-10 text-primary-glow/60 mx-auto mb-6" strokeWidth={1.2} />
+              <p className="font-display italic text-xl md:text-2xl text-foreground/85 leading-relaxed mb-6">
+                Não foi possível carregar agora.
+              </p>
+              <p className="text-sm text-foreground/60 tracking-wider mb-6">
+                Verifique sua conexão e toque para tentar novamente.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="border-primary/30 text-primary-glow hover:bg-primary/10"
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")} />
+                Tentar novamente
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !isError && hasItems && (
+          <div className="relative">
             <Carousel
+              setApi={setApi}
               opts={{ align: "start", loop: true }}
               plugins={[autoplay.current]}
               className="w-full"
@@ -185,13 +238,46 @@ export const Testimonials = () => {
                 ))}
               </CarouselContent>
 
+              {/* Mobile arrows — small, overlay on cards */}
+              <CarouselPrevious
+                aria-label="Depoimento anterior"
+                className="md:hidden left-2 top-1/2 -translate-y-1/2 h-9 w-9 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20"
+              />
+              <CarouselNext
+                aria-label="Próximo depoimento"
+                className="md:hidden right-2 top-1/2 -translate-y-1/2 h-9 w-9 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20"
+              />
+
+              {/* Desktop arrows — original styling */}
               <CarouselPrevious className="hidden md:flex -left-6 lg:-left-12 h-12 w-12 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow hover:text-foreground shadow-[0_0_30px_hsl(var(--primary)/0.3)]" />
               <CarouselNext className="hidden md:flex -right-6 lg:-right-12 h-12 w-12 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow hover:text-foreground shadow-[0_0_30px_hsl(var(--primary)/0.3)]" />
             </Carousel>
+
+            {/* Pagination dots — visible on mobile */}
+            {snapCount > 1 && (
+              <div className="md:hidden flex items-center justify-center gap-2 mt-8" role="tablist" aria-label="Navegar entre depoimentos">
+                {Array.from({ length: snapCount }).map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    role="tab"
+                    aria-selected={i === selectedIndex}
+                    aria-label={`Ir para depoimento ${i + 1}`}
+                    onClick={() => api?.scrollTo(i)}
+                    className={cn(
+                      "h-2 rounded-full transition-all duration-300",
+                      i === selectedIndex
+                        ? "w-6 bg-primary-glow"
+                        : "w-2 bg-primary-glow/30 hover:bg-primary-glow/60"
+                    )}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {!isLoading && !hasItems && (
+        {!isLoading && !isError && !hasItems && (
           <div className="max-w-2xl mx-auto text-center">
             <div className="relative border border-primary/15 bg-background/40 backdrop-blur-sm p-12 md:p-16">
               <Sparkles className="w-10 h-10 text-primary-glow/60 mx-auto mb-6" strokeWidth={1.2} />

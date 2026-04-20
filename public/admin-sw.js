@@ -1,5 +1,5 @@
 // Ellennous Admin — minimal service worker scoped to /admin
-const CACHE = "ellennous-admin-v4";
+const CACHE = "ellennous-admin-v5";
 const APP_SHELL = [
   "/admin",
   "/brand-icon.png",
