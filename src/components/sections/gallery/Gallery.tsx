@@ -290,7 +290,8 @@ export const Gallery = () => {
                 <Accordion
                   type="single"
                   collapsible
-                  defaultValue={selected.descricao ? "descricao" : selected.conceito ? "conceito" : selected.historia ? "historia" : selected.tempo ? "tempo" : undefined}
+                  value={openSection}
+                  onValueChange={handleSectionChange}
                   className="text-sm"
                 >
                   {selected.descricao && (
