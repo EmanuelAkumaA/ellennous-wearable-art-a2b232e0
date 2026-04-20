@@ -536,16 +536,18 @@ export const ReviewsManager = () => {
     <div className="space-y-8">
       {/* Gerar link */}
       <Card className="bg-card/40 border-border/40 backdrop-blur-xl">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3">
           <CardTitle className="font-display text-xl flex items-center gap-2">
             <Link2 className="h-5 w-5 text-primary-glow" />
             Gerar link de avaliação
           </CardTitle>
-          <Button variant="outline" size="sm" asChild>
-            <a href="/avaliar/preview" target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-3.5 w-3.5 mr-2" /> Ver página base
-            </a>
-          </Button>
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" asChild>
+              <a href="/avaliar/preview" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3.5 w-3.5 mr-2" /> Ver página base
+              </a>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-5">
           {activeInvites.length > 0 && (
@@ -673,14 +675,14 @@ export const ReviewsManager = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="pending">
-            <TabsList>
-              <TabsTrigger value="pending">
-                Pendentes <Badge variant="secondary" className="ml-2">{grouped.pending.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="approved">
+            <TabsList className="grid grid-cols-2 sm:flex sm:w-auto h-auto gap-1 w-full p-1">
+              <TabsTrigger value="approved" className="col-span-2 sm:col-span-1 w-full">
                 Aprovadas <Badge variant="secondary" className="ml-2">{grouped.approved.length}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="rejected">
+              <TabsTrigger value="pending" className="w-full">
+                Pendentes <Badge variant="secondary" className="ml-2">{grouped.pending.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="rejected" className="w-full">
                 Recusadas <Badge variant="secondary" className="ml-2">{grouped.rejected.length}</Badge>
               </TabsTrigger>
             </TabsList>
