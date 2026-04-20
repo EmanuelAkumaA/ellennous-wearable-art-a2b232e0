@@ -133,6 +133,7 @@ const SortablePieceCard = ({
   canMoveUp,
   canMoveDown,
   disabled,
+  highlight,
 }: {
   piece: Piece;
   onEdit: (p: Piece) => void;
@@ -142,6 +143,7 @@ const SortablePieceCard = ({
   canMoveUp: boolean;
   canMoveDown: boolean;
   disabled?: boolean;
+  highlight?: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: piece.id,
@@ -162,7 +164,7 @@ const SortablePieceCard = ({
       {...listeners}
       className={`group glass-card overflow-hidden transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] select-none ${
         isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-      } ${disabled ? "" : "cursor-grab active:cursor-grabbing"}`}
+      } ${highlight ? "animate-move-highlight" : ""} ${disabled ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
       {/* MOBILE: list layout */}
       <div className="flex md:hidden items-stretch gap-3 p-3">
