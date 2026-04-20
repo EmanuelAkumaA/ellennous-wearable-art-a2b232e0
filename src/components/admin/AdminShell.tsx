@@ -1,11 +1,56 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminProfile } from "@/hooks/useAdminProfile";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star } from "lucide-react";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
+import { InstallPrompt } from "@/components/admin/InstallPrompt";
 import brandIcon from "@/assets/brand-icon.png";
+
+// PWA registration scoped to /admin — only in production, never in iframes/preview
+const registerAdminPWA = () => {
+  if (typeof window === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
+
+  const isInIframe = (() => {
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  })();
+  const host = window.location.hostname;
+  const isPreviewHost =
+    host.includes("id-preview--") ||
+    host.includes("lovableproject.com") ||
+    host.includes("lovable.app") ||
+    host === "localhost" ||
+    host === "127.0.0.1";
+
+  if (isInIframe || isPreviewHost) {
+    // Cleanup any stale SW from prior runs in preview/iframe contexts
+    navigator.serviceWorker.getRegistrations?.().then((regs) => {
+      regs.forEach((r) => {
+        if (r.scope.includes("/admin")) r.unregister();
+      });
+    });
+    return;
+  }
+
+  // Inject manifest link only inside /admin so the public site stays a normal web app
+  if (!document.querySelector('link[rel="manifest"][data-admin]')) {
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = "/admin-manifest.webmanifest";
+    link.setAttribute("data-admin", "true");
+    document.head.appendChild(link);
+  }
+
+  navigator.serviceWorker
+    .register("/admin-sw.js", { scope: "/admin" })
+    .catch(() => undefined);
+};
 
 export type AdminTab = "pieces" | "categories" | "reviews" | "stats" | "user";
 
@@ -164,6 +209,10 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
   const current = NAV.find((n) => n.key === active) ?? NAV[0];
   const Icon = current.icon;
 
+  useEffect(() => {
+    registerAdminPWA();
+  }, []);
+
   const handleSelect = (k: AdminTab) => {
     onSelect(k);
     setMobileOpen(false);
@@ -172,6 +221,7 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
   return (
     <div className="min-h-screen relative text-foreground">
       <Atmosphere />
+      <InstallPrompt />
 
       <div className="lg:grid lg:grid-cols-[280px_1fr] min-h-screen">
         {/* Desktop sidebar */}
