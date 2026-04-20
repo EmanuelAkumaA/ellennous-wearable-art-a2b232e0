@@ -46,6 +46,7 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useFlipAnimation } from "@/hooks/use-flip-animation";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
@@ -134,6 +135,7 @@ const SortablePieceCard = ({
   canMoveDown,
   disabled,
   highlight,
+  registerFlipNode,
 }: {
   piece: Piece;
   onEdit: (p: Piece) => void;
@@ -144,6 +146,7 @@ const SortablePieceCard = ({
   canMoveDown: boolean;
   disabled?: boolean;
   highlight?: boolean;
+  registerFlipNode?: (id: string, el: HTMLElement | null) => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: piece.id,
@@ -156,9 +159,15 @@ const SortablePieceCard = ({
   };
   const thumbUrl = piece.cover_url ?? piece.gallery_piece_images[0]?.url;
 
+  // Combine dnd-kit's ref with FLIP-tracking ref
+  const setRefs = (el: HTMLDivElement | null) => {
+    setNodeRef(el);
+    registerFlipNode?.(piece.id, el);
+  };
+
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       style={style}
       {...attributes}
       {...listeners}
@@ -713,6 +722,12 @@ export const PiecesManager = () => {
     return true;
   });
 
+  // FLIP slide animation when filteredPieces order changes (button moves, drag, etc.)
+  const { registerNode: registerFlipNode } = useFlipAnimation(
+    filteredPieces,
+    (p) => p.id,
+  );
+
   return (
     <div className="space-y-6">
       {/* Top bar: count + new piece */}
@@ -814,6 +829,7 @@ export const PiecesManager = () => {
                   canMoveDown={!isFiltering && idx < filteredPieces.length - 1}
                   disabled={isFiltering}
                   highlight={recentlyMovedId === p.id}
+                  registerFlipNode={registerFlipNode}
                 />
               ))}
             </div>

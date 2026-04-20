@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Chameleon } from "@/components/Chameleon";
 import { buildWhatsAppLink } from "@/components/FloatingWhatsApp";
-import heroImage from "@/assets/hero-ellennous.jpg";
+import heroImage from "@/assets/hero-ellennous-aero.png";
 
 export const Hero = () => (
   <section className="relative min-h-[100svh] flex items-center justify-center overflow-hidden">
@@ -9,8 +9,8 @@ export const Hero = () => (
     <div className="absolute inset-0">
       <img
         src={heroImage}
-        alt="Pessoa vestindo jaqueta personalizada Ellennous com arte autoral"
-        className="w-full h-full object-cover opacity-60"
+        alt="Jaqueta Ellennous com arte autoral 'Aero por Vero' em preto, branco e amarelo"
+        className="w-full h-full object-cover object-center opacity-60"
         width={1920}
         height={1080}
       />
