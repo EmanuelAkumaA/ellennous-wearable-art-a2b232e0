@@ -100,7 +100,7 @@ const ReviewSubmit = () => {
       content,
     });
     if (!parsed.success) {
-      const first = parsed.error.errors[0];
+      const first = parsed.error.issues[0];
       toast({ title: "Verifique o formulário", description: first.message, variant: "destructive" });
       return;
     }
