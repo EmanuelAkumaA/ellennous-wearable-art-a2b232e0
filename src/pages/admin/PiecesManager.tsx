@@ -175,6 +175,32 @@ const SortablePieceCard = ({
             </div>
           )}
         </div>
+        <div className="flex flex-col gap-1 shrink-0 justify-center">
+          <Button
+            size="icon"
+            variant="outline"
+            disabled={!canMoveUp || disabled}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+            aria-label="Mover para cima"
+            title="Mover para cima"
+            className="h-7 w-7 rounded-md border-border/50"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            disabled={!canMoveDown || disabled}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+            aria-label="Mover para baixo"
+            title="Mover para baixo"
+            className="h-7 w-7 rounded-md border-border/50"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="flex-1 min-w-0 flex flex-col justify-between">
           <div className="min-w-0">
             <p className="font-display text-sm leading-tight line-clamp-2">{piece.nome}</p>
