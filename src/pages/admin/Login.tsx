@@ -6,9 +6,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import { Lock, Mail, ArrowLeft, Sparkles } from "lucide-react";
-import logo from "@/assets/logo-ellennous.svg";
+import { Lock, Mail, ArrowLeft, Sparkles, Eye, EyeOff } from "lucide-react";
+import brandIcon from "@/assets/brand-icon.png";
 
 const schema = z.object({
   email: z.string().trim().email("E-mail inválido").max(255),
@@ -17,16 +18,25 @@ const schema = z.object({
 
 type Mode = "signin" | "signup";
 
+const REMEMBER_KEY = "ellennous_remember_email";
+
 const AdminLogin = () => {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     document.title = "Acesso · Ellennous Admin";
+    const saved = localStorage.getItem(REMEMBER_KEY);
+    if (saved) {
+      setEmail(saved);
+      setRemember(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -58,6 +68,12 @@ const AdminLogin = () => {
         });
         if (error) throw error;
       }
+      // Persistir email se "lembrar" marcado
+      if (remember) {
+        localStorage.setItem(REMEMBER_KEY, parsed.data.email);
+      } else {
+        localStorage.removeItem(REMEMBER_KEY);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       toast({ title: "Falha na autenticação", description: msg, variant: "destructive" });
@@ -85,9 +101,9 @@ const AdminLogin = () => {
           <div className="relative mb-5">
             <div className="absolute inset-0 rounded-full bg-primary/40 blur-2xl animate-pulse-glow" />
             <img
-              src={logo}
+              src={brandIcon}
               alt="Ellennous"
-              className="relative h-16 w-16 rounded-full ring-1 ring-primary/40 shadow-glow"
+              className="relative h-20 w-20 object-contain drop-shadow-[0_0_24px_hsl(var(--primary-glow)/0.6)]"
             />
           </div>
           <p className="font-accent text-[10px] tracking-[0.5em] text-primary-glow/80 uppercase mb-3 flex items-center gap-2">
@@ -133,14 +149,37 @@ const AdminLogin = () => {
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
               <Input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="pl-10 bg-secondary/40 border-border/40 focus-visible:border-primary-glow focus-visible:ring-primary/30"
+                className="pl-10 pr-10 bg-secondary/40 border-border/40 focus-visible:border-primary-glow focus-visible:ring-primary/30"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 hover:text-primary-glow transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <Checkbox
+              id="remember"
+              checked={remember}
+              onCheckedChange={(v) => setRemember(v === true)}
+              className="border-border/60 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+            />
+            <Label
+              htmlFor="remember"
+              className="text-[11px] text-muted-foreground font-accent tracking-[0.15em] uppercase cursor-pointer select-none"
+            >
+              Lembrar neste dispositivo
+            </Label>
           </div>
 
           <Button
