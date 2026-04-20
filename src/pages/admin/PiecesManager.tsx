@@ -135,6 +135,7 @@ const SortablePieceCard = ({
   canMoveUp,
   canMoveDown,
   disabled,
+  dragDisabled,
   highlight,
   registerFlipNode,
 }: {
@@ -146,12 +147,13 @@ const SortablePieceCard = ({
   canMoveUp: boolean;
   canMoveDown: boolean;
   disabled?: boolean;
+  dragDisabled?: boolean;
   highlight?: boolean;
   registerFlipNode?: (id: string, el: HTMLElement | null) => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: piece.id,
-    disabled,
+    disabled: disabled || dragDisabled,
   });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -166,15 +168,18 @@ const SortablePieceCard = ({
     registerFlipNode?.(piece.id, el);
   };
 
+  // On mobile, do not bind drag listeners — only ↑/↓ buttons reorder
+  const dragProps = dragDisabled ? {} : { ...attributes, ...listeners };
+  const dragClasses = dragDisabled ? "" : "select-none cursor-grab active:cursor-grabbing";
+
   return (
     <div
       ref={setRefs}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`group glass-card overflow-hidden transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] select-none ${
+      {...dragProps}
+      className={`group glass-card overflow-hidden transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] ${
         isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-      } ${highlight ? "animate-move-highlight" : ""} ${disabled ? "" : "cursor-grab active:cursor-grabbing"}`}
+      } ${highlight ? "animate-move-highlight" : ""} ${dragClasses}`}
     >
       {/* MOBILE: list layout */}
       <div className="flex md:hidden items-stretch gap-3 p-3">
