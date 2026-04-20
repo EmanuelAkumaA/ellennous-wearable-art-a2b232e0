@@ -332,6 +332,43 @@ const ReviewSubmit = () => {
           />
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="city" className={labelCls}>Cidade (opcional)</Label>
+            <Input
+              id="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              maxLength={80}
+              placeholder="Ex: São Paulo"
+              className={inputCls}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="state" className={labelCls}>UF</Label>
+            <Input
+              id="state"
+              value={state}
+              onChange={(e) => setState(e.target.value.toUpperCase())}
+              maxLength={2}
+              placeholder="SP"
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="instagram" className={labelCls}>Instagram (opcional)</Label>
+          <Input
+            id="instagram"
+            value={instagram}
+            onChange={(e) => setInstagram(e.target.value)}
+            maxLength={60}
+            placeholder="@seu.user"
+            className={inputCls}
+          />
+        </div>
+
         <div className="space-y-3 text-center">
           <Label className={`${labelCls} block`}>Sua nota *</Label>
           <div className="flex gap-1.5 justify-center">
