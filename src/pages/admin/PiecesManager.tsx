@@ -128,11 +128,19 @@ const SortablePieceCard = ({
   piece,
   onEdit,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
   disabled,
 }: {
   piece: Piece;
   onEdit: (p: Piece) => void;
   onDelete: (id: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   disabled?: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
