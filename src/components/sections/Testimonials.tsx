@@ -4,14 +4,8 @@ import Autoplay from "embla-carousel-autoplay";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useReveal } from "@/hooks/use-reveal";
 import { Dragon } from "@/components/Dragon";
-import { Instagram, MapPin, Quote, Star } from "lucide-react";
+import { Instagram, MapPin, Quote, Sparkles, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import t1 from "@/assets/testimonial-1.jpg";
-import t2 from "@/assets/testimonial-2.jpg";
-import t3 from "@/assets/testimonial-3.jpg";
-import t4 from "@/assets/testimonial-4.jpg";
-import t5 from "@/assets/testimonial-5.jpg";
-import t6 from "@/assets/testimonial-6.jpg";
 
 interface CardData {
   image: string | null;
@@ -23,15 +17,6 @@ interface CardData {
   state: string | null;
   instagram: string | null;
 }
-
-const fallbackTestimonials: CardData[] = [
-  { image: t1, name: "Rafael M.", role: "Anime/Geek", quote: "Nunca usei nada que falasse tanto por mim sem precisar abrir a boca.", rating: 5, city: "São Paulo", state: "SP", instagram: "@rafa.mtz" },
-  { image: t2, name: "Marina S.", role: "Floral", quote: "É arte que respira comigo. Cada flor parece pintada na minha pele.", rating: 5, city: "Curitiba", state: "PR", instagram: "@marina.sg" },
-  { image: t3, name: "Lucas T.", role: "ScarType™", quote: "Não é roupa. É um manifesto que eu visto todo dia.", rating: 5, city: "Belo Horizonte", state: "MG", instagram: "@lucas.tlr" },
-  { image: t4, name: "Beatriz L.", role: "Exclusiva", quote: "Senti que finalmente alguém entendeu quem eu sou — e bordou isso em mim.", rating: 5, city: "Rio de Janeiro", state: "RJ", instagram: "@bia.lps" },
-  { image: t5, name: "Daniel K.", role: "Anime/Geek", quote: "É a única peça que eu tenho medo de tirar do corpo. Parece parte de mim.", rating: 5, city: "Porto Alegre", state: "RS", instagram: "@dani.kbr" },
-  { image: t6, name: "Helena V.", role: "Realismo", quote: "Quem entende, entende. Quem não entende, fica olhando.", rating: 5, city: "Florianópolis", state: "SC", instagram: "@helena.vri" },
-];
 
 const StarRating = ({ value }: { value: number }) => (
   <div className="flex gap-0.5 mb-3">
@@ -53,6 +38,8 @@ export const Testimonials = () => {
 
   const { data: cards, isLoading } = useQuery({
     queryKey: ["approved-reviews"],
+    staleTime: 60_000,
+    refetchOnMount: "always",
     queryFn: async (): Promise<CardData[]> => {
       const { data, error } = await supabase
         .from("reviews")
@@ -60,8 +47,8 @@ export const Testimonials = () => {
         .eq("status", "approved")
         .order("ordem", { ascending: true })
         .order("created_at", { ascending: false });
-      if (error || !data || data.length === 0) return fallbackTestimonials;
-      return data.map((r) => ({
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
         image: r.photo_url,
         name: r.client_name,
         role: r.client_role,
@@ -74,7 +61,8 @@ export const Testimonials = () => {
     },
   });
 
-  const items = cards ?? fallbackTestimonials;
+  const items = cards ?? [];
+  const hasItems = items.length > 0;
 
   return (
     <section
@@ -97,7 +85,7 @@ export const Testimonials = () => {
           </p>
         </div>
 
-        {!isLoading && (
+        {!isLoading && hasItems && (
           <div className="reveal">
             <Carousel
               opts={{ align: "start", loop: true }}
@@ -160,6 +148,20 @@ export const Testimonials = () => {
               <CarouselPrevious className="hidden md:flex -left-6 lg:-left-12 h-12 w-12 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow hover:text-foreground shadow-[0_0_30px_hsl(var(--primary)/0.3)]" />
               <CarouselNext className="hidden md:flex -right-6 lg:-right-12 h-12 w-12 bg-background/80 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow hover:text-foreground shadow-[0_0_30px_hsl(var(--primary)/0.3)]" />
             </Carousel>
+          </div>
+        )}
+
+        {!isLoading && !hasItems && (
+          <div className="reveal max-w-2xl mx-auto text-center">
+            <div className="relative border border-primary/15 bg-background/40 backdrop-blur-sm p-12 md:p-16">
+              <Sparkles className="w-10 h-10 text-primary-glow/60 mx-auto mb-6" strokeWidth={1.2} />
+              <p className="font-display italic text-xl md:text-2xl text-foreground/85 leading-relaxed mb-4">
+                "As primeiras vozes estão sendo bordadas."
+              </p>
+              <p className="text-sm text-foreground/60 tracking-wider">
+                Em breve, quem veste a Ellennous fala por si — aqui mesmo.
+              </p>
+            </div>
           </div>
         )}
       </div>
