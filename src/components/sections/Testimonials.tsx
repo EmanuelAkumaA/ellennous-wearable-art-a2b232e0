@@ -192,7 +192,7 @@ export const Testimonials = () => {
         )}
 
         {!isLoading && !hasItems && (
-          <div className="reveal max-w-2xl mx-auto text-center">
+          <div className="max-w-2xl mx-auto text-center">
             <div className="relative border border-primary/15 bg-background/40 backdrop-blur-sm p-12 md:p-16">
               <Sparkles className="w-10 h-10 text-primary-glow/60 mx-auto mb-6" strokeWidth={1.2} />
               <p className="font-display italic text-xl md:text-2xl text-foreground/85 leading-relaxed mb-4">
