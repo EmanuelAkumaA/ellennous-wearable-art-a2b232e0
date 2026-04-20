@@ -125,6 +125,26 @@ export const Gallery = () => {
     previousCountRef.current = visibleCount;
   }, [visibleCount]);
 
+  useEffect(() => {
+    if (!selected) return;
+    const stored = getStoredSection(selected.id);
+    if (stored === "") {
+      setOpenSection("");
+      return;
+    }
+    if (stored && SECTION_ORDER.includes(stored as SectionKey) && selected[stored as SectionKey]) {
+      setOpenSection(stored);
+      return;
+    }
+    setOpenSection(pickFirstAvailable(selected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
+
+  const handleSectionChange = (value: string) => {
+    setOpenSection(value);
+    if (selected) setStoredSection(selected.id, value);
+  };
+
   const closeZoom = () => setZoomedImages(null);
   const prevZoom = () => {
     if (!zoomedImages) return;
