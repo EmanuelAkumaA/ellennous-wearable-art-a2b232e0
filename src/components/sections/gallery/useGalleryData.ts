@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export type CoverFit = "contain" | "cover";
+
 export interface PieceData {
   id: string;
   nome: string;
@@ -14,6 +16,8 @@ export interface PieceData {
   destaque: boolean;
   novo: boolean;
   ordem: number;
+  coverFit: CoverFit;
+  coverPosition: string;
 }
 
 export const useGalleryData = () => {
