@@ -18,6 +18,7 @@ import {
   MapPin,
   MessageCircle,
   RefreshCw,
+  Search,
   Star,
   Trash2,
   Check,
@@ -206,6 +207,7 @@ export const ReviewsManager = () => {
   const [validity, setValidity] = useState(24);
   const [unit, setUnit] = useState<"hours" | "days">("hours");
   const [note, setNote] = useState("");
+  const [approvedSearch, setApprovedSearch] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -321,6 +323,17 @@ export const ReviewsManager = () => {
     approved: reviews.filter((r) => r.status === "approved"),
     rejected: reviews.filter((r) => r.status === "rejected"),
   };
+
+  const filteredApproved = useMemo(() => {
+    const q = approvedSearch.trim().toLowerCase();
+    if (!q) return grouped.approved;
+    return grouped.approved.filter(
+      (r) =>
+        r.client_name.toLowerCase().includes(q) ||
+        (r.city ?? "").toLowerCase().includes(q) ||
+        (r.state ?? "").toLowerCase().includes(q),
+    );
+  }, [grouped.approved, approvedSearch]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -533,23 +546,38 @@ export const ReviewsManager = () => {
                 <p className="text-sm text-muted-foreground py-6 text-center">Nada por aqui ainda.</p>
               ) : (
                 <>
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={approvedSearch}
+                      onChange={(e) => setApprovedSearch(e.target.value)}
+                      placeholder="Buscar por nome, cidade ou estado…"
+                      className="pl-9"
+                    />
+                  </div>
                   <p className="text-[11px] text-muted-foreground tracking-wider mb-2">
-                    Arraste pelo ícone <GripVertical className="inline h-3 w-3" /> para reordenar como aparecem no site.
+                    {approvedSearch
+                      ? `${filteredApproved.length} resultado${filteredApproved.length === 1 ? "" : "s"}`
+                      : <>Arraste pelo ícone <GripVertical className="inline h-3 w-3" /> para reordenar como aparecem no site.</>}
                   </p>
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={grouped.approved.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                      {grouped.approved.map((r) => (
-                        <ReviewCard
-                          key={r.id}
-                          r={r}
-                          tab="approved"
-                          onStatus={setReviewStatus}
-                          onDelete={deleteReview}
-                          draggable
-                        />
-                      ))}
-                    </SortableContext>
-                  </DndContext>
+                  {filteredApproved.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma avaliação encontrada.</p>
+                  ) : (
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                      <SortableContext items={filteredApproved.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                        {filteredApproved.map((r) => (
+                          <ReviewCard
+                            key={r.id}
+                            r={r}
+                            tab="approved"
+                            onStatus={setReviewStatus}
+                            onDelete={deleteReview}
+                            draggable={!approvedSearch}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  )}
                 </>
               )}
             </TabsContent>

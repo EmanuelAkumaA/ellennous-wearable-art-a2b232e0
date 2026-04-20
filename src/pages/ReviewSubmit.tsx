@@ -329,7 +329,7 @@ const ReviewSubmit = () => {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="state" className={labelCls}>UF</Label>
+            <Label htmlFor="state" className={labelCls}>Estado</Label>
             <Input
               id="state"
               value={state}
@@ -399,8 +399,14 @@ const ReviewSubmit = () => {
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Label className={labelCls}>Foto (opcional)</Label>
+          <div className="border border-primary-glow/25 bg-primary/5 px-4 py-3 rounded-none">
+            <p className="text-xs text-foreground/80 leading-relaxed">
+              ✨ <span className="font-medium text-primary-glow">Poste uma foto sua vestindo a peça</span> e ganhe{" "}
+              <span className="font-semibold text-primary-glow">10% de desconto</span> na sua próxima compra.
+            </p>
+          </div>
           <div className="flex items-center gap-4">
             {photoPreview ? (
               <div className="relative">
