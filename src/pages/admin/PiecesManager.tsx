@@ -133,6 +133,7 @@ const SortablePieceCard = ({
   canMoveUp,
   canMoveDown,
   disabled,
+  highlight,
 }: {
   piece: Piece;
   onEdit: (p: Piece) => void;
@@ -142,6 +143,7 @@ const SortablePieceCard = ({
   canMoveUp: boolean;
   canMoveDown: boolean;
   disabled?: boolean;
+  highlight?: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: piece.id,
@@ -162,7 +164,7 @@ const SortablePieceCard = ({
       {...listeners}
       className={`group glass-card overflow-hidden transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] select-none ${
         isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-      } ${disabled ? "" : "cursor-grab active:cursor-grabbing"}`}
+      } ${highlight ? "animate-move-highlight" : ""} ${disabled ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
       {/* MOBILE: list layout */}
       <div className="flex md:hidden items-stretch gap-3 p-3">
@@ -339,6 +341,18 @@ export const PiecesManager = () => {
   const [coverUploading, setCoverUploading] = useState(false);
   const [activeImageId, setActiveImageId] = useState<string | null>(null);
   const [activePieceId, setActivePieceId] = useState<string | null>(null);
+  const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
+
+  const flashMoved = (id: string) => {
+    setRecentlyMovedId(null);
+    // re-trigger animation on consecutive moves of the same id
+    requestAnimationFrame(() => {
+      setRecentlyMovedId(id);
+      window.setTimeout(() => {
+        setRecentlyMovedId((curr) => (curr === id ? null : curr));
+      }, 950);
+    });
+  };
   const [newCategoryName, setNewCategoryName] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
@@ -631,6 +645,7 @@ export const PiecesManager = () => {
     if (oldIdx === -1 || newIdx === -1) return;
     const reordered = arrayMove(pieces, oldIdx, newIdx).map((p, idx) => ({ ...p, ordem: idx }));
     setPieces(reordered);
+    flashMoved(String(active.id));
     const updates = reordered
       .filter((p, idx) => pieces[idx]?.id !== p.id || pieces[idx]?.ordem !== p.ordem)
       .map((p) => supabase.from("gallery_pieces").update({ ordem: p.ordem }).eq("id", p.id));
@@ -654,6 +669,7 @@ export const PiecesManager = () => {
     const reordered = arrayMove(pieces, oldIdx, newIdx).map((p, idx) => ({ ...p, ordem: idx }));
     const prev = pieces;
     setPieces(reordered);
+    flashMoved(pieceId);
     const updates = reordered
       .filter((p, idx) => prev[idx]?.id !== p.id || prev[idx]?.ordem !== p.ordem)
       .map((p) => supabase.from("gallery_pieces").update({ ordem: p.ordem }).eq("id", p.id));
@@ -797,6 +813,7 @@ export const PiecesManager = () => {
                   canMoveUp={!isFiltering && idx > 0}
                   canMoveDown={!isFiltering && idx < filteredPieces.length - 1}
                   disabled={isFiltering}
+                  highlight={recentlyMovedId === p.id}
                 />
               ))}
             </div>
