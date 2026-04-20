@@ -8,9 +8,24 @@ import { ReviewsManager } from "./ReviewsManager";
 import { useAdminBackNavigation } from "@/hooks/useAdminBackNavigation";
 
 const ROOT_TAB: AdminTab = "pieces";
+const STORAGE_KEY = "ellennous:admin:lastTab";
+const VALID_TABS: AdminTab[] = ["pieces", "categories", "reviews", "stats", "user"];
+
+const readStoredTab = (): AdminTab => {
+  if (typeof window === "undefined") return ROOT_TAB;
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored && (VALID_TABS as string[]).includes(stored)) {
+      return stored as AdminTab;
+    }
+  } catch {
+    /* ignore storage errors (private mode, etc.) */
+  }
+  return ROOT_TAB;
+};
 
 const AdminDashboard = () => {
-  const [tab, setTab] = useState<AdminTab>(ROOT_TAB);
+  const [tab, setTab] = useState<AdminTab>(readStoredTab);
   const { selectTab } = useAdminBackNavigation<AdminTab>({
     active: tab,
     onChange: setTab,
@@ -20,6 +35,16 @@ const AdminDashboard = () => {
   useEffect(() => {
     document.title = "Atelier · Ellennous Admin";
   }, []);
+
+  // Persist last active tab so the admin reopens on the same section.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, tab);
+    } catch {
+      /* ignore */
+    }
+  }, [tab]);
 
   return (
     <AdminShell active={tab} onSelect={selectTab}>
