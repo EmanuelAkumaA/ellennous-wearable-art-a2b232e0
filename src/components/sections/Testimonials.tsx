@@ -133,27 +133,33 @@ export const Testimonials = () => {
                         <p className="font-display italic text-lg md:text-xl text-foreground/90 leading-relaxed mb-6">
                           "{t.quote}"
                         </p>
-                        <div className="pt-4 border-t border-border/40 space-y-1.5">
-                          <p className="font-accent text-lg text-foreground tracking-wide">{t.name}</p>
-                          {t.role && (
-                            <p className="text-xs text-muted-foreground tracking-wider">{t.role}</p>
-                          )}
-                          {(t.city || t.state) && (
-                            <p className="flex items-center gap-1 text-[11px] text-foreground/60">
-                              <MapPin className="h-3 w-3 text-primary-glow/70" strokeWidth={1.5} />
-                              {[t.city, t.state].filter(Boolean).join(" · ")}
-                            </p>
-                          )}
-                          {t.instagram && (
-                            <a
-                              href={`https://instagram.com/${t.instagram.replace(/^@/, "")}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] text-primary-glow/80 hover:text-primary-glow transition-colors"
-                            >
-                              <Instagram className="h-3 w-3" strokeWidth={1.5} />
-                              {t.instagram.startsWith("@") ? t.instagram : `@${t.instagram}`}
-                            </a>
+                        <div className="pt-4 border-t border-border/40 space-y-2">
+                          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                            <p className="font-accent text-lg text-foreground tracking-wide">{t.name}</p>
+                            {t.role && (
+                              <p className="text-xs text-muted-foreground tracking-wider">{t.role}</p>
+                            )}
+                          </div>
+                          {(t.city || t.state || t.instagram) && (
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              {(t.city || t.state) ? (
+                                <p className="flex items-center gap-1 text-[11px] text-foreground/60">
+                                  <MapPin className="h-3 w-3 text-primary-glow/70" strokeWidth={1.5} />
+                                  {[t.city, t.state].filter(Boolean).join(" · ")}
+                                </p>
+                              ) : <span />}
+                              {t.instagram && (
+                                <a
+                                  href={`https://instagram.com/${t.instagram.replace(/^@/, "")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] text-primary-glow/80 hover:text-primary-glow transition-colors"
+                                >
+                                  <Instagram className="h-3 w-3" strokeWidth={1.5} />
+                                  {t.instagram.startsWith("@") ? t.instagram : `@${t.instagram}`}
+                                </a>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
