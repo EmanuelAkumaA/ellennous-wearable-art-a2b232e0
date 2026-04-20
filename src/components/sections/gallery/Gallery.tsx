@@ -19,6 +19,33 @@ import {
 const MOBILE_STEP = 5;
 const DESKTOP_STEP = 6;
 
+const SECTION_STORAGE_PREFIX = "ellennous:gallery:lastSection:";
+type SectionKey = "descricao" | "conceito" | "historia" | "tempo";
+const SECTION_ORDER: SectionKey[] = ["descricao", "conceito", "historia", "tempo"];
+
+const getStoredSection = (pieceId: string): string | null => {
+  try {
+    return localStorage.getItem(SECTION_STORAGE_PREFIX + pieceId);
+  } catch {
+    return null;
+  }
+};
+
+const setStoredSection = (pieceId: string, value: string) => {
+  try {
+    localStorage.setItem(SECTION_STORAGE_PREFIX + pieceId, value);
+  } catch {
+    /* ignore */
+  }
+};
+
+const pickFirstAvailable = (piece: PieceData): SectionKey | undefined => {
+  for (const key of SECTION_ORDER) {
+    if (piece[key]) return key;
+  }
+  return undefined;
+};
+
 const rankPiece = (p: PieceData) => (p.novo ? 0 : p.destaque ? 1 : 2);
 
 export const Gallery = () => {
@@ -31,6 +58,7 @@ export const Gallery = () => {
   const [zoomedImages, setZoomedImages] = useState<string[] | null>(null);
   const [zoomedIndex, setZoomedIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(step);
+  const [openSection, setOpenSection] = useState<string | undefined>(undefined);
   const ref = useReveal();
   const lastInitialItemRef = useRef<HTMLButtonElement | null>(null);
   const previousCountRef = useRef(step);
@@ -96,6 +124,26 @@ export const Gallery = () => {
   useEffect(() => {
     previousCountRef.current = visibleCount;
   }, [visibleCount]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const stored = getStoredSection(selected.id);
+    if (stored === "") {
+      setOpenSection("");
+      return;
+    }
+    if (stored && SECTION_ORDER.includes(stored as SectionKey) && selected[stored as SectionKey]) {
+      setOpenSection(stored);
+      return;
+    }
+    setOpenSection(pickFirstAvailable(selected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
+
+  const handleSectionChange = (value: string) => {
+    setOpenSection(value);
+    if (selected) setStoredSection(selected.id, value);
+  };
 
   const closeZoom = () => setZoomedImages(null);
   const prevZoom = () => {
@@ -242,7 +290,8 @@ export const Gallery = () => {
                 <Accordion
                   type="single"
                   collapsible
-                  defaultValue={selected.descricao ? "descricao" : selected.conceito ? "conceito" : selected.historia ? "historia" : selected.tempo ? "tempo" : undefined}
+                  value={openSection}
+                  onValueChange={handleSectionChange}
                   className="text-sm"
                 >
                   {selected.descricao && (
