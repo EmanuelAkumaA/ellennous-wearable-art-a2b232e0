@@ -722,6 +722,12 @@ export const PiecesManager = () => {
     return true;
   });
 
+  // FLIP slide animation when filteredPieces order changes (button moves, drag, etc.)
+  const { registerNode: registerFlipNode } = useFlipAnimation(
+    filteredPieces,
+    (p) => p.id,
+  );
+
   return (
     <div className="space-y-6">
       {/* Top bar: count + new piece */}
@@ -823,6 +829,7 @@ export const PiecesManager = () => {
                   canMoveDown={!isFiltering && idx < filteredPieces.length - 1}
                   disabled={isFiltering}
                   highlight={recentlyMovedId === p.id}
+                  registerFlipNode={registerFlipNode}
                 />
               ))}
             </div>
