@@ -28,7 +28,6 @@ import {
 import {
   DndContext,
   PointerSensor,
-  TouchSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
@@ -47,6 +46,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
@@ -134,6 +134,7 @@ const SortablePieceCard = ({
   canMoveUp,
   canMoveDown,
   disabled,
+  dragDisabled,
   highlight,
   registerFlipNode,
 }: {
@@ -145,12 +146,13 @@ const SortablePieceCard = ({
   canMoveUp: boolean;
   canMoveDown: boolean;
   disabled?: boolean;
+  dragDisabled?: boolean;
   highlight?: boolean;
   registerFlipNode?: (id: string, el: HTMLElement | null) => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: piece.id,
-    disabled,
+    disabled: disabled || dragDisabled,
   });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -165,15 +167,18 @@ const SortablePieceCard = ({
     registerFlipNode?.(piece.id, el);
   };
 
+  // On mobile, do not bind drag listeners — only ↑/↓ buttons reorder
+  const dragProps = dragDisabled ? {} : { ...attributes, ...listeners };
+  const dragClasses = dragDisabled ? "" : "select-none cursor-grab active:cursor-grabbing";
+
   return (
     <div
       ref={setRefs}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`group glass-card overflow-hidden transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] select-none ${
+      {...dragProps}
+      className={`group glass-card overflow-hidden transition-all duration-300 hover:border-primary-glow/40 hover:shadow-[0_0_30px_-8px_hsl(var(--primary-glow)/0.5)] ${
         isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-      } ${highlight ? "animate-move-highlight" : ""} ${disabled ? "" : "cursor-grab active:cursor-grabbing"}`}
+      } ${highlight ? "animate-move-highlight" : ""} ${dragClasses}`}
     >
       {/* MOBILE: list layout */}
       <div className="flex md:hidden items-stretch gap-3 p-3">
@@ -370,10 +375,12 @@ export const PiecesManager = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
 
+  const isMobile = useIsMobile();
+
+  // No mobile: NÃO registrar TouchSensor — toque vertical sempre rola a página.
+  // Reordenação no celular acontece apenas pelas setas ↑/↓.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    // Mobile: long-press 1s para ativar drag, permitindo scroll vertical normal
-    useSensor(TouchSensor, { activationConstraint: { delay: 1000, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -828,6 +835,7 @@ export const PiecesManager = () => {
                   canMoveUp={!isFiltering && idx > 0}
                   canMoveDown={!isFiltering && idx < filteredPieces.length - 1}
                   disabled={isFiltering}
+                  dragDisabled={isMobile}
                   highlight={recentlyMovedId === p.id}
                   registerFlipNode={registerFlipNode}
                 />
