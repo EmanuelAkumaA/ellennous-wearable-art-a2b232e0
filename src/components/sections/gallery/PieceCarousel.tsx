@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Autoplay from "embla-carousel-autoplay";
 import { Pause } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -10,17 +10,77 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import type { OptimizedVariant } from "@/lib/imageSnippet";
+import type { PieceImageData } from "./useGalleryData";
 
 interface PieceCarouselProps {
   images: string[];
   alt: string;
   onZoom?: (images: string[], index: number) => void;
+  imagesData?: PieceImageData[];
 }
 
 const AUTOPLAY_DELAY = 4000;
 const PAUSE_AFTER_INTERACTION = 5000;
+const SIZES = "(max-width:768px) 100vw, 50vw";
 
-export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
+const buildSrcset = (variants: OptimizedVariant[], format: OptimizedVariant["format"]) =>
+  variants
+    .filter((v) => v.format === format)
+    .sort((a, b) => a.width - b.width)
+    .map((v) => `${v.url} ${v.width}w`)
+    .join(", ");
+
+interface SmartImageProps {
+  src: string;
+  variants: OptimizedVariant[] | null;
+  alt: string;
+  loading: "eager" | "lazy";
+  fetchPriority: "high" | "low" | "auto";
+  onClick?: () => void;
+  className: string;
+}
+
+const SmartImage = ({ src, variants, alt, loading, fetchPriority, onClick, className }: SmartImageProps) => {
+  if (!variants || variants.length === 0) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        loading={loading}
+        decoding="async"
+        fetchPriority={fetchPriority}
+        onClick={onClick}
+        className={className}
+      />
+    );
+  }
+  const avifSet = buildSrcset(variants, "avif");
+  const webpSet = buildSrcset(variants, "webp");
+  const jpegVariants = variants.filter((v) => v.format === "jpeg").sort((a, b) => a.width - b.width);
+  const jpegSet = jpegVariants.map((v) => `${v.url} ${v.width}w`).join(", ");
+  const fallback = jpegVariants.find((v) => v.width === 800) ?? jpegVariants[Math.floor(jpegVariants.length / 2)] ?? jpegVariants[0];
+
+  return (
+    <picture>
+      {avifSet && <source type="image/avif" srcSet={avifSet} sizes={SIZES} />}
+      {webpSet && <source type="image/webp" srcSet={webpSet} sizes={SIZES} />}
+      <img
+        src={fallback?.url ?? src}
+        srcSet={jpegSet || undefined}
+        sizes={SIZES}
+        alt={alt}
+        loading={loading}
+        decoding="async"
+        fetchPriority={fetchPriority}
+        onClick={onClick}
+        className={className}
+      />
+    </picture>
+  );
+};
+
+export const PieceCarousel = ({ images, alt, onZoom, imagesData }: PieceCarouselProps) => {
   const isMobile = useIsMobile();
   const autoplay = useRef(
     Autoplay({ delay: AUTOPLAY_DELAY, stopOnInteraction: false, stopOnMouseEnter: true, playOnInit: true })
@@ -32,6 +92,14 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
   const [isPaused, setIsPaused] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const pauseTimeoutRef = useRef<number | null>(null);
+
+  // Build a per-index variants lookup; falls back to null when not optimized.
+  const variantsAt = useMemo(() => {
+    if (!imagesData) return new Map<number, OptimizedVariant[] | null>();
+    const m = new Map<number, OptimizedVariant[] | null>();
+    imagesData.forEach((d, i) => m.set(i, d.variants));
+    return m;
+  }, [imagesData]);
 
   const pauseAutoplay = useCallback(() => {
     const ap = autoplay.current as unknown as { stop?: () => void; play?: () => void };
@@ -83,7 +151,6 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     };
   }, [api, pauseAutoplay]);
 
-  // Cleanup pause timeout on unmount
   useEffect(() => {
     return () => {
       if (pauseTimeoutRef.current != null) {
@@ -92,8 +159,6 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     };
   }, []);
 
-  // Animate progress bar in sync with autoplay
-  // Uses RAF on desktop, lighter setInterval on mobile, pauses while dragging or hidden
   useEffect(() => {
     if (!api || images.length <= 1 || isDragging || isPaused) return;
 
@@ -153,11 +218,11 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
 
   if (images.length <= 1) {
     return (
-      <img
+      <SmartImage
         src={images[0]}
+        variants={variantsAt.get(0) ?? null}
         alt={alt}
         loading="lazy"
-        decoding="async"
         fetchPriority="high"
         onClick={() => handleImageClick(0)}
         className={`w-full h-full object-cover ${cursorClass}`}
@@ -170,7 +235,6 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     api?.scrollTo(i);
   };
 
-  // Adjacent slide indices (with loop wrap) for eager loading
   const isAdjacent = (i: number) => {
     if (i === selectedIndex) return true;
     const total = images.length;
@@ -204,11 +268,11 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
           const adjacent = isAdjacent(i);
           return (
             <CarouselItem key={i} className="h-full">
-              <img
+              <SmartImage
                 src={src}
+                variants={variantsAt.get(i) ?? null}
                 alt={`${alt} — imagem ${i + 1}`}
                 loading={adjacent ? "eager" : "lazy"}
-                decoding="async"
                 fetchPriority={active ? "high" : "low"}
                 onClick={() => handleImageClick(i)}
                 className={`w-full h-full object-cover aspect-square md:aspect-auto ${cursorClass}`}
@@ -226,7 +290,6 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         className="right-3 h-9 w-9 bg-background/70 border-primary/30 text-primary-glow hover:bg-primary/20 hover:border-primary-glow"
       />
 
-      {/* Pause indicator */}
       <div
         className={`absolute top-2 right-2 z-20 flex items-center justify-center h-7 w-7 rounded-full bg-background/60 backdrop-blur-sm border border-primary/30 transition-opacity duration-300 ${
           isPaused ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -236,7 +299,6 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         <Pause className="h-3 w-3 text-primary-glow" fill="currentColor" />
       </div>
 
-      {/* Progress bar */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 z-10">
         <div
           className="h-full bg-primary-glow transition-none"
@@ -244,7 +306,6 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         />
       </div>
 
-      {/* Dots */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/40 backdrop-blur-sm">
         {Array.from({ length: snapCount }).map((_, i) => (
           <button
