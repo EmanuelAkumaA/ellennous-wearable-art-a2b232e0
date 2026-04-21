@@ -4,4 +4,4 @@ project_id = "tayitsyyyqskbmnmyljl"
 verify_jwt = false
 
 [functions.optimize-image]
-verify_jwt = true
+verify_jwt = false
