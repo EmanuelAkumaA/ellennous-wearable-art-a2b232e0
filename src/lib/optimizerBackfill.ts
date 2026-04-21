@@ -17,14 +17,12 @@ export interface LegacyImageItem {
 
 export interface BackfillProgressItem extends LegacyImageItem {
   status: "pending" | "downloading" | "uploading" | "optimizing" | "done" | "skipped" | "error";
+  /** 0–100 progress within the current run */
+  progress: number;
   error?: string;
   optimizedImageId?: string;
 }
 
-/**
- * A row is "legacy" when its storage_path doesn't live in optimized-images
- * (i.e. anything that's not "images/<uuid>/...").
- */
 const isLegacyPath = (path: string | null | undefined): boolean => {
   if (!path) return true;
   return !path.startsWith("images/");
@@ -41,10 +39,6 @@ const filenameFromUrl = (url: string, fallback: string): string => {
   return fallback;
 };
 
-/**
- * Detect all gallery images and covers that haven't been routed through the
- * Optimizer pipeline yet. Used by the BackfillRunner UI.
- */
 export const detectLegacyImages = async (): Promise<LegacyImageItem[]> => {
   const [piecesRes, imagesRes] = await Promise.all([
     supabase
@@ -63,7 +57,6 @@ export const detectLegacyImages = async (): Promise<LegacyImageItem[]> => {
 
   const out: LegacyImageItem[] = [];
 
-  // Piece covers
   for (const p of pieces) {
     if (!p.cover_url) continue;
     if (!isLegacyPath(p.cover_storage_path)) continue;
@@ -78,7 +71,6 @@ export const detectLegacyImages = async (): Promise<LegacyImageItem[]> => {
     });
   }
 
-  // Gallery images
   for (const img of images) {
     if (!isLegacyPath(img.storage_path)) continue;
     const piece = pieceById.get(img.piece_id);
@@ -111,8 +103,45 @@ const guessMime = (filename: string): string => {
   }
 };
 
+type StatusEmitter = (
+  status: BackfillProgressItem["status"],
+  extra?: Partial<BackfillProgressItem>,
+) => void;
+
+const downloadWithProgress = async (
+  url: string,
+  contentTypeFallback: string,
+  onProgress: (pct: number) => void,
+): Promise<Blob> => {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Falha ao baixar (${resp.status})`);
+  const total = Number(resp.headers.get("content-length")) || 0;
+  const ct = resp.headers.get("content-type") || contentTypeFallback;
+
+  if (!resp.body) {
+    return await resp.blob();
+  }
+
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      chunks.push(value);
+      received += value.length;
+      if (total) {
+        onProgress(Math.min(40, Math.round((received / total) * 40)));
+      }
+    }
+  }
+  return new Blob(chunks as BlobPart[], { type: ct });
+};
+
 const waitForOptimization = async (
   optimizedImageId: string,
+  onPoll: (elapsedMs: number) => void,
   timeoutMs = 90000,
 ): Promise<{ variants: OptimizedVariant[] | null; status: string }> => {
   const start = Date.now();
@@ -128,38 +157,33 @@ const waitForOptimization = async (
         variants: (data.variants as unknown as OptimizedVariant[]) ?? null,
       };
     }
+    onPoll(Date.now() - start);
     await new Promise((r) => setTimeout(r, 1500));
   }
   return { variants: null, status: "timeout" };
 };
 
-/**
- * Migrates one legacy item:
- *  1. fetches its blob from the public gallery URL
- *  2. uploads through `uploadToOptimizer` (which inserts an `optimized_images`
- *     row + dispatches the optimize-image edge function)
- *  3. waits for optimization to complete
- *  4. updates `gallery_piece_images` (or `gallery_pieces.cover_url`) to point
- *     at the new JPEG-1200w URL and the `images/<uuid>` storage path.
- *
- * The original `gallery/seed/...` file is NOT deleted (kept as a safety net).
- */
 export const migrateLegacyImage = async (
   item: LegacyImageItem,
-  onStatus: (status: BackfillProgressItem["status"], extra?: Partial<BackfillProgressItem>) => void,
+  onStatus: StatusEmitter,
 ): Promise<void> => {
-  onStatus("downloading");
-  const resp = await fetch(item.url);
-  if (!resp.ok) throw new Error(`Falha ao baixar (${resp.status})`);
-  const blob = await resp.blob();
+  onStatus("downloading", { progress: 0 });
+  const blob = await downloadWithProgress(item.url, guessMime(item.filename), (pct) => {
+    onStatus("downloading", { progress: pct });
+  });
+  onStatus("downloading", { progress: 40 });
+
   const file = new File([blob], item.filename, { type: blob.type || guessMime(item.filename) });
 
-  onStatus("uploading");
+  onStatus("uploading", { progress: 50 });
   const role: ImageRole = item.kind === "cover" ? "cover" : "gallery";
   const uploaded = await uploadToOptimizer({ file, pieceId: item.pieceId, role });
-  onStatus("optimizing", { optimizedImageId: uploaded.optimizedImageId });
+  onStatus("optimizing", { progress: 60, optimizedImageId: uploaded.optimizedImageId });
 
-  const opt = await waitForOptimization(uploaded.optimizedImageId);
+  const opt = await waitForOptimization(uploaded.optimizedImageId, (elapsed) => {
+    const pct = 60 + Math.min(38, Math.round(elapsed / 2500));
+    onStatus("optimizing", { progress: pct });
+  });
   if (opt.status === "error") throw new Error("Falha na otimização");
   const newUrl = getBestUrlForPiece(opt.variants ?? [], uploaded.originalUrl);
 
@@ -177,13 +201,9 @@ export const migrateLegacyImage = async (
     if (error) throw error;
   }
 
-  onStatus("done");
+  onStatus("done", { progress: 100 });
 };
 
-/**
- * Run the migration with bounded concurrency. Skips items that fail and
- * continues with the rest. Emits progress per item.
- */
 export const runBackfill = async (
   items: LegacyImageItem[],
   onItemUpdate: (id: string, patch: Partial<BackfillProgressItem>) => void,
@@ -203,7 +223,10 @@ export const runBackfill = async (
         done++;
       } catch (e) {
         failed++;
-        onItemUpdate(it.id, { status: "error", error: e instanceof Error ? e.message : String(e) });
+        onItemUpdate(it.id, {
+          status: "error",
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
   });
