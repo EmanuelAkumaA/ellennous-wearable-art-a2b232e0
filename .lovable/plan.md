@@ -1,61 +1,44 @@
 
 
-## Plano: Fade no accordion + memória da seção aberta
+## Plano: Indicador de seções + fix de travamento no mobile
 
-### 1. Animação fade no conteúdo do accordion
+### 1. Indicador visual de seções preenchidas
 
-Hoje o `AccordionContent` já tem o slide (`accordion-down`/`accordion-up`), mas só anima a altura. Vamos adicionar opacidade ao keyframe para o conteúdo aparecer suavemente além do slide.
+No header do modal (logo abaixo do nome da obra), adicionar uma linha discreta de 4 micro-pontos — um para cada seção possível (Descrição, Conceito, História, Tempo). Cada ponto tem dois estados:
 
-**Arquivo:** `tailwind.config.ts`
+- **Preenchido** (`bg-primary-glow`, opacidade total) → seção tem conteúdo
+- **Vazio** (`bg-muted-foreground/30`, sem brilho) → seção sem conteúdo
 
-Atualizar os keyframes existentes:
+Tooltip nativo (`title="Descrição"`) em cada ponto para acessibilidade. Visualmente fica um traço sutil tipo "•••○" que comunica de relance o que está disponível, sem competir com o título.
 
-```ts
-"accordion-down": {
-  from: { height: "0", opacity: "0" },
-  to:   { height: "var(--radix-accordion-content-height)", opacity: "1" },
-},
-"accordion-up": {
-  from: { height: "var(--radix-accordion-content-height)", opacity: "1" },
-  to:   { height: "0", opacity: "0" },
-},
-```
+Posicionamento: flex row com `gap-1.5`, abaixo do `<h3>` e acima do `<Accordion>`, com `mb-4`.
 
-E suavizar a duração das animações para ficar mais elegante:
+### 2. Fade no accordion (revalidação)
 
-```ts
-"accordion-down": "accordion-down 0.3s ease-out",
-"accordion-up":   "accordion-up 0.25s ease-out",
-```
+A animação já foi configurada na rodada anterior em `tailwind.config.ts` com opacity nos keyframes. Vou **verificar** se está realmente ativa e, se necessário, garantir que `AccordionContent` (em `src/components/ui/accordion.tsx`) não tenha `overflow-hidden` cortando a transição de opacidade durante o slide. Se o componente estiver aplicando `overflow-hidden` no wrapper externo (que é o que recebe a animação), está tudo certo — só preciso confirmar visualmente que a opacidade está aparecendo. Se não estiver, adiciono `transition-opacity duration-300` direto no children container.
 
-Nenhuma mudança no componente `accordion.tsx` é necessária — as classes `data-[state=open]:animate-accordion-down` já estão lá.
+### 3. Travamento no mobile (carrossel da obra)
 
-### 2. Memória da seção aberta por obra
+Causa identificada (390px viewport): o `PieceCarousel` dentro do `DialogContent` tem `aspect-square md:aspect-auto`, mas o **DialogContent** está com `max-h-[90vh] overflow-y-auto`. No mobile, o conteúdo total (imagem quadrada de ~390px + texto + accordion) ultrapassa 90vh, então o usuário precisa scrollar **vertical**. Mas o carrossel internamente captura gestos **horizontais** com Embla, e o navegador fica confuso entre scroll vertical da modal e swipe horizontal do carrossel — resultado: a tela "trava" em alguns toques.
 
-A última seção aberta de cada obra fica salva em `localStorage` sob a chave `ellennous:gallery:lastSection:<pieceId>`. Ao reabrir o modal da mesma obra, o accordion abre direto naquela seção. Se a obra nunca foi aberta antes (ou a seção salva não existe mais no conteúdo), cai no comportamento atual: abre "Descrição" (ou o primeiro campo disponível).
+**Correção** sem mexer na imagem nem no layout visual:
 
-**Arquivo:** `src/components/sections/gallery/Gallery.tsx`
+- Adicionar `touch-action: pan-y` no container do carrossel (`<div className="relative aspect-square md:aspect-auto bg-secondary/30">`) → diz ao browser "este elemento só recebe pan vertical do sistema; o pan horizontal é da aplicação". Isso elimina a briga de gestos.
+- O Embla, internamente, escuta `pointerdown/move/up` — não depende de touch-action para funcionar. Continua reconhecendo swipe horizontal.
+- Adicionar `overscroll-behavior: contain` no `DialogContent` para que o scroll da modal não "vaze" para o body (que também trava em alguns Androids).
+- Verificar se `PieceCarousel` está com `dragFree: false` e `containScroll: "trimSnaps"` — se não estiver, ajustar para reduzir jitter no fim do swipe.
 
-Implementação:
-
-1. Criar um pequeno helper `getStoredSection(pieceId)` / `setStoredSection(pieceId, value)` com try/catch para `localStorage` (SSR-safe + privacy mode).
-
-2. Substituir o `defaultValue` (estático no primeiro render) por um `value` controlado:
-   - Estado local `const [openSection, setOpenSection] = useState<string | undefined>(undefined)`.
-   - `useEffect` que dispara quando `selected` muda: lê do localStorage, valida que a seção ainda tem conteúdo na obra atual, senão escolhe o primeiro disponível (`descricao` → `conceito` → `historia` → `tempo`).
-   - `onValueChange` do `Accordion` salva no localStorage e atualiza estado.
-
-3. Salvar **string vazia** quando o usuário fecha tudo (Radix passa `""` em `type="single" collapsible`), para respeitar a escolha de "tudo fechado" na próxima abertura.
-
-### Detalhes técnicos
-
-- Chave de storage prefixada (`ellennous:gallery:lastSection:`) para não colidir com outros dados.
-- Validação ao restaurar: se a seção salva for `historia` mas a obra não tem `historia` preenchido, fazemos fallback automático para o primeiro campo disponível em vez de abrir vazio.
-- O `useEffect` depende apenas de `selected?.id` para evitar re-execução quando o objeto é recriado mas o id é o mesmo.
-- A animação de fade fica visível tanto na abertura quanto no fechamento, sincronizada com a transição de altura existente.
+Resultado: scroll vertical da modal flui livre, swipe horizontal do carrossel funciona, sem travamento.
 
 ### Arquivos modificados
 
-- `tailwind.config.ts` — keyframes do accordion com opacidade + duração ajustada
-- `src/components/sections/gallery/Gallery.tsx` — accordion controlado + persistência por obra
+- `src/components/sections/gallery/Gallery.tsx` — indicador de pontos no header + classes `touch-pan-y` e `overscroll-contain`
+- `src/components/sections/gallery/PieceCarousel.tsx` — verificar/ajustar opções do Embla se necessário
+- `src/components/ui/accordion.tsx` — apenas se a opacidade não estiver visível; adicionar `transition-opacity` redundante
+
+### Validação
+
+1. Modal aberto em desktop: pontos aparecem abaixo do título, preenchidos só nas seções com conteúdo.
+2. Mobile (390px): scroll vertical da modal funciona suave, swipe horizontal nas imagens funciona sem travar, accordion abre com fade visível.
+3. Obra com só 2 campos preenchidos: 2 pontos brilhantes + 2 apagados.
 
