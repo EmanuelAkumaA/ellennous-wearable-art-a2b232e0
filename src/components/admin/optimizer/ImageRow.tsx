@@ -135,28 +135,51 @@ export const ImageRow = ({
     icon: typeof Smartphone;
     label: string;
     variant: ReturnType<typeof findVariant>;
-  }) => (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-mono tabular-nums ${
-              variant
-                ? "bg-secondary/60 text-foreground"
-                : "bg-secondary/20 text-muted-foreground/50"
-            }`}
-          >
-            <Icon className="h-3 w-3" />
-            <span className="font-accent text-[8px] tracking-[0.2em] uppercase opacity-60">{label}</span>
-            <span>{variant ? formatBytes(variant.size_bytes) : "—"}</span>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          {variant ? `${variant.width}px · ${variant.format.toUpperCase()}` : "Variante não disponível"}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+  }) => {
+    const original = image.original_size_bytes;
+    let savedPct: number | null = null;
+    let savedBytes = 0;
+    if (variant && original > 0) {
+      savedBytes = original - variant.size_bytes;
+      savedPct = Math.round((savedBytes / original) * 100);
+    }
+    const tone =
+      savedPct === null
+        ? "bg-secondary/20 text-muted-foreground/50"
+        : savedPct >= 50
+          ? "bg-emerald-500/15 text-emerald-300"
+          : savedPct >= 0
+            ? "bg-amber-500/15 text-amber-300"
+            : "bg-destructive/15 text-destructive";
+    return (
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-mono tabular-nums ${tone}`}
+            >
+              <Icon className="h-3 w-3" />
+              <span className="font-accent text-[8px] tracking-[0.2em] uppercase opacity-60">{label}</span>
+              <span>{variant ? formatBytes(variant.size_bytes) : "—"}</span>
+              {savedPct !== null && (
+                <span className="font-accent text-[9px] tracking-wide opacity-90">
+                  {savedPct >= 0 ? "−" : "+"}
+                  {Math.abs(savedPct)}%
+                </span>
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            {variant
+              ? `${variant.width}px · ${variant.format.toUpperCase()}${
+                  savedBytes > 0 ? ` · ${formatBytes(savedBytes)} economizados` : ""
+                }`
+              : "Variante não disponível"}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
 
   return (
     <div
