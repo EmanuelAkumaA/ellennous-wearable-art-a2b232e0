@@ -273,10 +273,10 @@ export const Gallery = () => {
       </div>
 
       <Dialog open={!!selected} onOpenChange={handleModalChange}>
-        <DialogContent className="max-w-4xl bg-card border-primary/30 p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl bg-card border-primary/30 p-0 overflow-hidden max-h-[90vh] overflow-y-auto overscroll-contain">
           {selected && (
             <div className="grid md:grid-cols-2 gap-0">
-              <div className="relative aspect-square md:aspect-auto bg-secondary/30">
+              <div className="relative aspect-square md:aspect-auto bg-secondary/30 touch-pan-y">
                 <PieceCarousel
                   key={selected.id}
                   images={selected.imagens}
@@ -286,7 +286,27 @@ export const Gallery = () => {
               </div>
               <div className="p-8 flex flex-col">
                 <p className="font-accent text-xs tracking-[0.15em] uppercase text-primary-glow mb-3">{selected.categoria}</p>
-                <h3 className="font-display text-3xl md:text-4xl mb-6 text-foreground">{selected.nome}</h3>
+                <h3 className="font-display text-3xl md:text-4xl mb-3 text-foreground">{selected.nome}</h3>
+                <div className="flex items-center gap-1.5 mb-6" aria-label="Seções disponíveis">
+                  {SECTION_ORDER.map((key) => {
+                    const labels: Record<SectionKey, string> = {
+                      descricao: "Descrição",
+                      conceito: "Conceito",
+                      historia: "História",
+                      tempo: "Tempo de produção",
+                    };
+                    const filled = !!selected[key];
+                    return (
+                      <span
+                        key={key}
+                        title={`${labels[key]}${filled ? "" : " (sem conteúdo)"}`}
+                        className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                          filled ? "bg-primary-glow shadow-[0_0_6px_hsl(var(--primary-glow)/0.6)]" : "bg-muted-foreground/30"
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
                 <Accordion
                   type="single"
                   collapsible

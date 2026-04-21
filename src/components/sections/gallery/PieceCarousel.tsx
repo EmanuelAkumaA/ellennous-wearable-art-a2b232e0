@@ -130,7 +130,7 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
 
   return (
     <Carousel
-      opts={{ align: "start", loop: true }}
+      opts={{ align: "start", loop: true, dragFree: false, containScroll: "trimSnaps" }}
       plugins={[autoplay.current]}
       setApi={setApi}
       className="w-full h-full"
