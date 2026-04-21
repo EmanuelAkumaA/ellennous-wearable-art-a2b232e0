@@ -469,6 +469,9 @@ export const PiecesManager = () => {
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyForm, categoria_id: categories[0]?.id ?? "" });
+    setWorkingPieceId(crypto.randomUUID());
+    setDraftImages([]);
+    setDraftCover(null);
     setCreating(true);
   };
 
@@ -479,10 +482,20 @@ export const PiecesManager = () => {
       conceito: p.conceito, historia: p.historia, tempo: p.tempo,
       destaque: p.destaque, novo: p.novo,
     });
+    setWorkingPieceId(p.id);
+    setDraftImages([]);
+    setDraftCover(null);
     setCreating(true);
   };
 
-  const closeForm = () => { setCreating(false); setEditing(null); setForm(emptyForm); };
+  const closeForm = () => {
+    setCreating(false);
+    setEditing(null);
+    setForm(emptyForm);
+    setWorkingPieceId(null);
+    setDraftImages([]);
+    setDraftCover(null);
+  };
 
   const guardOffline = () => {
     if (isOffline()) {
@@ -491,6 +504,51 @@ export const PiecesManager = () => {
     }
     return false;
   };
+
+  // Realtime: when an optimized_image used in this modal becomes ready, refresh its preview/variants.
+  useEffect(() => {
+    if (!workingPieceId) return;
+    const ids = new Set<string>();
+    draftImages.forEach((d) => ids.add(d.optimizedImageId));
+    if (draftCover) ids.add(draftCover.optimizedImageId);
+    if (ids.size === 0) return;
+
+    const channel = supabase
+      .channel(`opt_modal_${workingPieceId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "optimized_images" },
+        (payload) => {
+          const row = payload.new as {
+            id: string;
+            status: string;
+            variants: OptimizedVariant[] | null;
+          };
+          if (!ids.has(row.id)) return;
+          const variants = (row.variants ?? []) as OptimizedVariant[];
+          const status = (row.status as DraftImage["status"]) ?? "processing";
+          const bestPreview =
+            variants.find((v) => v.format === "webp" && v.width === 800)?.url ??
+            variants.find((v) => v.format === "jpeg" && v.width === 800)?.url;
+          setDraftImages((prev) =>
+            prev.map((d) =>
+              d.optimizedImageId === row.id
+                ? { ...d, status, variants, previewUrl: bestPreview ?? d.previewUrl }
+                : d,
+            ),
+          );
+          setDraftCover((prev) =>
+            prev && prev.optimizedImageId === row.id
+              ? { ...prev, status, variants, previewUrl: bestPreview ?? prev.previewUrl }
+              : prev,
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [workingPieceId, draftImages, draftCover]);
 
   const handleSave = async () => {
     if (guardOffline()) return;
@@ -507,16 +565,78 @@ export const PiecesManager = () => {
       destaque: form.destaque,
       novo: form.novo,
     };
-    const { error } = editing
-      ? await supabase.from("gallery_pieces").update(basePayload).eq("id", editing.id)
-      : await supabase.from("gallery_pieces").insert({ ...basePayload, ordem: pieces.length });
-    setSaving(false);
-    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
-    toast({ title: editing ? "Atualizada" : "Criada" });
-    if (!editing) closeForm();
-    load();
-    if (editing) await refreshEditing(editing.id);
+
+    try {
+      let pieceId: string;
+
+      if (editing) {
+        const { error } = await supabase.from("gallery_pieces").update(basePayload).eq("id", editing.id);
+        if (error) throw error;
+        pieceId = editing.id;
+      } else {
+        const newId = workingPieceId ?? crypto.randomUUID();
+        const insertPayload: typeof basePayload & { id: string; ordem: number; cover_url?: string; cover_storage_path?: string } = {
+          ...basePayload,
+          id: newId,
+          ordem: pieces.length,
+        };
+        if (draftCover) {
+          insertPayload.cover_url = getBestUrlForPiece(draftCover.variants, draftCover.previewUrl);
+          insertPayload.cover_storage_path = draftCover.originalPath;
+        }
+        const { error } = await supabase.from("gallery_pieces").insert(insertPayload);
+        if (error) throw error;
+        pieceId = newId;
+      }
+
+      // Persist draft cover for edit mode (insert always handled above)
+      if (editing && draftCover) {
+        await supabase
+          .from("gallery_pieces")
+          .update({
+            cover_url: getBestUrlForPiece(draftCover.variants, draftCover.previewUrl),
+            cover_storage_path: draftCover.originalPath,
+          })
+          .eq("id", pieceId);
+      }
+
+      // Persist draft gallery images
+      if (draftImages.length > 0) {
+        const baseOrdem = editing?.gallery_piece_images.length ?? 0;
+        const rows = draftImages.map((d, idx) => ({
+          piece_id: pieceId,
+          url: getBestUrlForPiece(d.variants, d.previewUrl),
+          storage_path: d.originalPath,
+          ordem: baseOrdem + idx,
+        }));
+        const { error: imgErr } = await supabase.from("gallery_piece_images").insert(rows);
+        if (imgErr) throw imgErr;
+
+        // Make sure piece_id is set on the optimizer rows (in case row was created
+        // before workingPieceId existed — defensive).
+        const optIds = draftImages.map((d) => d.optimizedImageId);
+        await supabase
+          .from("optimized_images")
+          .update({ piece_id: pieceId })
+          .in("id", optIds);
+      }
+      if (draftCover) {
+        await supabase
+          .from("optimized_images")
+          .update({ piece_id: pieceId })
+          .eq("id", draftCover.optimizedImageId);
+      }
+
+      toast({ title: editing ? "Atualizada" : "Criada" });
+      setSaving(false);
+      closeForm();
+      load();
+    } catch (err) {
+      setSaving(false);
+      toast({ title: "Erro", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    }
   };
+
 
   const handleDelete = async (id: string) => {
     if (guardOffline()) return;
