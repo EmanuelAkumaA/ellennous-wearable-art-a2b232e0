@@ -1321,14 +1321,24 @@ export const PiecesManager = () => {
                   hidden
                   onChange={(e) => handleUpload(e.target.files)}
                 />
-                <Button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  size="sm"
-                  className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
-                >
-                  <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => openPicker("gallery")}
+                    size="sm"
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                  >
+                    <Library className="h-3.5 w-3.5 mr-1" /> Histórico
+                  </Button>
+                  <Button
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    size="sm"
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 {editing
