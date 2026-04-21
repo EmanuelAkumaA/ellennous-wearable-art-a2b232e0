@@ -1436,6 +1436,17 @@ export const PiecesManager = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ImagePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        defaultMode={pickerMode}
+        alreadyUsedIds={new Set([
+          ...draftImages.map((d) => d.optimizedImageId),
+          ...(draftCover ? [draftCover.optimizedImageId] : []),
+        ])}
+        onConfirm={handlePickerConfirm}
+      />
     </div>
   );
 };
