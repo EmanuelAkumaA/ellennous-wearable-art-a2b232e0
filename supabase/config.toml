@@ -2,3 +2,6 @@ project_id = "tayitsyyyqskbmnmyljl"
 
 [functions.submit-review]
 verify_jwt = false
+
+[functions.optimize-image]
+verify_jwt = true
