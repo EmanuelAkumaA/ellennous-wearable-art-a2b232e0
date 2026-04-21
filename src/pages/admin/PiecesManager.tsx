@@ -760,6 +760,8 @@ export const PiecesManager = () => {
     setPickerMode(mode);
     setPickerOpen(true);
   };
+
+  const removeCover = async () => {
     // Draft cover (not yet persisted) — remove optimizer record + storage
     if (draftCover) {
       if (!confirm("Remover capa enviada?")) return;
