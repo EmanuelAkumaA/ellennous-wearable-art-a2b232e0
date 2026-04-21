@@ -16,6 +16,7 @@ const BULK_CONCURRENCY = 3;
 
 type SortMode = "recent" | "used";
 type ViewMode = "list" | "grid";
+type StatusFilter = "all" | "active" | "orphan";
 
 const runWithConcurrency = async <T,>(
   items: T[],
@@ -44,6 +45,7 @@ export const ImageOptimizer = () => {
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<SortMode>("recent");
   const [view, setView] = useState<ViewMode>("list");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [snippetTarget, setSnippetTarget] = useState<OptimizedImage | null>(null);
@@ -113,11 +115,25 @@ export const ImageOptimizer = () => {
   }, [sort]);
 
   const filtered = useMemo(() => {
-    if (!debounced) return items;
-    return items.filter(
-      (i) => i.name.toLowerCase().includes(debounced) || i.id.toLowerCase().includes(debounced),
-    );
-  }, [items, debounced]);
+    let out = items;
+    if (statusFilter === "active") {
+      out = out.filter((i) => pieceLinks.has(i.id) || i.used_count > 0);
+    } else if (statusFilter === "orphan") {
+      out = out.filter((i) => !pieceLinks.has(i.id) && i.used_count === 0);
+    }
+    if (debounced) {
+      out = out.filter(
+        (i) => i.name.toLowerCase().includes(debounced) || i.id.toLowerCase().includes(debounced),
+      );
+    }
+    return out;
+  }, [items, debounced, statusFilter, pieceLinks]);
+
+  const orphanCount = useMemo(
+    () => items.filter((i) => !pieceLinks.has(i.id) && i.used_count === 0).length,
+    [items, pieceLinks],
+  );
+  const activeCount = items.length - orphanCount;
 
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
