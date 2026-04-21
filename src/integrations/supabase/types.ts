@@ -195,6 +195,54 @@ export type Database = {
           },
         ]
       }
+      optimized_images: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          name: string
+          original_height: number | null
+          original_path: string
+          original_size_bytes: number
+          original_width: number | null
+          status: string
+          total_optimized_bytes: number | null
+          updated_at: string
+          used_count: number
+          variants: Json
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          name: string
+          original_height?: number | null
+          original_path: string
+          original_size_bytes: number
+          original_width?: number | null
+          status?: string
+          total_optimized_bytes?: number | null
+          updated_at?: string
+          used_count?: number
+          variants?: Json
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          name?: string
+          original_height?: number | null
+          original_path?: string
+          original_size_bytes?: number
+          original_width?: number | null
+          status?: string
+          total_optimized_bytes?: number | null
+          updated_at?: string
+          used_count?: number
+          variants?: Json
+        }
+        Relationships: []
+      }
       review_invites: {
         Row: {
           created_at: string

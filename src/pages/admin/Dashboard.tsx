@@ -5,11 +5,12 @@ import { PiecesManager } from "./PiecesManager";
 import { UserSettings } from "./UserSettings";
 import { StatsManager } from "./StatsManager";
 import { ReviewsManager } from "./ReviewsManager";
+import { ImageOptimizer } from "./ImageOptimizer";
 import { useAdminBackNavigation } from "@/hooks/useAdminBackNavigation";
 
 const ROOT_TAB: AdminTab = "pieces";
 const STORAGE_KEY = "ellennous:admin:lastTab";
-const VALID_TABS: AdminTab[] = ["pieces", "categories", "reviews", "stats", "user"];
+const VALID_TABS: AdminTab[] = ["pieces", "categories", "reviews", "stats", "optimizer", "user"];
 
 const readStoredTab = (): AdminTab => {
   if (typeof window === "undefined") return ROOT_TAB;
@@ -52,6 +53,7 @@ const AdminDashboard = () => {
       {tab === "categories" && <CategoriesManager />}
       {tab === "reviews" && <ReviewsManager />}
       {tab === "stats" && <StatsManager />}
+      {tab === "optimizer" && <ImageOptimizer />}
       {tab === "user" && <UserSettings />}
     </AdminShell>
   );
