@@ -24,6 +24,7 @@ import {
   Flame,
   ChevronUp,
   ChevronDown,
+  Library,
 } from "lucide-react";
 import {
   DndContext,
@@ -48,6 +49,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { uploadToOptimizer, getBestUrlForPiece } from "@/lib/optimizerUpload";
+import { ImagePicker, type PickedImage } from "@/components/admin/optimizer/ImagePicker";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
 
 interface Category { id: string; nome: string; }
@@ -383,6 +385,8 @@ export const PiecesManager = () => {
   // Optimizer-backed images uploaded in this modal session (rendered alongside saved ones).
   const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
   const [draftCover, setDraftCover] = useState<DraftCover | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"gallery" | "cover">("gallery");
 
   const flashMoved = (id: string) => {
     setRecentlyMovedId(null);
