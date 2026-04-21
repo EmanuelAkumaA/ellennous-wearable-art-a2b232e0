@@ -1,91 +1,71 @@
 
 
-## Plano: 4 melhorias no Otimizador + backfill da galeria
+## Plano: porcentagens por imagem + aviso final no Backfill
 
-### 1. Filtro "Apenas inativas (órfãs)" no Otimizador
+### 1. Progresso individual (download e otimização) por linha
 
-**Arquivo:** `src/pages/admin/ImageOptimizer.tsx`
+**Arquivos:** `src/lib/optimizerBackfill.ts`, `src/pages/admin/BackfillRunner.tsx`
 
-- Novo estado `statusFilter: "all" | "active" | "orphan"` ao lado dos filtros de ordenação.
-- Pílulas/tabs adicionais: **Todas · Na galeria · Órfãs**.
-- Lógica do `filtered`: imagem é "órfã" quando `pieceLinks.get(id)` é nulo **e** `used_count === 0`.
-- Quando `statusFilter === "orphan"`, expor um botão extra na barra de bulk: **"Selecionar todas órfãs"** (seleciona todas as visíveis filtradas → permite excluir em massa com 1 clique).
+- Adicionar campo `progress: number` (0–100) em `BackfillProgressItem`.
+- Em `migrateLegacyImage`:
+  - **Download (0–40%)**: usar `fetch` com leitura via `ReadableStream` + `Content-Length` para emitir `progress` em incrementos enquanto baixa o blob (mapeado para 0–40%).
+  - **Upload (40–60%)**: emitir 50% logo antes de chamar `uploadToOptimizer` e 60% logo após resolver (a SDK do Supabase Storage não expõe progresso nativo no browser; mantemos um pulso de 50% para feedback visual).
+  - **Otimização (60–99%)**: `waitForOptimization` recebe um `onPoll(elapsedMs)` que estima progresso baseado no tempo decorrido (assíntota até 99%) até o status virar `ready` → 100%.
+- Cada transição já chama `onStatus`; passamos `progress` no segundo argumento.
 
-### 2. Chips por dispositivo com economia (% smaller)
+### 2. UI por linha com barra de progresso e %
 
-**Arquivo:** `src/components/admin/optimizer/ImageRow.tsx`
+**Arquivo:** `src/pages/admin/BackfillRunner.tsx`
 
-- Cada `DeviceChip` (Mob/Tab/Desk) recebe uma nova linha de info com a economia comparada ao **original**:
-  ```
-  📱 Mob   42 KB   −78%
-  💻 Tab   98 KB   −52%
-  🖥 Desk  180 KB  −12%
-  ```
-- Cálculo: `savedPct = round((original_size_bytes − variant.size_bytes) / original_size_bytes * 100)`. Se negativo (variante maior que original — raro em widths altos), mostra `+X%` em amber.
-- Cor: verde para >50%, amber para 0–50%, destrutivo para crescimento.
-- Tooltip já existente passa a mostrar `{width}px · {format} · {original_size_bytes - variant.size_bytes formatBytes} economizados`.
+- Em `BackfillRow`, sob o nome da imagem, renderizar uma micro-barra `h-1` quando `status` ∈ {downloading, uploading, optimizing} com:
+  - largura animada controlada por `progress`
+  - rótulo à direita: `{progress}%` + verbo da etapa atual (ex: "Baixando 32%")
+- Quando `status === "done"`: mostrar "100% · concluída" em verde por ~2s.
 
-### 3. Botão "Reaproveitar imagem do histórico" no modal de obras
+### 3. Progresso global ponderado
 
-**Arquivo:** `src/pages/admin/PiecesManager.tsx` + novo `src/components/admin/optimizer/ImagePicker.tsx`
+**Arquivo:** `src/pages/admin/BackfillRunner.tsx`
 
-- No modal de obra, abaixo do botão de upload de **Galeria** e da seção de **Capa**, novo botão secundário: **"Reaproveitar do histórico"** (ícone `Library` ou `History`).
-- Clicar abre um `Dialog` (`ImagePicker`) com:
-  - Busca por nome/ID
-  - Filtro `status='ready'`, ordenação por mais recentes
-  - Grid de thumbnails 80×80 com checkbox para múltipla seleção
-  - Indicador visual quando já vinculada a outra obra ("Vinculada à obra X" — ainda assim selecionável: a vinculação se torna "compartilhada")
-  - Botão **Adicionar (N)** no rodapé
-- Ao confirmar:
-  - Para uso na **galeria**: cria draft `DraftImage` para cada imagem escolhida, reusando `optimizedImageId`, `originalPath`, `variants` e a melhor URL — não faz upload novo.
-  - Para uso como **capa**: separar com toggle no topo do picker (Capa | Galeria). Modo capa permite selecionar 1.
-- No save da obra: insere normalmente em `gallery_piece_images` usando a melhor URL. Não sobrescreve `optimized_images.piece_id` se já houver um (preserva vínculo original); pode usar coluna nova `used_count` incrementando para sinalizar reuso.
+- A barra de progresso global passa a usar a média de `progress` de todos os itens (em vez de só `done/total`), refletindo download + otimização em curso.
+- Mantém o número grande "Otimizadas: N/M" ao lado.
 
-### 4. Backfill: otimizar todas as 8 imagens já existentes na galeria
+### 4. Aviso visual quando tudo estiver pronto
 
-**Migração de dados via script no admin** (executável uma vez), arquivo novo: `src/pages/admin/BackfillRunner.tsx` — botão escondido no Dashboard ou rodando no mount do Otimizador caso `optimized_images.piece_id` ainda não cubra `gallery_piece_images`.
+**Arquivo:** `src/pages/admin/BackfillRunner.tsx`
 
-Fluxo automatizado (para cada `gallery_piece_images` cuja `storage_path` ainda não está no Otimizador):
-1. Baixa o blob da URL pública (`fetch`).
-2. Reconstrói um `File` e roda `uploadToOptimizer({ file, pieceId, role: 'gallery' })` — mesma função usada no modal.
-3. Após processado, atualiza `gallery_piece_images.url` para o JPEG 1200w novo (`getBestUrlForPiece`) e `storage_path` para o caminho otimizado. Mantém o original em `gallery/seed/` intocado (sem deletar — segurança).
-4. Para `cover_url` de `gallery_pieces`, repete o fluxo com `role: 'cover'` e atualiza `cover_url` + `cover_storage_path`.
-
-UI do backfill (página `/admin/backfill` ou banner no Otimizador):
-- Lista as imagens detectadas como "antigas" (`storage_path` começa com `seed/` ou bucket = gallery)
-- Botão **"Otimizar todas (N)"** com barra de progresso e concorrência 2
-- Linha por linha mostra status: pendente → enviando → otimizando → pronto → URL atualizada
-- Idempotente: se rodar de novo, pula imagens já vinculadas
-
-Após o backfill, `useGalleryData` (que já faz matching por basename) automaticamente serve as variantes AVIF/WebP no carrossel e nos thumbnails da grade.
-
----
+Quando `running` virar `false` e `stats.done === stats.total && stats.total > 0`:
+- **Toast** já existe; trocar por `sonner` para suportar ícone de sucesso e duração maior (6s).
+- Renderizar um **banner persistente** no topo (substitui o card azul informativo enquanto não for descartado): fundo `emerald/10`, ícone `CheckCircle2` grande, título **"Tudo otimizado!"**, descrição "As N imagens da galeria foram migradas para o pipeline. Recarregue o site público para ver os novos formatos AVIF/WebP." + botão **"Recarregar galeria"** (`window.location.reload()` em nova aba `/`) e **"Dispensar"**.
+- Som curto opcional (sino sutil via `new Audio()`) — *só se o user quiser; padrão desligado*.
 
 ### Detalhes técnicos
 
-- **Filtro "órfã" precisa do `pieceLinks`**: já está carregado em `ImageOptimizer.tsx`. Sem custo extra.
-- **% smaller**: `original_size_bytes` já existe na row; só precisa do cálculo no chip.
-- **ImagePicker modal**: reutiliza a mesma listagem do Otimizador (consulta `optimized_images` `status='ready'`), evita duplicar lógica criando hook `useOptimizedImages({ readyOnly: true })`.
-- **Backfill: por que client-side?** A edge function `optimize-image` exige que o original já esteja no bucket `optimized-images`. O cliente baixa do `gallery` bucket (público), reupload para `optimized-images`, e dispara a edge function — exatamente o caminho do upload normal.
-- **Atualização de URL não quebra nada**: o `useGalleryData` já trata fallback por basename; manter a URL antiga também funcionaria, mas atualizar para a JPEG otimizada melhora o LCP do fallback `<img>` interno do `<picture>`.
+- **Streamed fetch**: 
+  ```ts
+  const reader = resp.body!.getReader();
+  const total = Number(resp.headers.get("content-length")) || 0;
+  let received = 0;
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (total) onStatus("downloading", { progress: Math.round((received / total) * 40) });
+  }
+  const blob = new Blob(chunks, { type: ct });
+  ```
+- **Otimização estimada**: `progress = 60 + Math.min(38, Math.round(elapsedMs / 2500))` — chega a ~98% em ~95s, depois 100% no ready.
 
-### Arquivos modificados/criados
+### Arquivos editados
 
-**Novos:**
-- `src/components/admin/optimizer/ImagePicker.tsx` — dialog de seleção
-- `src/pages/admin/BackfillRunner.tsx` — UI de backfill (linkada no Dashboard como aba ou rota `/admin/backfill`)
-- `src/lib/optimizerBackfill.ts` — helper que detecta + processa imagens antigas
-
-**Editados:**
-- `src/pages/admin/ImageOptimizer.tsx` — filtro órfãs + tabs
-- `src/components/admin/optimizer/ImageRow.tsx` — chips com `−X%`
-- `src/pages/admin/PiecesManager.tsx` — botão "Reaproveitar do histórico" + integração com `ImagePicker`
-- `src/pages/admin/Dashboard.tsx` — registrar nova aba/rota do Backfill (provisório, removível depois)
+- `src/lib/optimizerBackfill.ts` — streamed fetch, polling com estimativa, novo campo `progress`
+- `src/pages/admin/BackfillRunner.tsx` — barra por linha + barra global ponderada + banner final + toast com sonner
 
 ### Validação
 
-1. **Filtro órfãs**: clicar em "Órfãs" → lista só imagens sem `piece_id` e `used_count=0`. Clicar "Selecionar todas órfãs" → "Excluir (N)" → todas somem.
-2. **% por chip**: ler chip Mobile mostra ex. `−78%` em verde; passando o mouse vê `400px · JPEG · 142 KB economizados`.
-3. **Reaproveitar**: criar nova obra, abrir picker, escolher 2 imagens existentes, salvar → `gallery_piece_images` recebe rows com URLs já otimizadas; nenhum upload novo aparece no Otimizador.
-4. **Backfill**: rodar uma vez → 8 imagens da galeria atual viram 8 rows `optimized_images` com `status='ready'` e `piece_id` setado; ao recarregar o site público, Network mostra AVIF/WebP em mobile e 1200w JPG em desktop para todas as obras.
+1. Rodar backfill: cada linha mostra "Baixando 12% → 40% → Enviando 50% → Otimizando 72% → Pronta 100%".
+2. Barra global cresce continuamente em vez de saltar entre 0% → 12% → 25%.
+3. Ao terminar todas: toast verde "Tudo otimizado" e banner persistente com botão de recarregar a galeria.
+4. Em caso de erro numa linha, ela mantém status "Erro", barra fica vermelha e a global ainda atinge 100% das demais.
 
