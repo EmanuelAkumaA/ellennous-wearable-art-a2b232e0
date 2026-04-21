@@ -280,6 +280,7 @@ export const Gallery = () => {
                 <PieceCarousel
                   key={selected.id}
                   images={selected.imagens}
+                  imagesData={selected.imagensData}
                   alt={selected.nome}
                   onZoom={openZoom}
                 />
