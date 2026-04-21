@@ -725,10 +725,28 @@ export const PiecesManager = () => {
 
 
   const removeCover = async () => {
+    // Draft cover (not yet persisted) — remove optimizer record + storage
+    if (draftCover) {
+      if (!confirm("Remover capa enviada?")) return;
+      try {
+        const folder = draftCover.originalPath.split("/").slice(0, -1).join("/");
+        const { data: list } = await supabase.storage.from("optimized-images").list(folder);
+        if (list?.length) {
+          await supabase.storage.from("optimized-images").remove(list.map((f) => `${folder}/${f.name}`));
+        }
+        await supabase.from("optimized_images").delete().eq("id", draftCover.optimizedImageId);
+      } catch (e) {
+        console.warn("Failed to clean draft cover:", e);
+      }
+      setDraftCover(null);
+      return;
+    }
     if (!editing || !editing.cover_url) return;
     if (!confirm("Remover imagem capa?")) return;
     if (editing.cover_storage_path) {
-      await supabase.storage.from("gallery").remove([editing.cover_storage_path]);
+      // legacy gallery bucket OR optimized-images path
+      const bucket = editing.cover_storage_path.startsWith("images/") ? "optimized-images" : "gallery";
+      await supabase.storage.from(bucket).remove([editing.cover_storage_path]);
     }
     const { error } = await supabase
       .from("gallery_pieces")
