@@ -1377,7 +1377,7 @@ export const PiecesManager = () => {
               disabled={saving}
               className="rounded-none font-accent tracking-[0.2em] uppercase text-xs px-6 bg-gradient-purple-wine hover:opacity-90 shadow-glow"
             >
-              {saving ? "Salvando…" : editing ? "Salvar alterações" : "Criar e gerenciar imagens"}
+              {saving ? "Salvando…" : editing ? "Salvar alterações" : "Salvar obra"}
             </Button>
           </div>
         </SheetContent>
