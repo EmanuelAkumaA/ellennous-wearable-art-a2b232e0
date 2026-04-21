@@ -47,9 +47,30 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { uploadToOptimizer, getBestUrlForPiece } from "@/lib/optimizerUpload";
+import type { OptimizedVariant } from "@/lib/imageSnippet";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
+
+// Draft images live in the modal state before the piece is saved (or as new uploads on edit).
+interface DraftImage {
+  optimizedImageId: string;
+  name: string;
+  previewUrl: string;          // current best preview (original → variant once ready)
+  status: "processing" | "ready" | "error";
+  variants: OptimizedVariant[];
+  ordem: number;
+  originalPath: string;
+}
+interface DraftCover {
+  optimizedImageId: string;
+  name: string;
+  previewUrl: string;
+  status: "processing" | "ready" | "error";
+  variants: OptimizedVariant[];
+  originalPath: string;
+}
 interface Piece {
   id: string;
   nome: string;
@@ -357,6 +378,12 @@ export const PiecesManager = () => {
   const [activePieceId, setActivePieceId] = useState<string | null>(null);
   const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
 
+  // Working piece id (a draft uuid for "create" mode, the real id for "edit").
+  const [workingPieceId, setWorkingPieceId] = useState<string | null>(null);
+  // Optimizer-backed images uploaded in this modal session (rendered alongside saved ones).
+  const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
+  const [draftCover, setDraftCover] = useState<DraftCover | null>(null);
+
   const flashMoved = (id: string) => {
     setRecentlyMovedId(null);
     // re-trigger animation on consecutive moves of the same id
@@ -442,6 +469,9 @@ export const PiecesManager = () => {
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyForm, categoria_id: categories[0]?.id ?? "" });
+    setWorkingPieceId(crypto.randomUUID());
+    setDraftImages([]);
+    setDraftCover(null);
     setCreating(true);
   };
 
@@ -452,10 +482,20 @@ export const PiecesManager = () => {
       conceito: p.conceito, historia: p.historia, tempo: p.tempo,
       destaque: p.destaque, novo: p.novo,
     });
+    setWorkingPieceId(p.id);
+    setDraftImages([]);
+    setDraftCover(null);
     setCreating(true);
   };
 
-  const closeForm = () => { setCreating(false); setEditing(null); setForm(emptyForm); };
+  const closeForm = () => {
+    setCreating(false);
+    setEditing(null);
+    setForm(emptyForm);
+    setWorkingPieceId(null);
+    setDraftImages([]);
+    setDraftCover(null);
+  };
 
   const guardOffline = () => {
     if (isOffline()) {
@@ -464,6 +504,51 @@ export const PiecesManager = () => {
     }
     return false;
   };
+
+  // Realtime: when an optimized_image used in this modal becomes ready, refresh its preview/variants.
+  useEffect(() => {
+    if (!workingPieceId) return;
+    const ids = new Set<string>();
+    draftImages.forEach((d) => ids.add(d.optimizedImageId));
+    if (draftCover) ids.add(draftCover.optimizedImageId);
+    if (ids.size === 0) return;
+
+    const channel = supabase
+      .channel(`opt_modal_${workingPieceId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "optimized_images" },
+        (payload) => {
+          const row = payload.new as {
+            id: string;
+            status: string;
+            variants: OptimizedVariant[] | null;
+          };
+          if (!ids.has(row.id)) return;
+          const variants = (row.variants ?? []) as OptimizedVariant[];
+          const status = (row.status as DraftImage["status"]) ?? "processing";
+          const bestPreview =
+            variants.find((v) => v.format === "webp" && v.width === 800)?.url ??
+            variants.find((v) => v.format === "jpeg" && v.width === 800)?.url;
+          setDraftImages((prev) =>
+            prev.map((d) =>
+              d.optimizedImageId === row.id
+                ? { ...d, status, variants, previewUrl: bestPreview ?? d.previewUrl }
+                : d,
+            ),
+          );
+          setDraftCover((prev) =>
+            prev && prev.optimizedImageId === row.id
+              ? { ...prev, status, variants, previewUrl: bestPreview ?? prev.previewUrl }
+              : prev,
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [workingPieceId, draftImages, draftCover]);
 
   const handleSave = async () => {
     if (guardOffline()) return;
@@ -480,16 +565,78 @@ export const PiecesManager = () => {
       destaque: form.destaque,
       novo: form.novo,
     };
-    const { error } = editing
-      ? await supabase.from("gallery_pieces").update(basePayload).eq("id", editing.id)
-      : await supabase.from("gallery_pieces").insert({ ...basePayload, ordem: pieces.length });
-    setSaving(false);
-    if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
-    toast({ title: editing ? "Atualizada" : "Criada" });
-    if (!editing) closeForm();
-    load();
-    if (editing) await refreshEditing(editing.id);
+
+    try {
+      let pieceId: string;
+
+      if (editing) {
+        const { error } = await supabase.from("gallery_pieces").update(basePayload).eq("id", editing.id);
+        if (error) throw error;
+        pieceId = editing.id;
+      } else {
+        const newId = workingPieceId ?? crypto.randomUUID();
+        const insertPayload: typeof basePayload & { id: string; ordem: number; cover_url?: string; cover_storage_path?: string } = {
+          ...basePayload,
+          id: newId,
+          ordem: pieces.length,
+        };
+        if (draftCover) {
+          insertPayload.cover_url = getBestUrlForPiece(draftCover.variants, draftCover.previewUrl);
+          insertPayload.cover_storage_path = draftCover.originalPath;
+        }
+        const { error } = await supabase.from("gallery_pieces").insert(insertPayload);
+        if (error) throw error;
+        pieceId = newId;
+      }
+
+      // Persist draft cover for edit mode (insert always handled above)
+      if (editing && draftCover) {
+        await supabase
+          .from("gallery_pieces")
+          .update({
+            cover_url: getBestUrlForPiece(draftCover.variants, draftCover.previewUrl),
+            cover_storage_path: draftCover.originalPath,
+          })
+          .eq("id", pieceId);
+      }
+
+      // Persist draft gallery images
+      if (draftImages.length > 0) {
+        const baseOrdem = editing?.gallery_piece_images.length ?? 0;
+        const rows = draftImages.map((d, idx) => ({
+          piece_id: pieceId,
+          url: getBestUrlForPiece(d.variants, d.previewUrl),
+          storage_path: d.originalPath,
+          ordem: baseOrdem + idx,
+        }));
+        const { error: imgErr } = await supabase.from("gallery_piece_images").insert(rows);
+        if (imgErr) throw imgErr;
+
+        // Make sure piece_id is set on the optimizer rows (in case row was created
+        // before workingPieceId existed — defensive).
+        const optIds = draftImages.map((d) => d.optimizedImageId);
+        await supabase
+          .from("optimized_images")
+          .update({ piece_id: pieceId })
+          .in("id", optIds);
+      }
+      if (draftCover) {
+        await supabase
+          .from("optimized_images")
+          .update({ piece_id: pieceId })
+          .eq("id", draftCover.optimizedImageId);
+      }
+
+      toast({ title: editing ? "Atualizada" : "Criada" });
+      setSaving(false);
+      closeForm();
+      load();
+    } catch (err) {
+      setSaving(false);
+      toast({ title: "Erro", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    }
   };
+
 
   const handleDelete = async (id: string) => {
     if (guardOffline()) return;
@@ -508,29 +655,39 @@ export const PiecesManager = () => {
 
   const handleUpload = async (files: FileList | null) => {
     if (guardOffline()) return;
-    if (!files || !editing) return;
+    if (!files || !workingPieceId) return;
     setUploading(true);
     try {
-      const baseOrdem = editing.gallery_piece_images.length;
-      let i = 0;
+      let baseOrdem = (editing?.gallery_piece_images.length ?? 0) + draftImages.length;
+      const newDrafts: DraftImage[] = [];
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("image/")) continue;
-        const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `pieces/${editing.id}/${Date.now()}-${i}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { upsert: false });
-        if (upErr) throw upErr;
-        const { data: pub } = supabase.storage.from("gallery").getPublicUrl(path);
-        const { error: insErr } = await supabase
-          .from("gallery_piece_images")
-          .insert({ piece_id: editing.id, url: pub.publicUrl, storage_path: path, ordem: baseOrdem + i });
-        if (insErr) throw insErr;
-        i++;
+        try {
+          const result = await uploadToOptimizer({
+            file,
+            pieceId: workingPieceId,
+            role: "gallery",
+          });
+          newDrafts.push({
+            optimizedImageId: result.optimizedImageId,
+            name: result.name,
+            previewUrl: result.originalUrl,
+            status: "processing",
+            variants: [],
+            ordem: baseOrdem++,
+            originalPath: result.originalPath,
+          });
+        } catch (e) {
+          toast({ title: "Falha no upload", description: (e as Error).message, variant: "destructive" });
+        }
       }
-      toast({ title: "Upload concluído" });
-      await refreshEditing(editing.id);
-      load();
-    } catch (err) {
-      toast({ title: "Erro no upload", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      if (newDrafts.length > 0) {
+        setDraftImages((prev) => [...prev, ...newDrafts]);
+        toast({
+          title: `${newDrafts.length} imagem(ns) enviada(s)`,
+          description: "Otimização rodando em segundo plano…",
+        });
+      }
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -538,27 +695,26 @@ export const PiecesManager = () => {
   };
 
   const handleCoverUpload = async (files: FileList | null) => {
-    if (!files || !editing) return;
+    if (guardOffline()) return;
+    if (!files || !workingPieceId) return;
     const file = files[0];
     if (!file || !file.type.startsWith("image/")) return;
     setCoverUploading(true);
     try {
-      if (editing.cover_storage_path) {
-        await supabase.storage.from("gallery").remove([editing.cover_storage_path]);
-      }
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `pieces/${editing.id}/cover-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("gallery").getPublicUrl(path);
-      const { error: updErr } = await supabase
-        .from("gallery_pieces")
-        .update({ cover_url: pub.publicUrl, cover_storage_path: path })
-        .eq("id", editing.id);
-      if (updErr) throw updErr;
-      toast({ title: "Capa atualizada" });
-      await refreshEditing(editing.id);
-      load();
+      const result = await uploadToOptimizer({
+        file,
+        pieceId: workingPieceId,
+        role: "cover",
+      });
+      setDraftCover({
+        optimizedImageId: result.optimizedImageId,
+        name: result.name,
+        previewUrl: result.originalUrl,
+        status: "processing",
+        variants: [],
+        originalPath: result.originalPath,
+      });
+      toast({ title: "Capa enviada", description: "Otimização rodando em segundo plano…" });
     } catch (err) {
       toast({ title: "Erro no upload da capa", description: err instanceof Error ? err.message : "", variant: "destructive" });
     } finally {
@@ -567,11 +723,30 @@ export const PiecesManager = () => {
     }
   };
 
+
   const removeCover = async () => {
+    // Draft cover (not yet persisted) — remove optimizer record + storage
+    if (draftCover) {
+      if (!confirm("Remover capa enviada?")) return;
+      try {
+        const folder = draftCover.originalPath.split("/").slice(0, -1).join("/");
+        const { data: list } = await supabase.storage.from("optimized-images").list(folder);
+        if (list?.length) {
+          await supabase.storage.from("optimized-images").remove(list.map((f) => `${folder}/${f.name}`));
+        }
+        await supabase.from("optimized_images").delete().eq("id", draftCover.optimizedImageId);
+      } catch (e) {
+        console.warn("Failed to clean draft cover:", e);
+      }
+      setDraftCover(null);
+      return;
+    }
     if (!editing || !editing.cover_url) return;
     if (!confirm("Remover imagem capa?")) return;
     if (editing.cover_storage_path) {
-      await supabase.storage.from("gallery").remove([editing.cover_storage_path]);
+      // legacy gallery bucket OR optimized-images path
+      const bucket = editing.cover_storage_path.startsWith("images/") ? "optimized-images" : "gallery";
+      await supabase.storage.from(bucket).remove([editing.cover_storage_path]);
     }
     const { error } = await supabase
       .from("gallery_pieces")
@@ -613,13 +788,33 @@ export const PiecesManager = () => {
 
   const removeImage = async (img: Image) => {
     if (!confirm("Remover esta imagem?")) return;
-    if (img.storage_path) await supabase.storage.from("gallery").remove([img.storage_path]);
+    if (img.storage_path) {
+      const bucket = img.storage_path.startsWith("images/") ? "optimized-images" : "gallery";
+      await supabase.storage.from(bucket).remove([img.storage_path]);
+    }
     const { error } = await supabase.from("gallery_piece_images").delete().eq("id", img.id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     if (editing) {
       setEditing({ ...editing, gallery_piece_images: editing.gallery_piece_images.filter((i) => i.id !== img.id) });
     }
     load();
+  };
+
+  const removeDraftImage = async (draftId: string) => {
+    if (!confirm("Remover esta imagem?")) return;
+    const target = draftImages.find((d) => d.optimizedImageId === draftId);
+    if (!target) return;
+    try {
+      const folder = target.originalPath.split("/").slice(0, -1).join("/");
+      const { data: list } = await supabase.storage.from("optimized-images").list(folder);
+      if (list?.length) {
+        await supabase.storage.from("optimized-images").remove(list.map((f) => `${folder}/${f.name}`));
+      }
+      await supabase.from("optimized_images").delete().eq("id", draftId);
+    } catch (e) {
+      console.warn("Failed to clean draft image:", e);
+    }
+    setDraftImages((prev) => prev.filter((d) => d.optimizedImageId !== draftId));
   };
 
   const handleImageDragStart = (event: DragStartEvent) => {
@@ -1012,117 +1207,160 @@ export const PiecesManager = () => {
               </div>
             </section>
 
-            {editing && (
-              <>
-                {/* Capa */}
-                <section className="space-y-4">
-                  <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
-                    <span className="h-px w-6 bg-primary-glow" /> Capa
-                  </h4>
-                  <p className="text-xs text-muted-foreground">
-                    Imagem usada como destaque nos cards. Você pode enviar uma capa dedicada ou clicar na ⭐ em uma
-                    imagem da galeria para promovê-la.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4 items-start">
-                    <div className="w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40 rounded overflow-hidden">
-                      {editing.cover_url ? (
-                        <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
-                      ) : (
-                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <input
-                        ref={coverRef}
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        onChange={(e) => handleCoverUpload(e.target.files)}
-                      />
-                      <Button
-                        onClick={() => coverRef.current?.click()}
-                        disabled={coverUploading}
-                        className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
-                      >
-                        <Upload className="h-4 w-4 mr-1" />
-                        {coverUploading ? "Enviando…" : editing.cover_url ? "Trocar capa" : "Enviar capa"}
-                      </Button>
-                      {editing.cover_url && (
-                        <Button
-                          variant="outline"
-                          onClick={removeCover}
-                          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" /> Remover capa
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </section>
-
-                {/* Galeria */}
-                <section className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
-                      <span className="h-px w-6 bg-primary-glow" /> Galeria
-                    </h4>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      hidden
-                      onChange={(e) => handleUpload(e.target.files)}
-                    />
-                    <Button
-                      onClick={() => fileRef.current?.click()}
-                      disabled={uploading}
-                      size="sm"
-                      className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
-                    >
-                      <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Arraste para reordenar · Clique na estrela para definir como capa
-                  </p>
-                  {editing.gallery_piece_images.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">Nenhuma imagem ainda.</p>
-                  ) : (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragStart={handleImageDragStart}
-                      onDragEnd={handleImageDragEnd}
-                      onDragCancel={() => setActiveImageId(null)}
-                    >
-                      <SortableContext
-                        items={editing.gallery_piece_images.map((i) => i.id)}
-                        strategy={rectSortingStrategy}
-                      >
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {editing.gallery_piece_images.map((img) => (
-                            <SortableImage
-                              key={img.id}
-                              img={img}
-                              onRemove={removeImage}
-                              onPromote={promoteToCover}
-                            />
-                          ))}
+            {/* Capa */}
+            <section className="space-y-4">
+              <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                <span className="h-px w-6 bg-primary-glow" /> Capa
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                Imagem usada como destaque nos cards. Otimizada automaticamente para mobile, tablet e desktop.
+                {editing && " Você também pode clicar na ⭐ em uma imagem da galeria para promovê-la."}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 items-start">
+                <div className="relative w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40 rounded overflow-hidden">
+                  {draftCover ? (
+                    <>
+                      <img src={draftCover.previewUrl} alt="Capa" className="w-full h-full object-cover" />
+                      {draftCover.status === "processing" && (
+                        <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1 text-primary-glow">
+                          <Sparkles className="h-4 w-4 animate-pulse" />
+                          <span className="font-accent text-[8px] tracking-[0.25em] uppercase">Otimizando</span>
                         </div>
-                      </SortableContext>
-                      <DragOverlay>
-                        {activeImage ? (
-                          <div className="aspect-square w-32 shadow-2xl ring-2 ring-primary/60 rounded">
-                            <img src={activeImage.url} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ) : null}
-                      </DragOverlay>
-                    </DndContext>
+                      )}
+                    </>
+                  ) : editing?.cover_url ? (
+                    <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
                   )}
-                </section>
-              </>
-            )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input
+                    ref={coverRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    hidden
+                    onChange={(e) => handleCoverUpload(e.target.files)}
+                  />
+                  <Button
+                    onClick={() => coverRef.current?.click()}
+                    disabled={coverUploading}
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    {coverUploading ? "Enviando…" : draftCover || editing?.cover_url ? "Trocar capa" : "Enviar capa"}
+                  </Button>
+                  {(draftCover || editing?.cover_url) && (
+                    <Button
+                      variant="outline"
+                      onClick={removeCover}
+                      className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" /> Remover capa
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Galeria */}
+            <section className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                  <span className="h-px w-6 bg-primary-glow" /> Galeria
+                </h4>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  hidden
+                  onChange={(e) => handleUpload(e.target.files)}
+                />
+                <Button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  size="sm"
+                  className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {editing
+                  ? "Arraste para reordenar imagens já salvas · Clique na estrela para definir como capa · Novas imagens são otimizadas em segundo plano."
+                  : "As imagens aparecem aqui durante o upload. A otimização roda em segundo plano e finaliza após salvar a obra."}
+              </p>
+
+              {/* Saved images (only present when editing) — sortable + promotable */}
+              {editing && editing.gallery_piece_images.length > 0 && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleImageDragStart}
+                  onDragEnd={handleImageDragEnd}
+                  onDragCancel={() => setActiveImageId(null)}
+                >
+                  <SortableContext
+                    items={editing.gallery_piece_images.map((i) => i.id)}
+                    strategy={rectSortingStrategy}
+                  >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {editing.gallery_piece_images.map((img) => (
+                        <SortableImage
+                          key={img.id}
+                          img={img}
+                          onRemove={removeImage}
+                          onPromote={promoteToCover}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                  <DragOverlay>
+                    {activeImage ? (
+                      <div className="aspect-square w-32 shadow-2xl ring-2 ring-primary/60 rounded">
+                        <img src={activeImage.url} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
+
+              {/* Draft (just-uploaded) images — render below saved ones */}
+              {draftImages.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {draftImages.map((d) => (
+                    <div
+                      key={d.optimizedImageId}
+                      className="relative aspect-square bg-secondary/30 group rounded-md overflow-hidden border border-primary/20"
+                    >
+                      <img src={d.previewUrl} alt={d.name} className="w-full h-full object-cover" />
+                      {d.status === "processing" && (
+                        <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1 text-primary-glow">
+                          <Sparkles className="h-4 w-4 animate-pulse" />
+                          <span className="font-accent text-[8px] tracking-[0.25em] uppercase">Otimizando</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => removeDraftImage(d.optimizedImageId)}
+                          title="Remover"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(!editing || editing.gallery_piece_images.length === 0) && draftImages.length === 0 && (
+                <p className="text-sm text-muted-foreground italic">Nenhuma imagem ainda.</p>
+              )}
+            </section>
+
           </div>
 
           {/* Sticky save bar */}
@@ -1139,7 +1377,7 @@ export const PiecesManager = () => {
               disabled={saving}
               className="rounded-none font-accent tracking-[0.2em] uppercase text-xs px-6 bg-gradient-purple-wine hover:opacity-90 shadow-glow"
             >
-              {saving ? "Salvando…" : editing ? "Salvar alterações" : "Criar e gerenciar imagens"}
+              {saving ? "Salvando…" : editing ? "Salvar alterações" : "Salvar obra"}
             </Button>
           </div>
         </SheetContent>

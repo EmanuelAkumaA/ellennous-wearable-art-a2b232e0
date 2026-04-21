@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare } from "lucide-react";
+import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare, LayoutGrid, List, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { UploadDropzone } from "@/components/admin/optimizer/UploadDropzone";
 import { ImageCard, type OptimizedImage } from "@/components/admin/optimizer/ImageCard";
+import { ImageRow, type PieceLink } from "@/components/admin/optimizer/ImageRow";
 import { CodeSnippetDialog } from "@/components/admin/optimizer/CodeSnippetDialog";
 import { ImageDetailSheet } from "@/components/admin/optimizer/ImageDetailSheet";
 import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 const BUCKET = "optimized-images";
 const BULK_CONCURRENCY = 3;
 
 type SortMode = "recent" | "used";
+type ViewMode = "list" | "grid";
 
-/** Run async tasks with a max concurrency limit. */
 const runWithConcurrency = async <T,>(
   items: T[],
   limit: number,
@@ -29,17 +29,21 @@ const runWithConcurrency = async <T,>(
       try {
         await fn(items[i], i);
       } catch {
-        /* swallowed; caller handles via state */
+        /* swallowed */
       }
     }
   });
   await Promise.all(workers);
 };
 
+type OptimizedImageWithLink = OptimizedImage & { piece_id?: string | null; image_role?: string | null };
+
 export const ImageOptimizer = () => {
-  const [items, setItems] = useState<OptimizedImage[]>([]);
+  const [items, setItems] = useState<OptimizedImageWithLink[]>([]);
+  const [pieceLinks, setPieceLinks] = useState<Map<string, PieceLink>>(new Map());
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<SortMode>("recent");
+  const [view, setView] = useState<ViewMode>("list");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [snippetTarget, setSnippetTarget] = useState<OptimizedImage | null>(null);
@@ -60,12 +64,34 @@ export const ImageOptimizer = () => {
     else query.order("used_count", { ascending: false }).order("created_at", { ascending: false });
     const { data, error } = await query;
     if (!error && data) {
-      setItems(
-        data.map((d) => ({
-          ...d,
-          variants: (d.variants as unknown as OptimizedVariant[]) ?? [],
-        })) as OptimizedImage[],
+      const mapped = data.map((d) => ({
+        ...d,
+        variants: (d.variants as unknown as OptimizedVariant[]) ?? [],
+      })) as OptimizedImageWithLink[];
+      setItems(mapped);
+
+      // Fetch piece names for items linked to a piece
+      const pieceIds = Array.from(
+        new Set(mapped.map((m) => m.piece_id).filter((v): v is string => !!v)),
       );
+      if (pieceIds.length > 0) {
+        const { data: pieces } = await supabase
+          .from("gallery_pieces")
+          .select("id, nome")
+          .in("id", pieceIds);
+        const linkMap = new Map<string, PieceLink>();
+        if (pieces) {
+          const byPiece = new Map(pieces.map((p) => [p.id, p.nome]));
+          for (const item of mapped) {
+            if (item.piece_id && byPiece.has(item.piece_id)) {
+              linkMap.set(item.id, { pieceId: item.piece_id, pieceName: byPiece.get(item.piece_id)! });
+            }
+          }
+        }
+        setPieceLinks(linkMap);
+      } else {
+        setPieceLinks(new Map());
+      }
     }
     setLoading(false);
   };
@@ -114,10 +140,7 @@ export const ImageOptimizer = () => {
     });
   };
 
-  const selectAllVisible = () => {
-    setSelectedIds(new Set(filtered.map((i) => i.id)));
-  };
-
+  const selectAllVisible = () => setSelectedIds(new Set(filtered.map((i) => i.id)));
   const clearSelection = () => setSelectedIds(new Set());
 
   const handleBulkReprocess = async () => {
@@ -126,14 +149,12 @@ export const ImageOptimizer = () => {
     setBulkBusy("reprocess");
     setBulkProgress({ done: 0, total: ids.length });
 
-    // Optimistic: mark as processing locally
     setItems((prev) =>
       prev.map((it) =>
         selectedIds.has(it.id) ? { ...it, status: "processing", error_message: null } : it,
       ),
     );
 
-    // Update DB rows
     await supabase
       .from("optimized_images")
       .update({ status: "processing", error_message: null })
@@ -207,14 +228,20 @@ export const ImageOptimizer = () => {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-3">
-        <Sparkles className="h-4 w-4 mt-0.5 text-primary-glow" />
+        <ImageIcon className="h-4 w-4 mt-0.5 text-primary-glow shrink-0" />
         <div className="text-xs text-muted-foreground leading-relaxed">
-          Cada imagem é processada em <strong className="text-foreground">12 variantes</strong> (4 larguras × AVIF/WebP/JPG).
-          O snippet gerado entrega o melhor formato suportado pelo navegador automaticamente, sem URL dinâmica.
+          As imagens são enviadas pelo modal de cada obra em <strong className="text-foreground">Criar e gerenciar Imagens</strong>.
+          Esta tela mostra o histórico, o estado de otimização e quais variantes (mobile/tablet/desktop) foram geradas.
         </div>
       </div>
 
-      <UploadDropzone onUploaded={load} />
+      <div className="rounded-lg border border-primary/10 bg-primary/[0.03] px-4 py-3 flex items-start gap-3">
+        <Sparkles className="h-4 w-4 mt-0.5 text-primary-glow shrink-0" />
+        <div className="text-xs text-muted-foreground leading-relaxed">
+          Cada imagem é processada em <strong className="text-foreground">12 variantes</strong> (4 larguras × AVIF/WebP/JPG).
+          O navegador escolhe automaticamente o melhor formato suportado em cada aparelho.
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Imagens" value={String(stats.count)} />
@@ -238,6 +265,28 @@ export const ImageOptimizer = () => {
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 h-9 text-sm"
           />
+        </div>
+        <div className="inline-flex rounded-md border border-border/60 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={`px-3 h-9 inline-flex items-center gap-1.5 text-xs font-accent tracking-[0.2em] uppercase transition-colors ${
+              view === "list" ? "bg-primary/15 text-primary-glow" : "text-muted-foreground hover:text-foreground"
+            }`}
+            aria-label="Visualização em lista"
+          >
+            <List className="h-3.5 w-3.5" /> Lista
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("grid")}
+            className={`px-3 h-9 inline-flex items-center gap-1.5 text-xs font-accent tracking-[0.2em] uppercase transition-colors ${
+              view === "grid" ? "bg-primary/15 text-primary-glow" : "text-muted-foreground hover:text-foreground"
+            }`}
+            aria-label="Visualização em grade"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" /> Grade
+          </button>
         </div>
       </div>
 
@@ -298,11 +347,19 @@ export const ImageOptimizer = () => {
       )}
 
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="aspect-square rounded-lg bg-secondary/30 animate-pulse" />
-          ))}
-        </div>
+        view === "grid" ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aspect-square rounded-lg bg-secondary/30 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-20 rounded-lg bg-secondary/30 animate-pulse" />
+            ))}
+          </div>
+        )
       ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/40 p-12 text-center">
           <Info className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
@@ -310,12 +367,28 @@ export const ImageOptimizer = () => {
             {items.length === 0 ? "Nenhuma imagem otimizada ainda." : "Nenhum resultado para a busca."}
           </p>
         </div>
-      ) : (
+      ) : view === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((img) => (
             <ImageCard
               key={img.id}
               image={img}
+              onOpenSnippet={setSnippetTarget}
+              onOpenDetail={setDetailTarget}
+              onChanged={load}
+              selected={selectedIds.has(img.id)}
+              onToggleSelect={toggleSelect}
+              selectionMode={selectionCount > 0}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((img) => (
+            <ImageRow
+              key={img.id}
+              image={img}
+              pieceLink={pieceLinks.get(img.id) ?? null}
               onOpenSnippet={setSnippetTarget}
               onOpenDetail={setDetailTarget}
               onChanged={load}
