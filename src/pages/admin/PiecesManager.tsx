@@ -47,9 +47,30 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { uploadToOptimizer, getBestUrlForPiece } from "@/lib/optimizerUpload";
+import type { OptimizedVariant } from "@/lib/imageSnippet";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
+
+// Draft images live in the modal state before the piece is saved (or as new uploads on edit).
+interface DraftImage {
+  optimizedImageId: string;
+  name: string;
+  previewUrl: string;          // current best preview (original → variant once ready)
+  status: "processing" | "ready" | "error";
+  variants: OptimizedVariant[];
+  ordem: number;
+  originalPath: string;
+}
+interface DraftCover {
+  optimizedImageId: string;
+  name: string;
+  previewUrl: string;
+  status: "processing" | "ready" | "error";
+  variants: OptimizedVariant[];
+  originalPath: string;
+}
 interface Piece {
   id: string;
   nome: string;
