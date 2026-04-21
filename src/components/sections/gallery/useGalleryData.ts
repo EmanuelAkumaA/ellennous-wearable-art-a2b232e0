@@ -50,6 +50,7 @@ const buildPieces = (
       url,
       variants: findVariantsForUrl(url, optimizedMap),
     }));
+    const capaVariants = capa ? findVariantsForUrl(capa, optimizedMap) : null;
     return {
       id: p.id,
       nome: p.nome,
@@ -57,6 +58,7 @@ const buildPieces = (
       imagens: urls,
       imagensData,
       capa,
+      capaVariants,
       descricao: p.descricao ?? "",
       conceito: p.conceito ?? "",
       historia: p.historia ?? "",
