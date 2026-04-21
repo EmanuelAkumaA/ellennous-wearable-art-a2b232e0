@@ -727,8 +727,39 @@ export const PiecesManager = () => {
     }
   };
 
+  const handlePickerConfirm = (picked: PickedImage[], mode: "gallery" | "cover") => {
+    if (picked.length === 0) return;
+    if (mode === "cover") {
+      const p = picked[0];
+      setDraftCover({
+        optimizedImageId: p.optimizedImageId,
+        name: p.name,
+        previewUrl: p.previewUrl,
+        status: "ready",
+        variants: p.variants,
+        originalPath: p.originalPath,
+      });
+      toast({ title: "Capa adicionada do histórico" });
+      return;
+    }
+    let baseOrdem = (editing?.gallery_piece_images.length ?? 0) + draftImages.length;
+    const newDrafts: DraftImage[] = picked.map((p) => ({
+      optimizedImageId: p.optimizedImageId,
+      name: p.name,
+      previewUrl: p.previewUrl,
+      status: "ready",
+      variants: p.variants,
+      ordem: baseOrdem++,
+      originalPath: p.originalPath,
+    }));
+    setDraftImages((prev) => [...prev, ...newDrafts]);
+    toast({ title: `${picked.length} imagem(ns) adicionada(s) do histórico` });
+  };
 
-  const removeCover = async () => {
+  const openPicker = (mode: "gallery" | "cover") => {
+    setPickerMode(mode);
+    setPickerOpen(true);
+  };
     // Draft cover (not yet persisted) — remove optimizer record + storage
     if (draftCover) {
       if (!confirm("Remover capa enviada?")) return;
