@@ -30,6 +30,7 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
   const [snapCount, setSnapCount] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const pauseTimeoutRef = useRef<number | null>(null);
 
   const pauseAutoplay = useCallback(() => {
@@ -55,10 +56,17 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
       setSnapCount(api.scrollSnapList().length);
       setProgress(0);
     };
+    const onPointerDown = () => {
+      setIsDragging(true);
+      pauseAutoplay();
+    };
+    const onSettle = () => setIsDragging(false);
+
     update();
     api.on("select", update);
     api.on("reInit", update);
-    api.on("pointerDown", pauseAutoplay);
+    api.on("pointerDown", onPointerDown);
+    api.on("settle", onSettle);
 
     const startTimer = window.setTimeout(() => {
       api.reInit();
@@ -70,7 +78,8 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
       window.clearTimeout(startTimer);
       api.off("select", update);
       api.off("reInit", update);
-      api.off("pointerDown", pauseAutoplay);
+      api.off("pointerDown", onPointerDown);
+      api.off("settle", onSettle);
     };
   }, [api, pauseAutoplay]);
 
@@ -84,25 +93,56 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
   }, []);
 
   // Animate progress bar in sync with autoplay
+  // Uses RAF on desktop, lighter setInterval on mobile, pauses while dragging or hidden
   useEffect(() => {
-    if (!api || images.length <= 1) return;
+    if (!api || images.length <= 1 || isDragging || isPaused) return;
+
+    const ap = autoplay.current as unknown as {
+      isPlaying?: () => boolean;
+      timeUntilNext?: () => number | null;
+    };
+
     let raf = 0;
-    const tick = () => {
-      const ap = autoplay.current as unknown as {
-        isPlaying?: () => boolean;
-        timeUntilNext?: () => number | null;
-      };
+    let intervalId: number | null = null;
+    let stopped = false;
+
+    const computeProgress = () => {
       const playing = ap.isPlaying?.() ?? false;
       const remaining = ap.timeUntilNext?.();
       if (playing && typeof remaining === "number" && remaining >= 0) {
         const pct = Math.max(0, Math.min(100, 100 - (remaining / AUTOPLAY_DELAY) * 100));
         setProgress(pct);
       }
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [api, images.length]);
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (raf) cancelAnimationFrame(raf);
+        if (intervalId != null) window.clearInterval(intervalId);
+        stopped = true;
+      }
+    };
+
+    if (isMobile) {
+      intervalId = window.setInterval(computeProgress, 50);
+    } else {
+      const tick = () => {
+        if (stopped) return;
+        computeProgress();
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    }
+
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      stopped = true;
+      if (raf) cancelAnimationFrame(raf);
+      if (intervalId != null) window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [api, images.length, isMobile, isDragging, isPaused]);
 
   const canZoom = !isMobile;
   const cursorClass = canZoom ? "cursor-zoom-in" : "cursor-default";
@@ -117,6 +157,8 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
         src={images[0]}
         alt={alt}
         loading="lazy"
+        decoding="async"
+        fetchPriority="high"
         onClick={() => handleImageClick(0)}
         className={`w-full h-full object-cover ${cursorClass}`}
       />
@@ -128,25 +170,52 @@ export const PieceCarousel = ({ images, alt, onZoom }: PieceCarouselProps) => {
     api?.scrollTo(i);
   };
 
+  // Adjacent slide indices (with loop wrap) for eager loading
+  const isAdjacent = (i: number) => {
+    if (i === selectedIndex) return true;
+    const total = images.length;
+    const prev = (selectedIndex - 1 + total) % total;
+    const next = (selectedIndex + 1) % total;
+    return i === prev || i === next;
+  };
+
   return (
     <Carousel
-      opts={{ align: "start", loop: true, dragFree: false, containScroll: "trimSnaps" }}
+      opts={{
+        align: "start",
+        loop: true,
+        dragFree: false,
+        containScroll: "trimSnaps",
+        duration: 20,
+        skipSnaps: false,
+        watchDrag: true,
+      }}
       plugins={[autoplay.current]}
       setApi={setApi}
       className="w-full h-full"
+      style={{ contain: "layout paint" }}
     >
-      <CarouselContent className="h-full">
-        {images.map((src, i) => (
-          <CarouselItem key={i} className="h-full">
-            <img
-              src={src}
-              alt={`${alt} — imagem ${i + 1}`}
-              loading="lazy"
-              onClick={() => handleImageClick(i)}
-              className={`w-full h-full object-cover aspect-square md:aspect-auto ${cursorClass}`}
-            />
-          </CarouselItem>
-        ))}
+      <CarouselContent
+        className="h-full"
+        style={{ willChange: isDragging ? "transform" : "auto" }}
+      >
+        {images.map((src, i) => {
+          const active = i === selectedIndex;
+          const adjacent = isAdjacent(i);
+          return (
+            <CarouselItem key={i} className="h-full">
+              <img
+                src={src}
+                alt={`${alt} — imagem ${i + 1}`}
+                loading={adjacent ? "eager" : "lazy"}
+                decoding="async"
+                fetchPriority={active ? "high" : "low"}
+                onClick={() => handleImageClick(i)}
+                className={`w-full h-full object-cover aspect-square md:aspect-auto ${cursorClass}`}
+              />
+            </CarouselItem>
+          );
+        })}
       </CarouselContent>
       <CarouselPrevious
         onClick={pauseAutoplay}
