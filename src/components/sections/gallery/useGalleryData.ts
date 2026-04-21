@@ -15,6 +15,7 @@ export interface PieceData {
   imagens: string[];
   imagensData: PieceImageData[];
   capa: string;
+  capaVariants: OptimizedVariant[] | null;
   descricao: string;
   conceito: string;
   historia: string;
