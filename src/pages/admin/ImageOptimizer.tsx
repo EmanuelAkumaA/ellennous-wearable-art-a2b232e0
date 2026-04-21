@@ -455,4 +455,29 @@ const StatCard = ({ label, value, highlight }: { label: string; value: string; h
   </div>
 );
 
+const FilterPill = ({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-3 h-9 inline-flex items-center gap-1.5 font-accent tracking-[0.2em] uppercase text-[11px] transition-colors ${
+      active ? "bg-primary/15 text-primary-glow" : "text-muted-foreground hover:text-foreground"
+    }`}
+  >
+    <span>{label}</span>
+    <span className={`text-[10px] tabular-nums ${active ? "text-primary-glow" : "text-muted-foreground/60"}`}>
+      {count}
+    </span>
+  </button>
+);
+
 export default ImageOptimizer;
