@@ -136,7 +136,7 @@ const downloadWithProgress = async (
       }
     }
   }
-  return new Blob(chunks, { type: ct });
+  return new Blob(chunks as BlobPart[], { type: ct });
 };
 
 const waitForOptimization = async (
