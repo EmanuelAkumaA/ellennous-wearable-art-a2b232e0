@@ -1287,6 +1287,13 @@ export const PiecesManager = () => {
                     <Upload className="h-4 w-4 mr-1" />
                     {coverUploading ? "Enviando…" : draftCover || editing?.cover_url ? "Trocar capa" : "Enviar capa"}
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => openPicker("cover")}
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                  >
+                    <Library className="h-4 w-4 mr-1" /> Reaproveitar do histórico
+                  </Button>
                   {(draftCover || editing?.cover_url) && (
                     <Button
                       variant="outline"
