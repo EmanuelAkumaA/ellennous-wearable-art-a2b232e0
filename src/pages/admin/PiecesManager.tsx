@@ -378,6 +378,12 @@ export const PiecesManager = () => {
   const [activePieceId, setActivePieceId] = useState<string | null>(null);
   const [recentlyMovedId, setRecentlyMovedId] = useState<string | null>(null);
 
+  // Working piece id (a draft uuid for "create" mode, the real id for "edit").
+  const [workingPieceId, setWorkingPieceId] = useState<string | null>(null);
+  // Optimizer-backed images uploaded in this modal session (rendered alongside saved ones).
+  const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
+  const [draftCover, setDraftCover] = useState<DraftCover | null>(null);
+
   const flashMoved = (id: string) => {
     setRecentlyMovedId(null);
     // re-trigger animation on consecutive moves of the same id
