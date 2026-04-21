@@ -655,29 +655,39 @@ export const PiecesManager = () => {
 
   const handleUpload = async (files: FileList | null) => {
     if (guardOffline()) return;
-    if (!files || !editing) return;
+    if (!files || !workingPieceId) return;
     setUploading(true);
     try {
-      const baseOrdem = editing.gallery_piece_images.length;
-      let i = 0;
+      let baseOrdem = (editing?.gallery_piece_images.length ?? 0) + draftImages.length;
+      const newDrafts: DraftImage[] = [];
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("image/")) continue;
-        const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `pieces/${editing.id}/${Date.now()}-${i}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { upsert: false });
-        if (upErr) throw upErr;
-        const { data: pub } = supabase.storage.from("gallery").getPublicUrl(path);
-        const { error: insErr } = await supabase
-          .from("gallery_piece_images")
-          .insert({ piece_id: editing.id, url: pub.publicUrl, storage_path: path, ordem: baseOrdem + i });
-        if (insErr) throw insErr;
-        i++;
+        try {
+          const result = await uploadToOptimizer({
+            file,
+            pieceId: workingPieceId,
+            role: "gallery",
+          });
+          newDrafts.push({
+            optimizedImageId: result.optimizedImageId,
+            name: result.name,
+            previewUrl: result.originalUrl,
+            status: "processing",
+            variants: [],
+            ordem: baseOrdem++,
+            originalPath: result.originalPath,
+          });
+        } catch (e) {
+          toast({ title: "Falha no upload", description: (e as Error).message, variant: "destructive" });
+        }
       }
-      toast({ title: "Upload concluído" });
-      await refreshEditing(editing.id);
-      load();
-    } catch (err) {
-      toast({ title: "Erro no upload", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      if (newDrafts.length > 0) {
+        setDraftImages((prev) => [...prev, ...newDrafts]);
+        toast({
+          title: `${newDrafts.length} imagem(ns) enviada(s)`,
+          description: "Otimização rodando em segundo plano…",
+        });
+      }
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -685,27 +695,26 @@ export const PiecesManager = () => {
   };
 
   const handleCoverUpload = async (files: FileList | null) => {
-    if (!files || !editing) return;
+    if (guardOffline()) return;
+    if (!files || !workingPieceId) return;
     const file = files[0];
     if (!file || !file.type.startsWith("image/")) return;
     setCoverUploading(true);
     try {
-      if (editing.cover_storage_path) {
-        await supabase.storage.from("gallery").remove([editing.cover_storage_path]);
-      }
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `pieces/${editing.id}/cover-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("gallery").upload(path, file, { upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("gallery").getPublicUrl(path);
-      const { error: updErr } = await supabase
-        .from("gallery_pieces")
-        .update({ cover_url: pub.publicUrl, cover_storage_path: path })
-        .eq("id", editing.id);
-      if (updErr) throw updErr;
-      toast({ title: "Capa atualizada" });
-      await refreshEditing(editing.id);
-      load();
+      const result = await uploadToOptimizer({
+        file,
+        pieceId: workingPieceId,
+        role: "cover",
+      });
+      setDraftCover({
+        optimizedImageId: result.optimizedImageId,
+        name: result.name,
+        previewUrl: result.originalUrl,
+        status: "processing",
+        variants: [],
+        originalPath: result.originalPath,
+      });
+      toast({ title: "Capa enviada", description: "Otimização rodando em segundo plano…" });
     } catch (err) {
       toast({ title: "Erro no upload da capa", description: err instanceof Error ? err.message : "", variant: "destructive" });
     } finally {
@@ -713,6 +722,7 @@ export const PiecesManager = () => {
       if (coverRef.current) coverRef.current.value = "";
     }
   };
+
 
   const removeCover = async () => {
     if (!editing || !editing.cover_url) return;
