@@ -24,6 +24,7 @@ import {
   Flame,
   ChevronUp,
   ChevronDown,
+  Library,
 } from "lucide-react";
 import {
   DndContext,
@@ -48,6 +49,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { uploadToOptimizer, getBestUrlForPiece } from "@/lib/optimizerUpload";
+import { ImagePicker, type PickedImage } from "@/components/admin/optimizer/ImagePicker";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
 
 interface Category { id: string; nome: string; }
@@ -383,6 +385,8 @@ export const PiecesManager = () => {
   // Optimizer-backed images uploaded in this modal session (rendered alongside saved ones).
   const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
   const [draftCover, setDraftCover] = useState<DraftCover | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"gallery" | "cover">("gallery");
 
   const flashMoved = (id: string) => {
     setRecentlyMovedId(null);
@@ -723,6 +727,39 @@ export const PiecesManager = () => {
     }
   };
 
+  const handlePickerConfirm = (picked: PickedImage[], mode: "gallery" | "cover") => {
+    if (picked.length === 0) return;
+    if (mode === "cover") {
+      const p = picked[0];
+      setDraftCover({
+        optimizedImageId: p.optimizedImageId,
+        name: p.name,
+        previewUrl: p.previewUrl,
+        status: "ready",
+        variants: p.variants,
+        originalPath: p.originalPath,
+      });
+      toast({ title: "Capa adicionada do histórico" });
+      return;
+    }
+    let baseOrdem = (editing?.gallery_piece_images.length ?? 0) + draftImages.length;
+    const newDrafts: DraftImage[] = picked.map((p) => ({
+      optimizedImageId: p.optimizedImageId,
+      name: p.name,
+      previewUrl: p.previewUrl,
+      status: "ready",
+      variants: p.variants,
+      ordem: baseOrdem++,
+      originalPath: p.originalPath,
+    }));
+    setDraftImages((prev) => [...prev, ...newDrafts]);
+    toast({ title: `${picked.length} imagem(ns) adicionada(s) do histórico` });
+  };
+
+  const openPicker = (mode: "gallery" | "cover") => {
+    setPickerMode(mode);
+    setPickerOpen(true);
+  };
 
   const removeCover = async () => {
     // Draft cover (not yet persisted) — remove optimizer record + storage
@@ -1250,6 +1287,13 @@ export const PiecesManager = () => {
                     <Upload className="h-4 w-4 mr-1" />
                     {coverUploading ? "Enviando…" : draftCover || editing?.cover_url ? "Trocar capa" : "Enviar capa"}
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => openPicker("cover")}
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                  >
+                    <Library className="h-4 w-4 mr-1" /> Reaproveitar do histórico
+                  </Button>
                   {(draftCover || editing?.cover_url) && (
                     <Button
                       variant="outline"
@@ -1277,14 +1321,24 @@ export const PiecesManager = () => {
                   hidden
                   onChange={(e) => handleUpload(e.target.files)}
                 />
-                <Button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  size="sm"
-                  className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
-                >
-                  <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => openPicker("gallery")}
+                    size="sm"
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                  >
+                    <Library className="h-3.5 w-3.5 mr-1" /> Histórico
+                  </Button>
+                  <Button
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    size="sm"
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 {editing
@@ -1382,6 +1436,17 @@ export const PiecesManager = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ImagePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        defaultMode={pickerMode}
+        alreadyUsedIds={new Set([
+          ...draftImages.map((d) => d.optimizedImageId),
+          ...(draftCover ? [draftCover.optimizedImageId] : []),
+        ])}
+        onConfirm={handlePickerConfirm}
+      />
     </div>
   );
 };

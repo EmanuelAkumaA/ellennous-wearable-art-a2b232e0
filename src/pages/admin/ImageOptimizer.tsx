@@ -16,6 +16,7 @@ const BULK_CONCURRENCY = 3;
 
 type SortMode = "recent" | "used";
 type ViewMode = "list" | "grid";
+type StatusFilter = "all" | "active" | "orphan";
 
 const runWithConcurrency = async <T,>(
   items: T[],
@@ -44,6 +45,7 @@ export const ImageOptimizer = () => {
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<SortMode>("recent");
   const [view, setView] = useState<ViewMode>("list");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [snippetTarget, setSnippetTarget] = useState<OptimizedImage | null>(null);
@@ -113,11 +115,25 @@ export const ImageOptimizer = () => {
   }, [sort]);
 
   const filtered = useMemo(() => {
-    if (!debounced) return items;
-    return items.filter(
-      (i) => i.name.toLowerCase().includes(debounced) || i.id.toLowerCase().includes(debounced),
-    );
-  }, [items, debounced]);
+    let out = items;
+    if (statusFilter === "active") {
+      out = out.filter((i) => pieceLinks.has(i.id) || i.used_count > 0);
+    } else if (statusFilter === "orphan") {
+      out = out.filter((i) => !pieceLinks.has(i.id) && i.used_count === 0);
+    }
+    if (debounced) {
+      out = out.filter(
+        (i) => i.name.toLowerCase().includes(debounced) || i.id.toLowerCase().includes(debounced),
+      );
+    }
+    return out;
+  }, [items, debounced, statusFilter, pieceLinks]);
+
+  const orphanCount = useMemo(
+    () => items.filter((i) => !pieceLinks.has(i.id) && i.used_count === 0).length,
+    [items, pieceLinks],
+  );
+  const activeCount = items.length - orphanCount;
 
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
@@ -290,6 +306,28 @@ export const ImageOptimizer = () => {
         </div>
       </div>
 
+      {/* Status filter pills */}
+      <div className="inline-flex rounded-md border border-border/60 overflow-hidden text-xs">
+        <FilterPill
+          active={statusFilter === "all"}
+          onClick={() => setStatusFilter("all")}
+          label="Todas"
+          count={items.length}
+        />
+        <FilterPill
+          active={statusFilter === "active"}
+          onClick={() => setStatusFilter("active")}
+          label="Na galeria"
+          count={activeCount}
+        />
+        <FilterPill
+          active={statusFilter === "orphan"}
+          onClick={() => setStatusFilter("orphan")}
+          label="Órfãs"
+          count={orphanCount}
+        />
+      </div>
+
       {/* Bulk action bar */}
       {selectionCount > 0 && (
         <div className="sticky top-0 z-20 -mx-2 px-2">
@@ -415,6 +453,31 @@ const StatCard = ({ label, value, highlight }: { label: string; value: string; h
     <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground">{label}</p>
     <p className={`font-display text-xl mt-1 ${highlight ? "text-primary-glow" : ""}`}>{value}</p>
   </div>
+);
+
+const FilterPill = ({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-3 h-9 inline-flex items-center gap-1.5 font-accent tracking-[0.2em] uppercase text-[11px] transition-colors ${
+      active ? "bg-primary/15 text-primary-glow" : "text-muted-foreground hover:text-foreground"
+    }`}
+  >
+    <span>{label}</span>
+    <span className={`text-[10px] tabular-nums ${active ? "text-primary-glow" : "text-muted-foreground/60"}`}>
+      {count}
+    </span>
+  </button>
 );
 
 export default ImageOptimizer;
