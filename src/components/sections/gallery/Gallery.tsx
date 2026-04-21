@@ -6,6 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { buildWhatsAppLink } from "@/components/FloatingWhatsApp";
 import { Dragon } from "@/components/Dragon";
 import { PieceCarousel } from "./PieceCarousel";
+import { ResponsivePicture } from "@/components/ui/responsive-picture";
 import { ZoomOverlay } from "./ZoomOverlay";
 import { useGalleryData, type PieceData } from "./useGalleryData";
 import { trackPieceEvent } from "@/lib/analytics";
@@ -214,12 +215,14 @@ export const Gallery = () => {
                   style={isNew ? { animationDelay: `${delay}ms` } : undefined}
                   className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
                 >
-                  <img
+                  <ResponsivePicture
                     src={piece.capa || piece.imagens[0]}
+                    variants={piece.capaVariants}
                     alt={`${piece.nome} — ${piece.categoria}`}
                     loading="lazy"
                     width={1024}
                     height={1280}
+                    sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 420px"
                     className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />

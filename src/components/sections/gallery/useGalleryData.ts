@@ -15,6 +15,7 @@ export interface PieceData {
   imagens: string[];
   imagensData: PieceImageData[];
   capa: string;
+  capaVariants: OptimizedVariant[] | null;
   descricao: string;
   conceito: string;
   historia: string;
@@ -49,6 +50,7 @@ const buildPieces = (
       url,
       variants: findVariantsForUrl(url, optimizedMap),
     }));
+    const capaVariants = capa ? findVariantsForUrl(capa, optimizedMap) : null;
     return {
       id: p.id,
       nome: p.nome,
@@ -56,6 +58,7 @@ const buildPieces = (
       imagens: urls,
       imagensData,
       capa,
+      capaVariants,
       descricao: p.descricao ?? "",
       conceito: p.conceito ?? "",
       historia: p.historia ?? "",
