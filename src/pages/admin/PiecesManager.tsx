@@ -1207,117 +1207,160 @@ export const PiecesManager = () => {
               </div>
             </section>
 
-            {editing && (
-              <>
-                {/* Capa */}
-                <section className="space-y-4">
-                  <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
-                    <span className="h-px w-6 bg-primary-glow" /> Capa
-                  </h4>
-                  <p className="text-xs text-muted-foreground">
-                    Imagem usada como destaque nos cards. Você pode enviar uma capa dedicada ou clicar na ⭐ em uma
-                    imagem da galeria para promovê-la.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4 items-start">
-                    <div className="w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40 rounded overflow-hidden">
-                      {editing.cover_url ? (
-                        <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
-                      ) : (
-                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <input
-                        ref={coverRef}
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        onChange={(e) => handleCoverUpload(e.target.files)}
-                      />
-                      <Button
-                        onClick={() => coverRef.current?.click()}
-                        disabled={coverUploading}
-                        className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
-                      >
-                        <Upload className="h-4 w-4 mr-1" />
-                        {coverUploading ? "Enviando…" : editing.cover_url ? "Trocar capa" : "Enviar capa"}
-                      </Button>
-                      {editing.cover_url && (
-                        <Button
-                          variant="outline"
-                          onClick={removeCover}
-                          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" /> Remover capa
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </section>
-
-                {/* Galeria */}
-                <section className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
-                      <span className="h-px w-6 bg-primary-glow" /> Galeria
-                    </h4>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      hidden
-                      onChange={(e) => handleUpload(e.target.files)}
-                    />
-                    <Button
-                      onClick={() => fileRef.current?.click()}
-                      disabled={uploading}
-                      size="sm"
-                      className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
-                    >
-                      <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Arraste para reordenar · Clique na estrela para definir como capa
-                  </p>
-                  {editing.gallery_piece_images.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">Nenhuma imagem ainda.</p>
-                  ) : (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragStart={handleImageDragStart}
-                      onDragEnd={handleImageDragEnd}
-                      onDragCancel={() => setActiveImageId(null)}
-                    >
-                      <SortableContext
-                        items={editing.gallery_piece_images.map((i) => i.id)}
-                        strategy={rectSortingStrategy}
-                      >
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {editing.gallery_piece_images.map((img) => (
-                            <SortableImage
-                              key={img.id}
-                              img={img}
-                              onRemove={removeImage}
-                              onPromote={promoteToCover}
-                            />
-                          ))}
+            {/* Capa */}
+            <section className="space-y-4">
+              <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                <span className="h-px w-6 bg-primary-glow" /> Capa
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                Imagem usada como destaque nos cards. Otimizada automaticamente para mobile, tablet e desktop.
+                {editing && " Você também pode clicar na ⭐ em uma imagem da galeria para promovê-la."}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 items-start">
+                <div className="relative w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40 rounded overflow-hidden">
+                  {draftCover ? (
+                    <>
+                      <img src={draftCover.previewUrl} alt="Capa" className="w-full h-full object-cover" />
+                      {draftCover.status === "processing" && (
+                        <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1 text-primary-glow">
+                          <Sparkles className="h-4 w-4 animate-pulse" />
+                          <span className="font-accent text-[8px] tracking-[0.25em] uppercase">Otimizando</span>
                         </div>
-                      </SortableContext>
-                      <DragOverlay>
-                        {activeImage ? (
-                          <div className="aspect-square w-32 shadow-2xl ring-2 ring-primary/60 rounded">
-                            <img src={activeImage.url} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ) : null}
-                      </DragOverlay>
-                    </DndContext>
+                      )}
+                    </>
+                  ) : editing?.cover_url ? (
+                    <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
                   )}
-                </section>
-              </>
-            )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input
+                    ref={coverRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    hidden
+                    onChange={(e) => handleCoverUpload(e.target.files)}
+                  />
+                  <Button
+                    onClick={() => coverRef.current?.click()}
+                    disabled={coverUploading}
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    {coverUploading ? "Enviando…" : draftCover || editing?.cover_url ? "Trocar capa" : "Enviar capa"}
+                  </Button>
+                  {(draftCover || editing?.cover_url) && (
+                    <Button
+                      variant="outline"
+                      onClick={removeCover}
+                      className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" /> Remover capa
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Galeria */}
+            <section className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="font-accent text-[11px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+                  <span className="h-px w-6 bg-primary-glow" /> Galeria
+                </h4>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  hidden
+                  onChange={(e) => handleUpload(e.target.files)}
+                />
+                <Button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  size="sm"
+                  className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {editing
+                  ? "Arraste para reordenar imagens já salvas · Clique na estrela para definir como capa · Novas imagens são otimizadas em segundo plano."
+                  : "As imagens aparecem aqui durante o upload. A otimização roda em segundo plano e finaliza após salvar a obra."}
+              </p>
+
+              {/* Saved images (only present when editing) — sortable + promotable */}
+              {editing && editing.gallery_piece_images.length > 0 && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleImageDragStart}
+                  onDragEnd={handleImageDragEnd}
+                  onDragCancel={() => setActiveImageId(null)}
+                >
+                  <SortableContext
+                    items={editing.gallery_piece_images.map((i) => i.id)}
+                    strategy={rectSortingStrategy}
+                  >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {editing.gallery_piece_images.map((img) => (
+                        <SortableImage
+                          key={img.id}
+                          img={img}
+                          onRemove={removeImage}
+                          onPromote={promoteToCover}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                  <DragOverlay>
+                    {activeImage ? (
+                      <div className="aspect-square w-32 shadow-2xl ring-2 ring-primary/60 rounded">
+                        <img src={activeImage.url} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
+
+              {/* Draft (just-uploaded) images — render below saved ones */}
+              {draftImages.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {draftImages.map((d) => (
+                    <div
+                      key={d.optimizedImageId}
+                      className="relative aspect-square bg-secondary/30 group rounded-md overflow-hidden border border-primary/20"
+                    >
+                      <img src={d.previewUrl} alt={d.name} className="w-full h-full object-cover" />
+                      {d.status === "processing" && (
+                        <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1 text-primary-glow">
+                          <Sparkles className="h-4 w-4 animate-pulse" />
+                          <span className="font-accent text-[8px] tracking-[0.25em] uppercase">Otimizando</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => removeDraftImage(d.optimizedImageId)}
+                          title="Remover"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(!editing || editing.gallery_piece_images.length === 0) && draftImages.length === 0 && (
+                <p className="text-sm text-muted-foreground italic">Nenhuma imagem ainda.</p>
+              )}
+            </section>
+
           </div>
 
           {/* Sticky save bar */}
