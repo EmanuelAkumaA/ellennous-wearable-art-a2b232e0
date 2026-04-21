@@ -1,116 +1,91 @@
 
 
-## Plano: integrar otimização ao modal de "Nova obra" + reformular histórico do Otimizador
+## Plano: 4 melhorias no Otimizador + backfill da galeria
 
-### O que muda na UX
-
-**Antes:** Cria obra → salva → reabre → faz upload de capa/imagens em outro bucket (`gallery`) → não otimiza.
-
-**Depois:** Abre "Nova obra" → preenche identidade + capa + galeria (tudo no mesmo modal, mesmo antes de salvar) → ao soltar uma imagem ela já vai para o pipeline do Otimizador em segundo plano → quando salvar, a obra é criada e as imagens (já otimizadas ou em processamento) são vinculadas.
-
----
-
-### Parte 1 — Modal "Nova obra" gerencia capa + galeria desde o início
-
-**Arquivo:** `src/pages/admin/PiecesManager.tsx`
-
-- **Remover** o botão `"Criar e gerenciar imagens"` como rótulo e a lógica `{editing && (…)}` que esconde as seções **Capa** e **Galeria** durante a criação. Essas seções passam a aparecer sempre.
-- Botão final do modal vira simplesmente **"Salvar obra"** / **"Salvar alterações"**.
-- Para suportar "obra ainda não criada", adicionar estado local `draftPieceId: string | null` — gerado com `crypto.randomUUID()` no momento que o usuário abre "Nova obra". Esse ID é usado tanto para o caminho do storage quanto como `id` da row de `gallery_pieces` no momento do save (passamos o id explícito no insert).
-- Adicionar estado local `draftCover` e `draftImages` (arrays em memória) que armazenam:
-  - `{ optimizedImageId, name, previewUrl, status, ordem }` para cada imagem subida
-  - Antes de salvar a obra, ficam só no estado React.
-  - No momento do save: insere `gallery_pieces` com o `draftPieceId` e em seguida insere as `gallery_piece_images` (e atualiza `cover_url`) usando as URLs **das variantes otimizadas** (jpeg 1200w como `url`, ou fallback para original enquanto estiver processando).
-
-**Fluxo de upload no modal (substitui `handleUpload` e `handleCoverUpload`):**
-
-1. User seleciona arquivo(s) no modal.
-2. Cliente roda exatamente o mesmo fluxo do `UploadDropzone` atual, mas marcando metadados extras (ver Parte 3): sobe original em `optimized-images/images/{newId}/original.{ext}`, insere row em `optimized_images` com `status='processing'` + `piece_draft_id = draftPieceId` + `image_role = 'cover' | 'gallery'`, dispara `optimize-image` em background.
-3. Adiciona à lista local `draftImages` (ou define `draftCover`) com preview imediato (object URL + URL pública do original).
-4. Realtime channel já existente em `useGalleryData` cobre o site público. No modal, dispara `setDraftImages` reactivo escutando `optimized_images` para `piece_draft_id = draftPieceId` para atualizar o preview quando ficar `ready`.
-
-**Ao salvar obra:**
-
-- `INSERT INTO gallery_pieces (id, ...)` com `draftPieceId`.
-- Para cada imagem no `draftImages`: `INSERT INTO gallery_piece_images (piece_id, url, storage_path, ordem)` onde `url` é a **JPEG 1200w** otimizada (ou a URL pública do original como fallback se ainda processando — o map por basename do `useGalleryData` já cuida de servir variantes assim que ficarem prontas).
-- Para a capa: atualiza `cover_url` da row recém-criada.
-- Atualiza no banco: `optimized_images SET piece_id = draftPieceId, used_count = 1` para todas as imagens vinculadas (marca como "ativas").
-
-**Ao editar uma obra existente:** mesma UI; uploads novos seguem o mesmo fluxo, mas usando o `editing.id` no lugar de `draftPieceId`.
-
----
-
-### Parte 2 — Histórico do Otimizador em modo lista, com aparelhos e marcador ativo/desativado
+### 1. Filtro "Apenas inativas (órfãs)" no Otimizador
 
 **Arquivo:** `src/pages/admin/ImageOptimizer.tsx`
 
-- Manter as estatísticas e a barra de bulk no topo. Remover a `UploadDropzone` (uploads agora vêm do modal de obras). Manter aviso explicando que o upload migrou.
-- Adicionar **toggle de visualização** (Grid / Lista) ao lado dos filtros. Padrão: **Lista** (atende ao briefing).
+- Novo estado `statusFilter: "all" | "active" | "orphan"` ao lado dos filtros de ordenação.
+- Pílulas/tabs adicionais: **Todas · Na galeria · Órfãs**.
+- Lógica do `filtered`: imagem é "órfã" quando `pieceLinks.get(id)` é nulo **e** `used_count === 0`.
+- Quando `statusFilter === "orphan"`, expor um botão extra na barra de bulk: **"Selecionar todas órfãs"** (seleciona todas as visíveis filtradas → permite excluir em massa com 1 clique).
 
-**Novo componente:** `src/components/admin/optimizer/ImageRow.tsx`
-- Layout: `flex` de uma linha por imagem
-- Coluna 1 — **Pré-via** (thumb 64×64) usando a variante webp 400w
-- Coluna 2 — **Nome + ID truncado**
-- Coluna 3 — **Tamanhos por aparelho** (3 chips lado a lado):
-  - 📱 **Mobile**: tamanho da JPEG 400w (ex: `42 KB`)
-  - 💻 **Tablet**: JPEG 800w (ex: `98 KB`)
-  - 🖥️ **Desktop**: JPEG 1200w (ex: `180 KB`)
-  - cada chip mostra `{width}px · {format}` no hover
-- Coluna 4 — **Marcador ativo/desativado**: 
-  - Switch (`@/components/ui/switch`) que reflete `used_count > 0` e/ou existência da row vinculada em `gallery_piece_images` por basename
-  - Label visual: ✅ "Na galeria" (verde) ou ⭕ "Inativa" (cinza)
-  - Toggle só altera `used_count` (não remove da obra) — clicável apenas quando a imagem **não está vinculada a uma obra**; quando vinculada, vira readonly com tooltip "Vinculada à obra X"
-- Coluna 5 — Ações compactas (Código, Detalhes, Reprocessar, Excluir) — ícones só, sem texto
-- Checkbox de seleção idêntico ao do `ImageCard` no canto esquerdo
+### 2. Chips por dispositivo com economia (% smaller)
 
-**Detecção de "ativo" (vinculação real):** carregar uma vez no mount um `Map<optimizedImageId, { pieceId, pieceName }>` consultando `gallery_piece_images` + `gallery_pieces` e cruzando por `piece_id` da `optimized_images` (nova coluna — Parte 3) ou, fallback, por basename matching com URLs em `gallery_piece_images`/`cover_url`. Esse map alimenta o badge "Vinculada à obra X".
+**Arquivo:** `src/components/admin/optimizer/ImageRow.tsx`
+
+- Cada `DeviceChip` (Mob/Tab/Desk) recebe uma nova linha de info com a economia comparada ao **original**:
+  ```
+  📱 Mob   42 KB   −78%
+  💻 Tab   98 KB   −52%
+  🖥 Desk  180 KB  −12%
+  ```
+- Cálculo: `savedPct = round((original_size_bytes − variant.size_bytes) / original_size_bytes * 100)`. Se negativo (variante maior que original — raro em widths altos), mostra `+X%` em amber.
+- Cor: verde para >50%, amber para 0–50%, destrutivo para crescimento.
+- Tooltip já existente passa a mostrar `{width}px · {format} · {original_size_bytes - variant.size_bytes formatBytes} economizados`.
+
+### 3. Botão "Reaproveitar imagem do histórico" no modal de obras
+
+**Arquivo:** `src/pages/admin/PiecesManager.tsx` + novo `src/components/admin/optimizer/ImagePicker.tsx`
+
+- No modal de obra, abaixo do botão de upload de **Galeria** e da seção de **Capa**, novo botão secundário: **"Reaproveitar do histórico"** (ícone `Library` ou `History`).
+- Clicar abre um `Dialog` (`ImagePicker`) com:
+  - Busca por nome/ID
+  - Filtro `status='ready'`, ordenação por mais recentes
+  - Grid de thumbnails 80×80 com checkbox para múltipla seleção
+  - Indicador visual quando já vinculada a outra obra ("Vinculada à obra X" — ainda assim selecionável: a vinculação se torna "compartilhada")
+  - Botão **Adicionar (N)** no rodapé
+- Ao confirmar:
+  - Para uso na **galeria**: cria draft `DraftImage` para cada imagem escolhida, reusando `optimizedImageId`, `originalPath`, `variants` e a melhor URL — não faz upload novo.
+  - Para uso como **capa**: separar com toggle no topo do picker (Capa | Galeria). Modo capa permite selecionar 1.
+- No save da obra: insere normalmente em `gallery_piece_images` usando a melhor URL. Não sobrescreve `optimized_images.piece_id` se já houver um (preserva vínculo original); pode usar coluna nova `used_count` incrementando para sinalizar reuso.
+
+### 4. Backfill: otimizar todas as 8 imagens já existentes na galeria
+
+**Migração de dados via script no admin** (executável uma vez), arquivo novo: `src/pages/admin/BackfillRunner.tsx` — botão escondido no Dashboard ou rodando no mount do Otimizador caso `optimized_images.piece_id` ainda não cubra `gallery_piece_images`.
+
+Fluxo automatizado (para cada `gallery_piece_images` cuja `storage_path` ainda não está no Otimizador):
+1. Baixa o blob da URL pública (`fetch`).
+2. Reconstrói um `File` e roda `uploadToOptimizer({ file, pieceId, role: 'gallery' })` — mesma função usada no modal.
+3. Após processado, atualiza `gallery_piece_images.url` para o JPEG 1200w novo (`getBestUrlForPiece`) e `storage_path` para o caminho otimizado. Mantém o original em `gallery/seed/` intocado (sem deletar — segurança).
+4. Para `cover_url` de `gallery_pieces`, repete o fluxo com `role: 'cover'` e atualiza `cover_url` + `cover_storage_path`.
+
+UI do backfill (página `/admin/backfill` ou banner no Otimizador):
+- Lista as imagens detectadas como "antigas" (`storage_path` começa com `seed/` ou bucket = gallery)
+- Botão **"Otimizar todas (N)"** com barra de progresso e concorrência 2
+- Linha por linha mostra status: pendente → enviando → otimizando → pronto → URL atualizada
+- Idempotente: se rodar de novo, pula imagens já vinculadas
+
+Após o backfill, `useGalleryData` (que já faz matching por basename) automaticamente serve as variantes AVIF/WebP no carrossel e nos thumbnails da grade.
 
 ---
 
-### Parte 3 — Pequeno schema add (sem migration de dados, só colunas opcionais)
+### Detalhes técnicos
 
-**Migration nova:**
-```sql
-alter table public.optimized_images
-  add column if not exists piece_id uuid,
-  add column if not exists image_role text;  -- 'cover' | 'gallery' | null (uploads avulsos do dropzone, retro)
+- **Filtro "órfã" precisa do `pieceLinks`**: já está carregado em `ImageOptimizer.tsx`. Sem custo extra.
+- **% smaller**: `original_size_bytes` já existe na row; só precisa do cálculo no chip.
+- **ImagePicker modal**: reutiliza a mesma listagem do Otimizador (consulta `optimized_images` `status='ready'`), evita duplicar lógica criando hook `useOptimizedImages({ readyOnly: true })`.
+- **Backfill: por que client-side?** A edge function `optimize-image` exige que o original já esteja no bucket `optimized-images`. O cliente baixa do `gallery` bucket (público), reupload para `optimized-images`, e dispara a edge function — exatamente o caminho do upload normal.
+- **Atualização de URL não quebra nada**: o `useGalleryData` já trata fallback por basename; manter a URL antiga também funcionaria, mas atualizar para a JPEG otimizada melhora o LCP do fallback `<img>` interno do `<picture>`.
 
-create index if not exists idx_optimized_images_piece_id
-  on public.optimized_images(piece_id);
-```
-
-Sem FK para evitar bloqueio quando uma obra é deletada (a row da imagem otimizada pode sobreviver como histórico). Quando uma obra é apagada, um trigger `on delete` em `gallery_pieces` opcionalmente zera `piece_id` (incluído na migration).
-
-Esse vínculo direto torna o histórico do Otimizador 100% determinístico: "esta imagem pertence à obra X" ↔ status ativo no marcador.
-
----
-
-### Parte 4 — Limpeza/auxiliares
-
-- **Remover** o `UploadDropzone` da `ImageOptimizer.tsx` (uploads passam a vir do modal de obras). O componente em si pode ficar no projeto (não removo), mas a aba não exibe mais.
-- Adicionar no topo da aba um aviso curto:  
-  > _As imagens são enviadas pelo modal de cada obra em **Criar e gerenciar Imagens**. Esta tela mostra o histórico e o estado de otimização._
-- O snippet de copiar continua funcionando como hoje (útil para usos avulsos no futuro).
-
----
-
-### Arquivos modificados / criados
+### Arquivos modificados/criados
 
 **Novos:**
-- `supabase/migrations/{timestamp}_optimized_images_piece_link.sql`
-- `src/components/admin/optimizer/ImageRow.tsx` — visualização em lista
+- `src/components/admin/optimizer/ImagePicker.tsx` — dialog de seleção
+- `src/pages/admin/BackfillRunner.tsx` — UI de backfill (linkada no Dashboard como aba ou rota `/admin/backfill`)
+- `src/lib/optimizerBackfill.ts` — helper que detecta + processa imagens antigas
 
 **Editados:**
-- `src/pages/admin/PiecesManager.tsx` — modal mostra Capa + Galeria sempre; novo fluxo de upload integrado ao Otimizador; estado de draft
-- `src/pages/admin/ImageOptimizer.tsx` — toggle Grid/Lista, remove dropzone, banner explicativo, fetch de vínculo com obras
-- `src/components/admin/optimizer/ImageCard.tsx` — apenas pequeno ajuste para receber `pieceLink` e mostrar tag "Obra: X"
-- `src/integrations/supabase/types.ts` — gerado automaticamente pela migration
+- `src/pages/admin/ImageOptimizer.tsx` — filtro órfãs + tabs
+- `src/components/admin/optimizer/ImageRow.tsx` — chips com `−X%`
+- `src/pages/admin/PiecesManager.tsx` — botão "Reaproveitar do histórico" + integração com `ImagePicker`
+- `src/pages/admin/Dashboard.tsx` — registrar nova aba/rota do Backfill (provisório, removível depois)
 
 ### Validação
 
-1. **Modal nova obra**: ao abrir, seções "Capa" e "Galeria" aparecem imediatamente. Subir 3 imagens → cada uma já entra no Otimizador com `status='processing'` e `image_role='gallery'`. Salvar → `gallery_pieces` é criada e `gallery_piece_images` ficam vinculadas. Ao recarregar a página pública, as imagens são servidas em AVIF/WebP via o map por basename.
-2. **Capa no modal**: subir 1 imagem na seção Capa → `image_role='cover'`. Ao salvar, `cover_url` aponta para a JPEG 1200w (ou original como fallback temporário). Ao terminar a otimização, `<picture>` no carrossel/grid já serve as variantes.
-3. **Histórico em lista**: aba Otimizador no modo lista mostra cada imagem com pré-via, três chips de peso (mobile/tablet/desktop) e o switch ✅ "Na galeria" ativo para imagens que vieram via modal de obras. Imagens antigas avulsas aparecem como ⭕ "Inativa".
-4. **Excluir obra**: trigger zera `piece_id` da row otimizada → switch passa a "Inativa" mas o histórico mantém o registro.
-5. **Mobile**: todo o fluxo funciona em viewport 390px (lista vira cards empilhados em `< sm`).
+1. **Filtro órfãs**: clicar em "Órfãs" → lista só imagens sem `piece_id` e `used_count=0`. Clicar "Selecionar todas órfãs" → "Excluir (N)" → todas somem.
+2. **% por chip**: ler chip Mobile mostra ex. `−78%` em verde; passando o mouse vê `400px · JPEG · 142 KB economizados`.
+3. **Reaproveitar**: criar nova obra, abrir picker, escolher 2 imagens existentes, salvar → `gallery_piece_images` recebe rows com URLs já otimizadas; nenhum upload novo aparece no Otimizador.
+4. **Backfill**: rodar uma vez → 8 imagens da galeria atual viram 8 rows `optimized_images` com `status='ready'` e `piece_id` setado; ao recarregar o site público, Network mostra AVIF/WebP em mobile e 1200w JPG em desktop para todas as obras.
 
