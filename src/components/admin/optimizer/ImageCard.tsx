@@ -24,11 +24,14 @@ interface ImageCardProps {
   onOpenSnippet: (img: OptimizedImage) => void;
   onOpenDetail: (img: OptimizedImage) => void;
   onChanged: () => void;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  selectionMode?: boolean;
 }
 
 const BUCKET = "optimized-images";
 
-export const ImageCard = ({ image, onOpenSnippet, onOpenDetail, onChanged }: ImageCardProps) => {
+export const ImageCard = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected = false, onToggleSelect, selectionMode = false }: ImageCardProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
 
   const previewUrl =
