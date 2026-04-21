@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Code2, Trash2, RefreshCw, Loader2, Star, AlertCircle, CheckCircle2, Eye } from "lucide-react";
+import { Code2, Trash2, RefreshCw, Loader2, Star, AlertCircle, CheckCircle2, Eye, CheckSquare, Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
@@ -96,8 +96,41 @@ export const ImageCard = ({ image, onOpenSnippet, onOpenDetail, onChanged, selec
     }
   };
 
+  const handleCardBackgroundClick = (e: React.MouseEvent) => {
+    if (!selectionMode || !onToggleSelect) return;
+    // Only toggle when clicking the card surface itself, not buttons/inputs/imgs
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, a, picture, img")) return;
+    onToggleSelect(image.id);
+  };
+
   return (
-    <div className="group relative rounded-lg border border-border/40 bg-card/40 backdrop-blur overflow-hidden hover:border-primary/40 transition-colors">
+    <div
+      onClick={handleCardBackgroundClick}
+      className={`group relative rounded-lg border bg-card/40 backdrop-blur overflow-hidden transition-all ${
+        selected
+          ? "border-primary ring-2 ring-primary/60"
+          : "border-border/40 hover:border-primary/40"
+      } ${selectionMode ? "cursor-pointer" : ""}`}
+    >
+      {onToggleSelect && (
+        <label
+          className={`absolute top-2 left-2 z-30 flex items-center justify-center h-6 w-6 rounded-md border bg-background/80 backdrop-blur cursor-pointer transition-all ${
+            selected ? "border-primary bg-primary text-primary-foreground" : "border-border/60 hover:border-primary/60"
+          } ${selectionMode || selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(image.id)}
+            className="sr-only"
+            aria-label={selected ? "Desmarcar imagem" : "Selecionar imagem"}
+          />
+          {selected && <CheckSquare className="h-3.5 w-3.5" />}
+          {!selected && <Square className="h-3.5 w-3.5 text-muted-foreground" />}
+        </label>
+      )}
       <div className="relative aspect-square bg-secondary/30">
         {image.status === "processing" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
