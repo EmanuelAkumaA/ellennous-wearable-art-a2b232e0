@@ -1,44 +1,66 @@
 
 
-## Plano: Indicador de seções + fix de travamento no mobile
+## Plano: Otimizar transição de imagens do carrossel no mobile
 
-### 1. Indicador visual de seções preenchidas
+### Diagnóstico
 
-No header do modal (logo abaixo do nome da obra), adicionar uma linha discreta de 4 micro-pontos — um para cada seção possível (Descrição, Conceito, História, Tempo). Cada ponto tem dois estados:
+No mobile (390px), a transição entre imagens do carrossel da obra está lenta e travando. Causas identificadas no código atual:
 
-- **Preenchido** (`bg-primary-glow`, opacidade total) → seção tem conteúdo
-- **Vazio** (`bg-muted-foreground/30`, sem brilho) → seção sem conteúdo
+1. **Imagens em alta resolução sem versão otimizada para mobile** — `loading="lazy"` ajuda no carregamento inicial, mas as imagens são as mesmas do desktop (até 1024×1280px), pesadas para decodificar em CPU mobile a cada swipe.
+2. **Sem `decoding="async"`** — o navegador decodifica as imagens de forma síncrona durante o swipe, bloqueando o thread principal e causando o travamento perceptível.
+3. **Animação de progresso roda em `requestAnimationFrame` contínuo** mesmo com 1 frame por slide — no mobile isso compete com o gesto de swipe.
+4. **`transition-transform duration-1000` nas thumbs do grid** continua rodando enquanto o modal abre.
+5. **Embla sem otimizações para touch** — falta `duration` reduzido e `skipSnaps` para resposta mais rápida ao gesto.
 
-Tooltip nativo (`title="Descrição"`) em cada ponto para acessibilidade. Visualmente fica um traço sutil tipo "•••○" que comunica de relance o que está disponível, sem competir com o título.
+### Correções
 
-Posicionamento: flex row com `gap-1.5`, abaixo do `<h3>` e acima do `<Accordion>`, com `mb-4`.
+**Arquivo:** `src/components/sections/gallery/PieceCarousel.tsx`
 
-### 2. Fade no accordion (revalidação)
+1. **Adicionar `decoding="async"` e `fetchPriority`** nas tags `<img>`:
+   - Imagem ativa: `fetchPriority="high"`, `decoding="async"`
+   - Demais imagens: `fetchPriority="low"`, `decoding="async"`
+   - Isso evita bloqueio do thread principal durante o swipe.
 
-A animação já foi configurada na rodada anterior em `tailwind.config.ts` com opacity nos keyframes. Vou **verificar** se está realmente ativa e, se necessário, garantir que `AccordionContent` (em `src/components/ui/accordion.tsx`) não tenha `overflow-hidden` cortando a transição de opacidade durante o slide. Se o componente estiver aplicando `overflow-hidden` no wrapper externo (que é o que recebe a animação), está tudo certo — só preciso confirmar visualmente que a opacidade está aparecendo. Se não estiver, adiciono `transition-opacity duration-300` direto no children container.
+2. **Pre-carregar imagens adjacentes (próxima/anterior)** com `loading="eager"` apenas para o slide atual ±1; manter `loading="lazy"` para o restante. Reduz o "branco" entre slides.
 
-### 3. Travamento no mobile (carrossel da obra)
+3. **Otimizar opções do Embla para mobile:**
+   ```ts
+   opts={{
+     align: "start",
+     loop: true,
+     dragFree: false,
+     containScroll: "trimSnaps",
+     duration: 20,        // padrão é 25 — mais responsivo
+     skipSnaps: false,
+     watchDrag: true,
+   }}
+   ```
+   `duration: 20` deixa a transição ~20% mais rápida sem perder suavidade.
 
-Causa identificada (390px viewport): o `PieceCarousel` dentro do `DialogContent` tem `aspect-square md:aspect-auto`, mas o **DialogContent** está com `max-h-[90vh] overflow-y-auto`. No mobile, o conteúdo total (imagem quadrada de ~390px + texto + accordion) ultrapassa 90vh, então o usuário precisa scrollar **vertical**. Mas o carrossel internamente captura gestos **horizontais** com Embla, e o navegador fica confuso entre scroll vertical da modal e swipe horizontal do carrossel — resultado: a tela "trava" em alguns toques.
+4. **Pausar a animação do progresso (`requestAnimationFrame`) quando o documento estiver hidden ou durante o gesto de drag.** Adicionar listener `pointerDown` que cancela o `raf` e `pointerUp` que retoma — assim o gesto não compete com o frame loop.
 
-**Correção** sem mexer na imagem nem no layout visual:
+5. **Reduzir trabalho do progress bar no mobile:** trocar atualização por RAF para `setInterval` de ~50ms (20fps) apenas quando `isMobile` — invisível ao olho mas muito mais leve.
 
-- Adicionar `touch-action: pan-y` no container do carrossel (`<div className="relative aspect-square md:aspect-auto bg-secondary/30">`) → diz ao browser "este elemento só recebe pan vertical do sistema; o pan horizontal é da aplicação". Isso elimina a briga de gestos.
-- O Embla, internamente, escuta `pointerdown/move/up` — não depende de touch-action para funcionar. Continua reconhecendo swipe horizontal.
-- Adicionar `overscroll-behavior: contain` no `DialogContent` para que o scroll da modal não "vaze" para o body (que também trava em alguns Androids).
-- Verificar se `PieceCarousel` está com `dragFree: false` e `containScroll: "trimSnaps"` — se não estiver, ajustar para reduzir jitter no fim do swipe.
+6. **Adicionar `will-change: transform` no `CarouselContent` apenas durante o swipe** (via classe que entra no `pointerDown` e sai no `select`). Isso promove a layer pra GPU só quando necessário, sem manter compositing custoso permanente.
 
-Resultado: scroll vertical da modal flui livre, swipe horizontal do carrossel funciona, sem travamento.
+7. **Adicionar `contain: layout paint` no container do carrossel** para isolar repaints do resto do modal durante o swipe.
 
-### Arquivos modificados
+### Detalhes técnicos
 
-- `src/components/sections/gallery/Gallery.tsx` — indicador de pontos no header + classes `touch-pan-y` e `overscroll-contain`
-- `src/components/sections/gallery/PieceCarousel.tsx` — verificar/ajustar opções do Embla se necessário
-- `src/components/ui/accordion.tsx` — apenas se a opacidade não estiver visível; adicionar `transition-opacity` redundante
+- `decoding="async"` é a otimização de maior impacto: evita o "freeze" de 100-300ms ao trocar de slide em CPUs mobile fracas.
+- `fetchPriority` é suportado em todos os navegadores modernos; nos antigos vira no-op (fallback seguro).
+- O `requestAnimationFrame` do progress hoje roda mesmo quando autoplay está pausado (verifica `isPlaying` mas o loop continua) — vou adicionar `cancelAnimationFrame` quando `!playing` para zerar o custo.
+- `will-change` aplicado permanentemente é prejudicial; aplicar/remover dinamicamente preserva performance.
+- A imagem do single-slide (quando `images.length <= 1`) também recebe `decoding="async"`.
 
 ### Validação
 
-1. Modal aberto em desktop: pontos aparecem abaixo do título, preenchidos só nas seções com conteúdo.
-2. Mobile (390px): scroll vertical da modal funciona suave, swipe horizontal nas imagens funciona sem travar, accordion abre com fade visível.
-3. Obra com só 2 campos preenchidos: 2 pontos brilhantes + 2 apagados.
+1. Mobile 390px: swipe entre imagens deve ser fluido, sem travadinha de ~200ms ao soltar o dedo.
+2. Slides de obras com 5+ imagens: troca contínua sem stutter.
+3. Desktop: comportamento idêntico ao atual (otimizações são neutras ou positivas).
+4. DevTools Performance: tempo do thread principal durante swipe deve cair de ~150ms para <50ms por transição.
+
+### Arquivos modificados
+
+- `src/components/sections/gallery/PieceCarousel.tsx` — todas as otimizações descritas
 
