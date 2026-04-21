@@ -200,11 +200,13 @@ export type Database = {
           created_at: string
           error_message: string | null
           id: string
+          image_role: string | null
           name: string
           original_height: number | null
           original_path: string
           original_size_bytes: number
           original_width: number | null
+          piece_id: string | null
           status: string
           total_optimized_bytes: number | null
           updated_at: string
@@ -215,11 +217,13 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           id?: string
+          image_role?: string | null
           name: string
           original_height?: number | null
           original_path: string
           original_size_bytes: number
           original_width?: number | null
+          piece_id?: string | null
           status?: string
           total_optimized_bytes?: number | null
           updated_at?: string
@@ -230,11 +234,13 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           id?: string
+          image_role?: string | null
           name?: string
           original_height?: number | null
           original_path?: string
           original_size_bytes?: number
           original_width?: number | null
+          piece_id?: string | null
           status?: string
           total_optimized_bytes?: number | null
           updated_at?: string
