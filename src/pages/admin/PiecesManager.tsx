@@ -788,13 +788,33 @@ export const PiecesManager = () => {
 
   const removeImage = async (img: Image) => {
     if (!confirm("Remover esta imagem?")) return;
-    if (img.storage_path) await supabase.storage.from("gallery").remove([img.storage_path]);
+    if (img.storage_path) {
+      const bucket = img.storage_path.startsWith("images/") ? "optimized-images" : "gallery";
+      await supabase.storage.from(bucket).remove([img.storage_path]);
+    }
     const { error } = await supabase.from("gallery_piece_images").delete().eq("id", img.id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     if (editing) {
       setEditing({ ...editing, gallery_piece_images: editing.gallery_piece_images.filter((i) => i.id !== img.id) });
     }
     load();
+  };
+
+  const removeDraftImage = async (draftId: string) => {
+    if (!confirm("Remover esta imagem?")) return;
+    const target = draftImages.find((d) => d.optimizedImageId === draftId);
+    if (!target) return;
+    try {
+      const folder = target.originalPath.split("/").slice(0, -1).join("/");
+      const { data: list } = await supabase.storage.from("optimized-images").list(folder);
+      if (list?.length) {
+        await supabase.storage.from("optimized-images").remove(list.map((f) => `${folder}/${f.name}`));
+      }
+      await supabase.from("optimized_images").delete().eq("id", draftId);
+    } catch (e) {
+      console.warn("Failed to clean draft image:", e);
+    }
+    setDraftImages((prev) => prev.filter((d) => d.optimizedImageId !== draftId));
   };
 
   const handleImageDragStart = (event: DragStartEvent) => {
