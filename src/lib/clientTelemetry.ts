@@ -13,7 +13,8 @@ import { getSessionId } from "./session";
 export type TelemetryEvent =
   | "webp_unsupported"
   | "webp_fallback_used"
-  | "webp_served";
+  | "webp_served"
+  | "webp_client_conversion";
 
 const ONCE_KEY = (eventType: string) => `telemetry_once_${eventType}`;
 
