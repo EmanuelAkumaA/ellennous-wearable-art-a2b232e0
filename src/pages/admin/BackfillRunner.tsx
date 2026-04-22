@@ -1,4 +1,4 @@
-import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -27,6 +27,7 @@ import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
+import { runWithLock } from "@/lib/runtimeLock";
 import {
   detectLegacyImages,
   runBackfill,
@@ -75,10 +76,17 @@ export const BackfillRunner = () => {
   const [completedCount, setCompletedCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
 
-  // Tick every second while running so the elapsed timer stays live.
+  // Synchronous double-click guard.
+  const startingRef = useRef(false);
+
+  // Tick every second while running, but only when the tab is visible — keeps
+  // the elapsed timer live without burning CPU on a hidden tab.
   useEffect(() => {
     if (!running) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const id = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      setNow((n) => (n === 0 ? Date.now() : n + 1000));
+    }, 1000);
     return () => window.clearInterval(id);
   }, [running]);
 
