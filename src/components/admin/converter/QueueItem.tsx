@@ -265,6 +265,17 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
     a.click();
   };
 
+  const downloadVariant = (key: VariantKey) => {
+    if (!converted?.preset) return;
+    const blob = converted.preset[key].blob;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName}-${key}.webp`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const downloadAllZip = async () => {
     if (!converted) return;
     const zip = new JSZip();
