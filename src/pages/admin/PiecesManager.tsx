@@ -24,7 +24,6 @@ import {
   Flame,
   ChevronUp,
   ChevronDown,
-  Library,
 } from "lucide-react";
 import {
   DndContext,
@@ -48,9 +47,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { uploadToOptimizer, getBestUrlForPiece } from "@/lib/optimizerUpload";
-import { ImagePicker, type PickedImage } from "@/components/admin/optimizer/ImagePicker";
-import type { OptimizedVariant } from "@/lib/imageSnippet";
+import { uploadGalleryImage, removeGalleryVariants } from "@/lib/galleryUploader";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
