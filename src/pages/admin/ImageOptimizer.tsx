@@ -136,6 +136,16 @@ export const ImageOptimizer = () => {
   );
   const activeCount = items.length - orphanCount;
 
+  /** Imagens "ready" sem o triple device-tagged WebP do novo pipeline. */
+  const legacyIds = useMemo(
+    () =>
+      items
+        .filter((i) => i.status === "ready" && isLegacyFormat(i.variants))
+        .map((i) => i.id),
+    [items],
+  );
+  const legacyCount = legacyIds.length;
+
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
     const totalOriginal = ready.reduce((s, i) => s + (i.original_size_bytes ?? 0), 0);
