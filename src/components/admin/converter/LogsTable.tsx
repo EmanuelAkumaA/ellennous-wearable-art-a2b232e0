@@ -102,8 +102,8 @@ export const LogsTable = () => {
 
   return (
     <div className="space-y-4">
-      <div className="glass-card p-4 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[200px]">
+      <div className="glass-card p-3 sm:p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+        <div className="w-full sm:flex-1 sm:min-w-[200px]">
           <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-1.5">Buscar arquivo</p>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -115,57 +115,111 @@ export const LogsTable = () => {
             />
           </div>
         </div>
-        <div>
-          <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-1.5">Status</p>
-          <Select value={status} onValueChange={(v) => setStatus(v as ConversionStatus | "all")}>
-            <SelectTrigger className="w-36 h-9 bg-secondary/40 border-border/40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="success">Sucesso</SelectItem>
-              <SelectItem value="error">Falha</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-2 gap-3 sm:contents w-full">
+          <div className="min-w-0">
+            <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-1.5">Status</p>
+            <Select value={status} onValueChange={(v) => setStatus(v as ConversionStatus | "all")}>
+              <SelectTrigger className="w-full sm:w-36 h-9 bg-secondary/40 border-border/40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="success">Sucesso</SelectItem>
+                <SelectItem value="error">Falha</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-0">
+            <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-1.5">Origem</p>
+            <Select value={source} onValueChange={(v) => setSource(v as ConversionSource | "all")}>
+              <SelectTrigger className="w-full sm:w-44 h-9 bg-secondary/40 border-border/40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="converter">Conversor</SelectItem>
+                <SelectItem value="piece_upload">Cadastro de obra</SelectItem>
+                <SelectItem value="image_load">Carregamento</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div>
-          <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground mb-1.5">Origem</p>
-          <Select value={source} onValueChange={(v) => setSource(v as ConversionSource | "all")}>
-            <SelectTrigger className="w-44 h-9 bg-secondary/40 border-border/40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="converter">Conversor</SelectItem>
-              <SelectItem value="piece_upload">Cadastro de obra</SelectItem>
-              <SelectItem value="image_load">Carregamento</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load()}
+            className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px] h-9 flex-1 sm:flex-none"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1" /> Atualizar
+          </Button>
+          <Button
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            size="sm"
+            className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px] h-9 bg-gradient-purple-wine flex-1 sm:flex-none"
+          >
+            <Download className="h-3.5 w-3.5 mr-1" /> Exportar CSV
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void load()}
-          className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px] h-9"
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-1" /> Atualizar
-        </Button>
-        <Button
-          onClick={exportCsv}
-          disabled={filtered.length === 0}
-          size="sm"
-          className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px] h-9 bg-gradient-purple-wine"
-        >
-          <Download className="h-3.5 w-3.5 mr-1" /> Exportar CSV
-        </Button>
       </div>
 
       {loading ? (
-        <div className="glass-card p-12 text-center text-muted-foreground">
+        <div className="glass-card p-8 sm:p-12 text-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mx-auto" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="glass-card p-12 text-center text-sm text-muted-foreground">
+        <div className="glass-card p-8 sm:p-12 text-center text-sm text-muted-foreground">
           Nenhum log encontrado.
         </div>
       ) : (
-        <div className="glass-card overflow-hidden">
+        <>
+        {/* Mobile cards: < lg */}
+        <div className="lg:hidden space-y-2">
+          {filtered.map((r) => {
+            const reduction = r.original_size > 0
+              ? Math.max(0, Math.round((1 - r.optimized_size / r.original_size) * 100))
+              : 0;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setSelected(r)}
+                className="w-full glass-card p-3 text-left hover:border-primary/40 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <p className="text-xs font-medium truncate flex-1" title={r.filename}>
+                    {r.filename}
+                  </p>
+                  {r.status === "success" ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[9px] font-accent tracking-[0.2em] uppercase text-emerald-400">
+                      <Check className="h-3 w-3" /> OK
+                    </span>
+                  ) : (
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[9px] font-accent tracking-[0.2em] uppercase text-destructive">
+                      <AlertCircle className="h-3 w-3" /> Falha
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-accent tracking-[0.2em] uppercase text-muted-foreground">
+                  <span>{formatDate(r.created_at)}</span>
+                  <span className="text-border">·</span>
+                  <span>{SOURCE_LABEL[r.source]}</span>
+                  <span className="text-border">·</span>
+                  <span className="tabular-nums">{(r.duration_ms / 1000).toFixed(1)}s</span>
+                  {r.status === "success" && (
+                    <>
+                      <span className="text-border">·</span>
+                      <span className="tabular-nums">
+                        {formatBytes(r.optimized_size)}
+                        {reduction > 0 && <span className="text-emerald-400/80 ml-1">−{reduction}%</span>}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop table: ≥ lg */}
+        <div className="hidden lg:block glass-card overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="border-border/40 hover:bg-transparent">
