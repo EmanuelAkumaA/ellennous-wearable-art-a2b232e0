@@ -18,7 +18,11 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Smartphone,
+  Tablet,
+  Monitor,
 } from "lucide-react";
+import { ErrorHistoryDialog } from "@/components/admin/optimizer/ErrorHistoryDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -692,8 +696,38 @@ type BackfillRowProps = {
   onToggle?: () => void;
 };
 
-const StatusBadge = ({ item }: { item: BackfillProgressItem }) => {
-  // 4 visual states: optimized / optimizing / pending / error
+const DEVICE_ICONS = { mobile: Smartphone, tablet: Tablet, desktop: Monitor } as const;
+
+const DeviceDots = ({ ready }: { ready: BackfillProgressItem["readyDevices"] }) => {
+  const set = new Set(ready ?? []);
+  return (
+    <div className="flex items-center gap-1">
+      {(["mobile", "tablet", "desktop"] as const).map((dev) => {
+        const Icon = DEVICE_ICONS[dev];
+        const on = set.has(dev);
+        return (
+          <span
+            key={dev}
+            title={`${dev}: ${on ? "pronto" : "aguardando"}`}
+            className={`inline-flex items-center justify-center h-3.5 w-3.5 rounded-full transition-colors ${
+              on ? "bg-emerald-500/30 text-emerald-300" : "bg-secondary/40 text-muted-foreground/50"
+            }`}
+          >
+            <Icon className="h-2 w-2" />
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+const StatusBadge = ({
+  item,
+  onClickError,
+}: {
+  item: BackfillProgressItem;
+  onClickError?: () => void;
+}) => {
   if (item.status === "done" || item.status === "skipped") {
     return (
       <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-accent tracking-[0.25em] uppercase">
@@ -703,20 +737,14 @@ const StatusBadge = ({ item }: { item: BackfillProgressItem }) => {
   }
   if (item.status === "error") {
     return (
-      <TooltipProvider delayDuration={150}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-destructive/15 text-destructive text-[10px] font-accent tracking-[0.25em] uppercase cursor-help">
-              <AlertCircle className="h-3 w-3" /> Erro
-            </span>
-          </TooltipTrigger>
-          {item.error && (
-            <TooltipContent side="left" className="max-w-xs text-xs">
-              {item.error}
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
+      <button
+        type="button"
+        onClick={onClickError}
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-destructive/15 text-destructive text-[10px] font-accent tracking-[0.25em] uppercase hover:bg-destructive/25 transition-colors cursor-pointer"
+        title="Ver histórico de erros"
+      >
+        <AlertCircle className="h-3 w-3" /> Erro
+      </button>
     );
   }
   if (ACTIVE_STATUSES.includes(item.status)) {
@@ -734,6 +762,7 @@ const StatusBadge = ({ item }: { item: BackfillProgressItem }) => {
 };
 
 const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle }: BackfillRowProps) => {
+  const [errorOpen, setErrorOpen] = useState(false);
   const animate = ACTIVE_STATUSES.includes(item.status);
   const showBar = animate || item.status === "done";
   const barPct = item.status === "done" ? 100 : item.progress || 0;
@@ -748,6 +777,19 @@ const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle 
     : item.status === "done"
       ? "100% · concluída"
       : null;
+  const showDots = animate || item.status === "done";
+
+  const reprocess = async () => {
+    if (!item.optimizedImageId) return;
+    await supabase
+      .from("optimized_images")
+      .update({ status: "processing", error_message: null })
+      .eq("id", item.optimizedImageId);
+    await supabase.functions.invoke("optimize-image", {
+      body: { imageId: item.optimizedImageId },
+    });
+    toast({ title: "Reprocessando…" });
+  };
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/10 transition-colors">
@@ -789,6 +831,7 @@ const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle 
                 style={{ width: `${barPct}%` }}
               />
             </div>
+            {showDots && <DeviceDots ready={item.readyDevices} />}
             {stageLabel && (
               <span
                 className={`text-[9px] font-accent tracking-[0.2em] uppercase shrink-0 ${
@@ -802,8 +845,23 @@ const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle 
         )}
       </div>
       <div className="shrink-0">
-        <StatusBadge item={item} />
+        <StatusBadge item={item} onClickError={() => setErrorOpen(true)} />
       </div>
+
+      {item.status === "error" && errorOpen && (
+        <ErrorHistoryDialog
+          open={errorOpen}
+          onOpenChange={setErrorOpen}
+          optimizedImageId={item.optimizedImageId ?? null}
+          title={item.filename}
+          sessionError={
+            item.error
+              ? { stage: item.errorStage ?? "optimize", message: item.error }
+              : null
+          }
+          onReprocess={item.optimizedImageId ? reprocess : undefined}
+        />
+      )}
     </div>
   );
 };
@@ -818,6 +876,7 @@ const BackfillRow = memo(
     prev.item.status === next.item.status &&
     prev.item.progress === next.item.progress &&
     prev.item.error === next.item.error &&
+    (prev.item.readyDevices?.length ?? 0) === (next.item.readyDevices?.length ?? 0) &&
     prev.selected === next.selected &&
     prev.selectable === next.selectable &&
     prev.onToggle === next.onToggle,

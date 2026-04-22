@@ -46,7 +46,19 @@ export const uploadToOptimizer = async ({
   const { error: upErr } = await supabase.storage
     .from(OPTIMIZER_BUCKET)
     .upload(path, file, { contentType: file.type, upsert: false });
-  if (upErr) throw upErr;
+  if (upErr) {
+    // Log to error history (non-blocking)
+    void supabase.from("optimization_error_log").insert([
+      {
+        optimized_image_id: id,
+        piece_id: pieceId ?? undefined,
+        stage: "upload",
+        error_message: upErr.message.slice(0, 500),
+        meta: { name: file.name, size: file.size, type: file.type } as never,
+      },
+    ]);
+    throw upErr;
+  }
 
   const { error: insErr } = await supabase.from("optimized_images").insert({
     id,

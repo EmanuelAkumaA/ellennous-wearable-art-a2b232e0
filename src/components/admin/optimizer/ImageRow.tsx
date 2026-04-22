@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   Code2,
   Trash2,
@@ -12,12 +12,15 @@ import {
   Tablet,
   Monitor,
   Link2,
+  CheckCircle2,
+  Hourglass,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatBytes, findByDevice, type DeviceLabel, type OptimizedVariant } from "@/lib/imageSnippet";
+import { ErrorHistoryDialog } from "@/components/admin/optimizer/ErrorHistoryDialog";
 import type { OptimizedImage } from "./ImageCard";
 
 const BUCKET = "optimized-images";
@@ -46,6 +49,9 @@ const findLegacyFor = (variants: OptimizedVariant[], targetWidth: number): Optim
   return sorted[0];
 };
 
+const AVG_PROCESS_MS = 6000;
+const STALE_PROCESS_MS = AVG_PROCESS_MS * 3;
+
 const ImageRowImpl = ({
   image,
   pieceLink,
@@ -57,6 +63,18 @@ const ImageRowImpl = ({
   selectionMode = false,
 }: ImageRowProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
+  const [errorOpen, setErrorOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const isProcessing = image.status === "processing";
+  useEffect(() => {
+    if (!isProcessing) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [isProcessing]);
+  const updatedAt = (image as { updated_at?: string }).updated_at;
+  const elapsedMs = isProcessing && updatedAt ? Math.max(0, now - new Date(updatedAt).getTime()) : 0;
+  const etaMs = Math.max(0, AVG_PROCESS_MS - elapsedMs);
+  const stale = elapsedMs > STALE_PROCESS_MS;
 
   const mobile = findByDevice(image.variants, "mobile") ?? findLegacyFor(image.variants, 480);
   const tablet = findByDevice(image.variants, "tablet") ?? findLegacyFor(image.variants, 1024);
@@ -146,14 +164,12 @@ const ImageRowImpl = ({
       savedBytes = original - variant.size_bytes;
       savedPct = Math.round((savedBytes / original) * 100);
     }
-    const tone =
-      savedPct === null
-        ? "bg-secondary/20 text-muted-foreground/50"
-        : savedPct >= 50
-          ? "bg-emerald-500/15 text-emerald-300"
-          : savedPct >= 0
-            ? "bg-amber-500/15 text-amber-300"
-            : "bg-destructive/15 text-destructive";
+    const ready = !!variant;
+    const tone = ready
+      ? "bg-emerald-500/20 text-emerald-300"
+      : isProcessing
+        ? "bg-secondary/30 text-muted-foreground/70"
+        : "bg-secondary/20 text-muted-foreground/50";
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
@@ -163,21 +179,32 @@ const ImageRowImpl = ({
             >
               <Icon className="h-3 w-3" />
               <span className="font-accent text-[8px] tracking-[0.2em] uppercase opacity-60">{label}</span>
-              <span>{variant ? formatBytes(variant.size_bytes) : "—"}</span>
-              {savedPct !== null && (
-                <span className="font-accent text-[9px] tracking-wide opacity-90">
-                  {savedPct >= 0 ? "−" : "+"}
-                  {Math.abs(savedPct)}%
-                </span>
+              {ready ? (
+                <>
+                  <span>{formatBytes(variant!.size_bytes)}</span>
+                  {savedPct !== null && (
+                    <span className="font-accent text-[9px] tracking-wide opacity-90">
+                      {savedPct >= 0 ? "−" : "+"}
+                      {Math.abs(savedPct)}%
+                    </span>
+                  )}
+                  <CheckCircle2 className="h-2.5 w-2.5 ml-0.5" />
+                </>
+              ) : isProcessing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <span>—</span>
               )}
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            {variant
-              ? `${variant.width}px · ${variant.format.toUpperCase()} (${deviceLabel})${
+            {ready
+              ? `Variante ${deviceLabel} pronta · ${variant!.width}px · ${formatBytes(variant!.size_bytes)}${
                   savedBytes > 0 ? ` · ${formatBytes(savedBytes)} economizados` : ""
                 }`
-              : "Variante não disponível"}
+              : isProcessing
+                ? `Variante ${deviceLabel} ainda gerando…`
+                : `Variante ${deviceLabel} não disponível`}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -216,13 +243,29 @@ const ImageRowImpl = ({
 
         <div className="relative w-full sm:w-16 h-32 sm:h-16 shrink-0 rounded-md overflow-hidden bg-secondary/30">
           {image.status === "processing" ? (
-            <div className="absolute inset-0 flex items-center justify-center text-primary-glow">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-primary-glow">
               <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="font-mono text-[8px] tabular-nums text-muted-foreground/80">
+                ~{Math.round(elapsedMs / 1000)}s · ETA ~{Math.round(etaMs / 1000)}s
+              </span>
+              {stale && (
+                <span className="text-[8px] font-accent tracking-wide uppercase text-amber-300">
+                  Demorando
+                </span>
+              )}
             </div>
           ) : image.status === "error" ? (
-            <div className="absolute inset-0 flex items-center justify-center text-destructive">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setErrorOpen(true);
+              }}
+              className="absolute inset-0 flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+              title="Ver histórico de erros"
+            >
               <AlertCircle className="h-5 w-5" />
-            </div>
+            </button>
           ) : (
             <img
               src={previewUrl}
@@ -324,6 +367,20 @@ const ImageRowImpl = ({
           </button>
         </div>
       </div>
+      {errorOpen && (
+        <ErrorHistoryDialog
+          open={errorOpen}
+          onOpenChange={setErrorOpen}
+          optimizedImageId={image.id}
+          title={image.name}
+          sessionError={
+            image.error_message
+              ? { stage: "processing", message: image.error_message }
+              : null
+          }
+          onReprocess={reprocess}
+        />
+      )}
     </div>
   );
 };

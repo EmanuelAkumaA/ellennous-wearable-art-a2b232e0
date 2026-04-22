@@ -85,11 +85,10 @@ Deno.serve(async (req) => {
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
-  const token = authHeader.replace("Bearer ", "");
-  const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
-  if (claimsErr || !claimsData?.claims?.sub) return json({ error: "Unauthorized" }, 401);
+  const { data: userData, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !userData?.user?.id) return json({ error: "Unauthorized" }, 401);
 
-  const userId = claimsData.claims.sub as string;
+  const userId = userData.user.id;
   const { data: isAdminRow, error: roleErr } = await userClient.rpc("has_role", {
     _user_id: userId,
     _role: "admin",
@@ -111,7 +110,7 @@ Deno.serve(async (req) => {
   // Fetch row
   const { data: row, error: rowErr } = await admin
     .from("optimized_images")
-    .select("id, original_path, name")
+    .select("id, original_path, name, piece_id")
     .eq("id", imageId)
     .maybeSingle();
   if (rowErr || !row) return json({ error: "Image not found" }, 404);
@@ -182,9 +181,17 @@ Deno.serve(async (req) => {
       await admin.from("optimized_images").update(update).eq("id", imageId);
     } catch (e) {
       console.error("optimize-image failed:", e);
+      const message = (e as Error).message?.slice(0, 500) ?? "Unknown error";
+      await admin.from("optimization_error_log").insert({
+        optimized_image_id: imageId,
+        piece_id: row.piece_id ?? null,
+        stage: "processing",
+        error_message: message,
+        meta: { name: row.name, original_path: row.original_path },
+      });
       await admin
         .from("optimized_images")
-        .update({ status: "error", error_message: (e as Error).message?.slice(0, 500) ?? "Unknown error" })
+        .update({ status: "error", error_message: message })
         .eq("id", imageId);
     }
   })();

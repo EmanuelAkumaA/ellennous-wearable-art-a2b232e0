@@ -1,8 +1,21 @@
-import { memo, useState } from "react";
-import { Code2, Trash2, RefreshCw, Loader2, Star, AlertCircle, CheckCircle2, Eye, CheckSquare, Square } from "lucide-react";
+import { memo, useEffect, useState } from "react";
+import {
+  Code2,
+  Trash2,
+  RefreshCw,
+  Loader2,
+  Star,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  CheckSquare,
+  Square,
+  Hourglass,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
+import { ErrorHistoryDialog } from "@/components/admin/optimizer/ErrorHistoryDialog";
 
 export type OptimizedImage = {
   id: string;
@@ -17,6 +30,24 @@ export type OptimizedImage = {
   total_optimized_bytes: number | null;
   used_count: number;
   created_at: string;
+  updated_at?: string;
+};
+
+const AVG_PROCESS_MS = 6000;
+const STALE_PROCESS_MS = AVG_PROCESS_MS * 3;
+
+/** Returns formatted "~Xs decorridos · ETA ~Ys" given the row's updated_at. */
+const useProcessingEta = (updatedAt?: string, active?: boolean) => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [active]);
+  if (!active || !updatedAt) return { elapsed: 0, etaMs: AVG_PROCESS_MS, stale: false };
+  const elapsed = Math.max(0, now - new Date(updatedAt).getTime());
+  const etaMs = Math.max(0, AVG_PROCESS_MS - elapsed);
+  return { elapsed, etaMs, stale: elapsed > STALE_PROCESS_MS };
 };
 
 interface ImageCardProps {
@@ -33,6 +64,8 @@ const BUCKET = "optimized-images";
 
 const ImageCardImpl = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected = false, onToggleSelect, selectionMode = false }: ImageCardProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
+  const [errorOpen, setErrorOpen] = useState(false);
+  const eta = useProcessingEta(image.updated_at, image.status === "processing");
 
   // New pipeline: prefer device-tagged WebP. Legacy: any webp/jpeg.
   const tabletWebp =
@@ -138,13 +171,29 @@ const ImageCardImpl = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin text-primary-glow" />
             <span className="font-accent text-[10px] tracking-[0.3em] uppercase">Processando</span>
+            <span className="font-mono text-[10px] tabular-nums text-muted-foreground/80">
+              ~{Math.round(eta.elapsed / 1000)}s · ETA ~{Math.round(eta.etaMs / 1000)}s
+            </span>
+            {eta.stale && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-accent tracking-[0.2em] uppercase text-amber-300">
+                <Hourglass className="h-2.5 w-2.5" /> Demorando mais
+              </span>
+            )}
           </div>
         ) : image.status === "error" ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-destructive p-4 text-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setErrorOpen(true);
+            }}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-destructive p-4 text-center hover:bg-destructive/5 transition-colors"
+            title="Ver histórico de erros"
+          >
             <AlertCircle className="h-6 w-6" />
-            <span className="font-accent text-[10px] tracking-[0.3em] uppercase">Erro</span>
+            <span className="font-accent text-[10px] tracking-[0.3em] uppercase">Erro · ver detalhes</span>
             <p className="text-[10px] text-muted-foreground line-clamp-2">{image.error_message}</p>
-          </div>
+          </button>
         ) : (
           <img
             src={previewUrl}
@@ -224,6 +273,20 @@ const ImageCardImpl = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected
           </button>
         </div>
       </div>
+      {errorOpen && (
+        <ErrorHistoryDialog
+          open={errorOpen}
+          onOpenChange={setErrorOpen}
+          optimizedImageId={image.id}
+          title={image.name}
+          sessionError={
+            image.error_message
+              ? { stage: "processing", message: image.error_message }
+              : null
+          }
+          onReprocess={reprocess}
+        />
+      )}
     </div>
   );
 };
