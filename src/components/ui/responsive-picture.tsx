@@ -18,6 +18,7 @@ interface ResponsivePictureProps {
   style?: CSSProperties;
   onClick?: () => void;
   onLoad?: (e: SyntheticEvent<HTMLImageElement>) => void;
+  onError?: (e: SyntheticEvent<HTMLImageElement>) => void;
 }
 
 /**
@@ -122,6 +123,7 @@ export const ResponsivePicture = ({
   style,
   onClick,
   onLoad,
+  onError,
 }: ResponsivePictureProps) => {
   const webpOk = useWebpSupport();
   const hasVariants = !!(variants && variants.length > 0);
@@ -152,6 +154,7 @@ export const ResponsivePicture = ({
         style={style}
         onClick={onClick}
         onLoad={handleLoad}
+        onError={onError}
       />
     );
   }
@@ -170,6 +173,7 @@ export const ResponsivePicture = ({
         style={style}
         onClick={onClick}
         onLoad={onLoad}
+        onError={onError}
       />
     );
   }
@@ -193,6 +197,7 @@ export const ResponsivePicture = ({
         style={style}
         onClick={onClick}
         onLoad={onLoad}
+        onError={onError}
       />
     );
   }
@@ -215,6 +220,7 @@ export const ResponsivePicture = ({
       style={style}
       onClick={onClick}
       onLoad={handleLoad}
+      onError={onError}
     />
   );
 };

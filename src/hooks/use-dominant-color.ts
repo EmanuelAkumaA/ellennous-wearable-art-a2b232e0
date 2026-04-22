@@ -148,6 +148,28 @@ const computeColor = (url: string): Promise<string | null> =>
     img.src = url;
   });
 
+/**
+ * Forces the dominant-color computation to start immediately for a URL,
+ * bypassing the 150ms debounce. Used by hover/focus prefetching so the
+ * color is ready (and the modal/border feel instant) by the time the
+ * user actually opens the piece.
+ *
+ * Safe to call repeatedly — short-circuits when the URL is already in
+ * the cache or has a pending computation.
+ */
+export const warmDominantColor = (url: string | null | undefined): void => {
+  if (!url || typeof window === "undefined") return;
+  hydrate();
+  if (CACHE.has(url) || PENDING.has(url)) return;
+  const promise = computeColor(url).then((c) => {
+    CACHE.set(url, { color: c, ts: Date.now() });
+    PENDING.delete(url);
+    schedulePersist();
+    return c;
+  });
+  PENDING.set(url, promise);
+};
+
 export const useDominantColor = (url: string | null | undefined): string | null => {
   const [color, setColor] = useState<string | null>(() => {
     if (!url) return null;
