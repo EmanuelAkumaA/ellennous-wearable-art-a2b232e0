@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star, Wifi, WifiOff, Wand2 } from "lucide-react";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
 import { InstallPrompt } from "@/components/admin/InstallPrompt";
+import { AdminBottomNav } from "@/components/admin/AdminBottomNav";
 import brandIcon from "@/assets/brand-icon.png";
 
 // PWA registration scoped to /admin — only in production, never in iframes/preview
@@ -267,10 +268,10 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
           {/* Sticky header */}
           <header className="sticky top-0 z-40 border-b border-border/40 bg-background/60 backdrop-blur-xl">
             <div className="flex items-center gap-3 px-5 lg:px-10 py-4">
-              {/* Mobile menu */}
+              {/* Desktop-only legacy hamburger fallback (kept for very narrow desktops) */}
               <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="lg:hidden -ml-2">
+                  <Button variant="ghost" size="icon" className="hidden -ml-2">
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
@@ -324,17 +325,20 @@ export const AdminShell = ({ active, onSelect, headerAction, children }: AdminSh
           </header>
 
           {/* Content */}
-          <main className="flex-1 px-5 lg:px-10 py-8 lg:py-10">
+          <main className="flex-1 px-5 lg:px-10 py-8 lg:py-10 pb-28 lg:pb-10">
             <div key={active} className="animate-fade-up">
               {children}
             </div>
           </main>
 
-          <footer className="px-5 lg:px-10 py-6 text-[10px] font-accent tracking-[0.3em] uppercase text-muted-foreground/60 border-t border-border/30">
+          <footer className="px-5 lg:px-10 py-6 pb-24 lg:pb-6 text-[10px] font-accent tracking-[0.3em] uppercase text-muted-foreground/60 border-t border-border/30">
             Ellennous · Atelier interno
           </footer>
         </div>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <AdminBottomNav active={active} onSelect={handleSelect} />
     </div>
   );
 };
