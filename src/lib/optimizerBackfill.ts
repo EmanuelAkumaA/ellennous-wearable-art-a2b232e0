@@ -15,12 +15,18 @@ export interface LegacyImageItem {
   filename: string;
 }
 
+export type DeviceLabel = "mobile" | "tablet" | "desktop";
+
 export interface BackfillProgressItem extends LegacyImageItem {
   status: "pending" | "downloading" | "uploading" | "optimizing" | "done" | "skipped" | "error";
   /** 0–100 progress within the current run */
   progress: number;
   error?: string;
+  /** Stage where the current error occurred (download/upload/optimize/persist) */
+  errorStage?: string;
   optimizedImageId?: string;
+  /** Devices whose WebP variant is already available (incremental) */
+  readyDevices?: DeviceLabel[];
 }
 
 const isLegacyPath = (path: string | null | undefined): boolean => {
