@@ -367,6 +367,20 @@ const ImageRowImpl = ({
           </button>
         </div>
       </div>
+      {errorOpen && (
+        <ErrorHistoryDialog
+          open={errorOpen}
+          onOpenChange={setErrorOpen}
+          optimizedImageId={image.id}
+          title={image.name}
+          sessionError={
+            image.error_message
+              ? { stage: "processing", message: image.error_message }
+              : null
+          }
+          onReprocess={reprocess}
+        />
+      )}
     </div>
   );
 };
