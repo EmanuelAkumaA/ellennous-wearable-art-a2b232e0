@@ -1,8 +1,21 @@
-import { memo, useState } from "react";
-import { Code2, Trash2, RefreshCw, Loader2, Star, AlertCircle, CheckCircle2, Eye, CheckSquare, Square } from "lucide-react";
+import { memo, useEffect, useState } from "react";
+import {
+  Code2,
+  Trash2,
+  RefreshCw,
+  Loader2,
+  Star,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  CheckSquare,
+  Square,
+  Hourglass,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
+import { ErrorHistoryDialog } from "@/components/admin/optimizer/ErrorHistoryDialog";
 
 export type OptimizedImage = {
   id: string;
@@ -17,6 +30,24 @@ export type OptimizedImage = {
   total_optimized_bytes: number | null;
   used_count: number;
   created_at: string;
+  updated_at?: string;
+};
+
+const AVG_PROCESS_MS = 6000;
+const STALE_PROCESS_MS = AVG_PROCESS_MS * 3;
+
+/** Returns formatted "~Xs decorridos · ETA ~Ys" given the row's updated_at. */
+const useProcessingEta = (updatedAt?: string, active?: boolean) => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [active]);
+  if (!active || !updatedAt) return { elapsed: 0, etaMs: AVG_PROCESS_MS, stale: false };
+  const elapsed = Math.max(0, now - new Date(updatedAt).getTime());
+  const etaMs = Math.max(0, AVG_PROCESS_MS - elapsed);
+  return { elapsed, etaMs, stale: elapsed > STALE_PROCESS_MS };
 };
 
 interface ImageCardProps {
