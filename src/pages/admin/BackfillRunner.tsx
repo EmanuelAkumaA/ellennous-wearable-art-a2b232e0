@@ -514,10 +514,35 @@ export const BackfillRunner = () => {
 
       {/* Action bar */}
       <div className="flex flex-wrap items-center gap-3">
+        {atRiskCount > 0 && (
+          <Button
+            onClick={async () => {
+              if (running || loading) return;
+              const ids = items
+                .filter((i) => i.status === "pending" || i.status === "error")
+                .map((i) => i.id);
+              setSelected(new Set(ids));
+              sonnerToast.info(
+                `Iniciando conversão WebP + otimização de ${ids.length} imagem(ns)…`,
+                { duration: 3500 },
+              );
+              // Defer one tick so `selected` state is committed before start() reads it.
+              await new Promise((r) => setTimeout(r, 0));
+              void start();
+            }}
+            disabled={running || loading}
+            className="rounded-none font-accent tracking-[0.2em] uppercase text-xs bg-gradient-to-r from-blue-500 to-primary hover:opacity-90 shadow-glow"
+            title="Converte todas para WebP no navegador e dispara a otimização em lote."
+          >
+            {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+            Converter tudo para WebP e otimizar ({atRiskCount})
+          </Button>
+        )}
         <Button
           onClick={start}
           disabled={running || loading || totalPending === 0}
-          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs bg-gradient-purple-wine hover:opacity-90 shadow-glow"
+          variant={atRiskCount > 0 ? "outline" : "default"}
+          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
         >
           {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
           {selected.size > 0
@@ -532,17 +557,6 @@ export const BackfillRunner = () => {
         >
           Selecionar todas pendentes
         </Button>
-        {atRiskCount > 0 && (
-          <Button
-            variant="outline"
-            onClick={selectAtRisk}
-            disabled={running || loading}
-            className="rounded-none font-accent tracking-[0.2em] uppercase text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
-            title="Marca apenas imagens pendentes ou com erro (em risco de fallback)."
-          >
-            Selecionar em risco ({atRiskCount})
-          </Button>
-        )}
         {selected.size > 0 && (
           <Button
             variant="ghost"
