@@ -42,6 +42,7 @@ import {
 const STATUS_LABEL: Record<BackfillProgressItem["status"], string> = {
   pending: "Pendente",
   downloading: "Baixando",
+  converting: "Convertendo WebP",
   uploading: "Enviando",
   optimizing: "Otimizando",
   done: "Pronta",
@@ -52,6 +53,7 @@ const STATUS_LABEL: Record<BackfillProgressItem["status"], string> = {
 const STATUS_TONE: Record<BackfillProgressItem["status"], string> = {
   pending: "text-muted-foreground",
   downloading: "text-primary-glow",
+  converting: "text-blue-400",
   uploading: "text-primary-glow",
   optimizing: "text-primary-glow",
   done: "text-emerald-400",
@@ -59,7 +61,7 @@ const STATUS_TONE: Record<BackfillProgressItem["status"], string> = {
   error: "text-destructive",
 };
 
-const ACTIVE_STATUSES: BackfillProgressItem["status"][] = ["downloading", "uploading", "optimizing"];
+const ACTIVE_STATUSES: BackfillProgressItem["status"][] = ["downloading", "converting", "uploading", "optimizing"];
 
 export const BackfillRunner = () => {
   const [items, setItems] = useState<BackfillProgressItem[]>([]);
