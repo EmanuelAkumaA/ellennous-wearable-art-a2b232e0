@@ -365,24 +365,25 @@ export const ImageOptimizer = () => {
         </div>
       </div>
 
-      {/* Status filter pills */}
-      <div className="inline-flex rounded-md border border-border/60 overflow-hidden text-xs">
-        <FilterPill
-          active={statusFilter === "all"}
-          onClick={() => setStatusFilter("all")}
-          label="Todas"
-          count={items.length}
-        />
-        <FilterPill
-          active={statusFilter === "active"}
-          onClick={() => setStatusFilter("active")}
-          label="Na galeria"
-          count={activeCount}
-        />
-        <FilterPill
-          active={statusFilter === "orphan"}
-          onClick={() => setStatusFilter("orphan")}
-          label="Órfãs"
+      {/* Status filter pills + legacy modernization */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-md border border-border/60 overflow-hidden text-xs">
+          <FilterPill
+            active={statusFilter === "all"}
+            onClick={() => setStatusFilter("all")}
+            label="Todas"
+            count={items.length}
+          />
+          <FilterPill
+            active={statusFilter === "active"}
+            onClick={() => setStatusFilter("active")}
+            label="Na galeria"
+            count={activeCount}
+          />
+          <FilterPill
+            active={statusFilter === "orphan"}
+            onClick={() => setStatusFilter("orphan")}
+            label="Órfãs"
           count={orphanCount}
         />
       </div>
