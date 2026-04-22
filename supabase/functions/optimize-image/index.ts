@@ -178,6 +178,17 @@ Deno.serve(async (req) => {
       };
       if (!variants.length) update.error_message = "No variants generated";
 
+      // Cleanup: when all 3 variants succeeded, remove the disposable master
+      // file (we no longer need it — gallery uses the device variants).
+      if (variants.length === TARGET_VARIANTS.length) {
+        try {
+          const { error: rmErr } = await admin.storage.from(BUCKET).remove([row.original_path]);
+          if (!rmErr) update.original_path = null;
+        } catch (cleanupErr) {
+          console.warn("Master cleanup failed (non-fatal):", cleanupErr);
+        }
+      }
+
       await admin.from("optimized_images").update(update).eq("id", imageId);
     } catch (e) {
       console.error("optimize-image failed:", e);

@@ -9,6 +9,7 @@ import { ImageCard, type OptimizedImage } from "@/components/admin/optimizer/Ima
 import { ImageRow, type PieceLink } from "@/components/admin/optimizer/ImageRow";
 import { CodeSnippetDialog } from "@/components/admin/optimizer/CodeSnippetDialog";
 import { ImageDetailSheet } from "@/components/admin/optimizer/ImageDetailSheet";
+import { ProcessingTimingsCard } from "@/components/admin/optimizer/ProcessingTimingsCard";
 import { formatBytes, isLegacyFormat, isAtRiskOfFallback, type OptimizedVariant } from "@/lib/imageSnippet";
 import { runWithLock } from "@/lib/runtimeLock";
 import { useCoalescedRealtime } from "@/lib/useCoalescedRealtime";
@@ -406,7 +407,10 @@ export const ImageOptimizer = () => {
         </div>
       </div>
 
-      <WebpTelemetryCard />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <WebpTelemetryCard />
+        <ProcessingTimingsCard />
+      </div>
 
       <div className="rounded-lg border border-primary/10 bg-primary/[0.03] px-4 py-3 flex items-start gap-3">
         <Sparkles className="h-4 w-4 mt-0.5 text-primary-glow shrink-0" />
