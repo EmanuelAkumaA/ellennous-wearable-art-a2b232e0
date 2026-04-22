@@ -386,7 +386,10 @@ const PieceCard = ({ piece, isNew, delay, onSelect, innerRef }: PieceCardProps) 
   const coverUrl = piece.capa || piece.imagens[0] || null;
   const dominantColor = useDominantColor(coverUrl);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [skeletonTimeout, setSkeletonTimeout] = useState(false);
+  const mountAtRef = useRef(performance.now());
+  const prefetchedRef = useRef(false);
 
   // Safety net: never trap the card in skeleton state if the color hook
   // somehow never resolves (CORS, network, etc.). After 600 ms post-image
@@ -397,44 +400,116 @@ const PieceCard = ({ piece, isNew, delay, onSelect, innerRef }: PieceCardProps) 
     return () => clearTimeout(t);
   }, [imgLoaded]);
 
-  const isReady = imgLoaded && (dominantColor !== null || skeletonTimeout);
-  const ringColor = dominantColor ?? "hsl(var(--primary-glow))";
+  // Telemetry: log when dominant color takes longer than COLOR_SLOW_MS to resolve.
+  useEffect(() => {
+    if (!dominantColor || !coverUrl) return;
+    if (loggedSlowColor.has(piece.id)) return;
+    const colorMs = performance.now() - mountAtRef.current;
+    if (colorMs > COLOR_SLOW_MS) {
+      loggedSlowColor.add(piece.id);
+      void trackClientEvent(
+        "gallery_dominant_color_slow",
+        { pieceId: piece.id, ms: Math.round(colorMs), url: coverUrl },
+        { oncePerSession: false },
+      );
+    }
+  }, [dominantColor, coverUrl, piece.id]);
+
+  const handleImgLoad = () => {
+    setImgLoaded(true);
+    if (loggedSlowImg.has(piece.id)) return;
+    const imgMs = performance.now() - mountAtRef.current;
+    if (imgMs > IMG_SLOW_MS && coverUrl) {
+      loggedSlowImg.add(piece.id);
+      void trackClientEvent(
+        "gallery_image_load_slow",
+        { pieceId: piece.id, ms: Math.round(imgMs), url: coverUrl },
+        { oncePerSession: false },
+      );
+    }
+  };
+
+  const handleImgError = () => {
+    setImgError(true);
+    if (loggedImgError.has(piece.id) || !coverUrl) return;
+    loggedImgError.add(piece.id);
+    const reason = "network_or_cors";
+    void trackClientEvent(
+      "gallery_image_load_error",
+      { pieceId: piece.id, url: coverUrl, reason },
+      { oncePerSession: false },
+    );
+    void logConversion({
+      source: "image_load",
+      pieceId: piece.id,
+      filename: coverUrl,
+      originalSize: 0,
+      optimizedSize: 0,
+      status: "error",
+      errorMessage: `Cover load failed: ${reason}`,
+      durationMs: Math.round(performance.now() - mountAtRef.current),
+    });
+  };
+
+  const handlePrefetch = () => {
+    if (prefetchedRef.current) return;
+    prefetchedRef.current = true;
+    // Warm modal-resolution images (first two slides of the carousel).
+    if (piece.imagens[0]) prefetchImage(piece.imagens[0]);
+    if (piece.imagens[1]) prefetchImage(piece.imagens[1]);
+    // Force dominant color computation (bypasses 150ms debounce).
+    warmDominantColor(coverUrl);
+  };
+
+  const isReady = imgError || (imgLoaded && (dominantColor !== null || skeletonTimeout));
 
   return (
-    <div
-      className="card-glow-ring rounded-sm"
-      data-loading={!isReady}
-      style={{ ["--ring-color" as string]: ringColor }}
-    >
+    <div className="card-glow-ring rounded-sm">
       <button
         ref={innerRef}
         onClick={() => onSelect(piece)}
+        onMouseEnter={handlePrefetch}
+        onFocus={handlePrefetch}
+        onTouchStart={handlePrefetch}
         style={isNew ? { animationDelay: `${delay}ms` } : undefined}
         className={`group relative aspect-[4/5] w-full overflow-hidden bg-card border border-border/40 transition-all duration-700 text-left rounded-sm hover:scale-[1.015] ${
           isNew ? "animate-fade-up" : ""
         }`}
       >
-        <ResponsivePicture
-          src={piece.capa || piece.imagens[0]}
-          variants={piece.capaVariants}
-          alt={`${piece.nome} — ${piece.categoria}`}
-          loading="lazy"
-          width={1024}
-          height={1280}
-          sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 420px"
-          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
-          onLoad={() => setImgLoaded(true)}
-        />
-        <div
-          className={`gallery-skeleton transition-opacity duration-700 ${
-            isReady ? "opacity-0 pointer-events-none" : "opacity-100"
-          }`}
-          aria-hidden="true"
-        >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Dragon className="w-24 h-24 opacity-10" />
+        {imgError ? (
+          // Branded fallback when the cover fails to load (CORS / 404 / network).
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card">
+            <Dragon className="w-32 h-32 opacity-15" />
+            <p className="font-accent text-[10px] tracking-[0.25em] uppercase text-muted-foreground/60 mt-4 px-6 text-center">
+              Imagem indisponível
+            </p>
           </div>
-        </div>
+        ) : (
+          <ResponsivePicture
+            src={piece.capa || piece.imagens[0]}
+            variants={piece.capaVariants}
+            alt={`${piece.nome} — ${piece.categoria}`}
+            loading="lazy"
+            width={1024}
+            height={1280}
+            sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 420px"
+            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+            onLoad={handleImgLoad}
+            onError={handleImgError}
+          />
+        )}
+        {!imgError && (
+          <div
+            className={`gallery-skeleton transition-opacity duration-700 ${
+              isReady ? "opacity-0 pointer-events-none" : "opacity-100"
+            }`}
+            aria-hidden="true"
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Dragon className="w-24 h-24 opacity-10" />
+            </div>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-primary/0 to-primary/15 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
         <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
