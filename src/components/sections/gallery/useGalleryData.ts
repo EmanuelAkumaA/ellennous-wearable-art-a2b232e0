@@ -109,7 +109,7 @@ export const useGalleryData = () => {
         supabase
           .from("gallery_pieces")
           .select(
-            "id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, cover_url, gallery_categories(nome), gallery_piece_images(id, url, ordem)",
+            "id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, cover_url, cover_url_mobile, cover_url_tablet, gallery_categories(nome), gallery_piece_images(id, url, ordem)",
           )
           .order("ordem", { ascending: true }),
       ]);
