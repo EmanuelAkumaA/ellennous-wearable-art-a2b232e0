@@ -29,20 +29,27 @@ export interface GalleryUploadResult {
 
 const PRESET_WIDTHS = { mobile: 480, tablet: 768, desktop: 1200 } as const;
 
+export type UploadStage = "converting" | "uploading" | "done";
+
 interface UploadParams {
   file: File;
   pieceId: string;
   /** Defaults to 82 — matches the converter UI default. */
   quality?: number;
+  /** Receives progress updates (0–100) during conversion + upload. */
+  onProgress?: (percent: number, stage: UploadStage) => void;
 }
 
 export const uploadGalleryImage = async ({
   file,
   pieceId,
   quality = 82,
+  onProgress,
 }: UploadParams): Promise<GalleryUploadResult> => {
   const tStart = performance.now();
+  onProgress?.(5, "converting");
   const preset = await convertResponsivePreset(file, quality);
+  onProgress?.(55, "uploading");
   const id = crypto.randomUUID();
   const folder = `${pieceId}/${id}`;
 
