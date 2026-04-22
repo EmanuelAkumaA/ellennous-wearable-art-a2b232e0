@@ -17,16 +17,24 @@ interface ResponsivePictureProps {
   onClick?: () => void;
 }
 
-const buildSrcset = (variants: OptimizedVariant[], format: OptimizedVariant["format"]) =>
-  variants
-    .filter((v) => v.format === format)
-    .sort((a, b) => a.width - b.width)
-    .map((v) => `${v.url} ${v.width}w`)
-    .join(", ");
+/**
+ * Picks WebP variants for the new pipeline (mobile/tablet/desktop),
+ * with a graceful fallback to legacy AVIF/WebP/JPEG sets.
+ */
+const pickWebps = (variants: OptimizedVariant[]) => {
+  const tagged = variants.filter((v) => v.format === "webp" && v.device_label);
+  if (tagged.length) {
+    return ["mobile", "tablet", "desktop"]
+      .map((label) => tagged.find((v) => v.device_label === label))
+      .filter((v): v is OptimizedVariant => !!v)
+      .sort((a, b) => a.width - b.width);
+  }
+  return variants.filter((v) => v.format === "webp").sort((a, b) => a.width - b.width);
+};
 
 /**
- * Renders a <picture> with AVIF/WebP/JPEG variants when available, falling back
- * to a plain <img> when the image hasn't been optimized.
+ * Renders an <img> with a WebP srcset when variants are available, falling
+ * back to a plain <img> when the image hasn't been optimized.
  */
 export const ResponsivePicture = ({
   src,
@@ -59,23 +67,15 @@ export const ResponsivePicture = ({
     );
   }
 
-  const avifSet = buildSrcset(variants, "avif");
-  const webpSet = buildSrcset(variants, "webp");
-  const jpegVariants = variants.filter((v) => v.format === "jpeg").sort((a, b) => a.width - b.width);
-  const jpegSet = jpegVariants.map((v) => `${v.url} ${v.width}w`).join(", ");
-  const fallback =
-    jpegVariants.find((v) => v.width === 800) ??
-    jpegVariants[Math.floor(jpegVariants.length / 2)] ??
-    jpegVariants[0];
+  const webps = pickWebps(variants);
 
-  return (
-    <picture>
-      {avifSet && <source type="image/avif" srcSet={avifSet} sizes={sizes} />}
-      {webpSet && <source type="image/webp" srcSet={webpSet} sizes={sizes} />}
+  if (!webps.length) {
+    // Legacy: try jpeg fallback if no webps at all
+    const jpegs = variants.filter((v) => v.format === "jpeg").sort((a, b) => a.width - b.width);
+    const fallback = jpegs[jpegs.length - 1]?.url ?? src;
+    return (
       <img
-        src={fallback?.url ?? src}
-        srcSet={jpegSet || undefined}
-        sizes={sizes}
+        src={fallback}
         alt={alt}
         loading={loading}
         decoding={decoding}
@@ -86,6 +86,26 @@ export const ResponsivePicture = ({
         style={style}
         onClick={onClick}
       />
-    </picture>
+    );
+  }
+
+  const srcSet = webps.map((v) => `${v.url} ${v.width}w`).join(", ");
+  const fallback = webps[webps.length - 1];
+
+  return (
+    <img
+      src={fallback.url}
+      srcSet={srcSet}
+      sizes={sizes}
+      alt={alt}
+      loading={loading}
+      decoding={decoding}
+      fetchPriority={fetchPriority}
+      width={width}
+      height={height}
+      className={className}
+      style={style}
+      onClick={onClick}
+    />
   );
 };

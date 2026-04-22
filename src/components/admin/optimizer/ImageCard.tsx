@@ -34,16 +34,18 @@ const BUCKET = "optimized-images";
 export const ImageCard = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected = false, onToggleSelect, selectionMode = false }: ImageCardProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
 
+  // New pipeline: prefer device-tagged WebP. Legacy: any webp/jpeg.
+  const tabletWebp =
+    image.variants.find((v) => v.format === "webp" && v.device_label === "tablet") ??
+    image.variants.find((v) => v.format === "webp" && v.device_label === "desktop") ??
+    image.variants.find((v) => v.format === "webp") ??
+    image.variants.find((v) => v.format === "jpeg");
   const previewUrl =
-    image.variants.find((v) => v.format === "webp" && v.width === 800)?.url ??
-    image.variants.find((v) => v.format === "jpeg")?.url ??
-    supabase.storage.from(BUCKET).getPublicUrl(image.original_path).data.publicUrl;
+    tabletWebp?.url ?? supabase.storage.from(BUCKET).getPublicUrl(image.original_path).data.publicUrl;
 
-  // Smarter savings: compare original vs the JPEG fallback the browser will pick
-  const fallbackJpeg = image.variants.find((v) => v.format === "jpeg" && v.width === 800)
-    ?? image.variants.find((v) => v.format === "jpeg");
-  const savings = fallbackJpeg && image.original_size_bytes
-    ? Math.max(0, Math.round(((image.original_size_bytes - fallbackJpeg.size_bytes) / image.original_size_bytes) * 100))
+  // Savings: compare original vs the tablet WebP (representative size)
+  const savings = tabletWebp && image.original_size_bytes
+    ? Math.max(0, Math.round(((image.original_size_bytes - tabletWebp.size_bytes) / image.original_size_bytes) * 100))
     : null;
 
   const remove = async () => {
@@ -172,7 +174,7 @@ export const ImageCard = ({ image, onOpenSnippet, onOpenDetail, onChanged, selec
         </p>
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>{formatBytes(image.original_size_bytes)}</span>
-          <span>{image.variants.length} variantes</span>
+          <span>{image.variants.length} {image.variants.length === 1 ? "variante" : "variantes"}</span>
         </div>
 
         <div className="flex items-center gap-1 pt-1">

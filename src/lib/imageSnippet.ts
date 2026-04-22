@@ -1,41 +1,55 @@
+export type DeviceLabel = "mobile" | "tablet" | "desktop";
+
 export type OptimizedVariant = {
   width: number;
+  /** New pipeline emits "webp" only. Legacy rows may still contain "avif" / "jpeg". */
   format: "avif" | "webp" | "jpeg";
+  /** New pipeline tags variants by device. Legacy rows won't have this. */
+  device_label?: DeviceLabel;
   path: string;
   url: string;
   size_bytes: number;
 };
 
-const SIZES_DEFAULT = "(max-width:640px) 400px, (max-width:1024px) 800px, 1200px";
+const SIZES_DEFAULT = "(max-width:640px) 480px, (max-width:1024px) 1024px, 1600px";
 
-const buildSrcset = (variants: OptimizedVariant[], format: OptimizedVariant["format"]) =>
-  variants
-    .filter((v) => v.format === format)
-    .sort((a, b) => a.width - b.width)
-    .map((v) => `${v.url} ${v.width}w`)
-    .join(", ");
+/**
+ * Picks the 3 device-tagged WebP variants if available, otherwise falls back
+ * to the largest WebP/JPEG variants from a legacy run.
+ */
+const pickWebpByDevice = (variants: OptimizedVariant[]) => {
+  const tagged = variants.filter((v) => v.format === "webp" && v.device_label);
+  if (tagged.length) {
+    return ["mobile", "tablet", "desktop"]
+      .map((label) => tagged.find((v) => v.device_label === label))
+      .filter((v): v is OptimizedVariant => !!v);
+  }
+  // Legacy fallback: any webp by width ascending
+  return variants
+    .filter((v) => v.format === "webp")
+    .sort((a, b) => a.width - b.width);
+};
 
 export const buildPictureSnippet = (variants: OptimizedVariant[], alt = ""): string => {
   if (!variants.length) return "";
-  const avifSet = buildSrcset(variants, "avif");
-  const webpSet = buildSrcset(variants, "webp");
-  const jpegVariants = variants.filter((v) => v.format === "jpeg").sort((a, b) => a.width - b.width);
-  const jpegSet = jpegVariants.map((v) => `${v.url} ${v.width}w`).join(", ");
-  const fallback = jpegVariants.find((v) => v.width === 800) ?? jpegVariants[Math.floor(jpegVariants.length / 2)] ?? jpegVariants[0];
-
-  const sources: string[] = [];
-  if (avifSet) {
-    sources.push(
-      `  <source type="image/avif"\n    srcset="${avifSet}"\n    sizes="${SIZES_DEFAULT}" />`,
-    );
-  }
-  if (webpSet) {
-    sources.push(
-      `  <source type="image/webp"\n    srcset="${webpSet}"\n    sizes="${SIZES_DEFAULT}" />`,
-    );
+  const webps = pickWebpByDevice(variants);
+  if (!webps.length) {
+    // Legacy snippet (no webp). Fall back to largest jpeg.
+    const jpegs = variants.filter((v) => v.format === "jpeg").sort((a, b) => a.width - b.width);
+    const fallback = jpegs[jpegs.length - 1] ?? variants[variants.length - 1];
+    return `<img\n  src="${fallback?.url ?? ""}"\n  loading="lazy"\n  decoding="async"\n  alt="${alt.replace(/"/g, "&quot;")}" />`;
   }
 
-  return `<picture>\n${sources.join("\n")}\n  <img\n    src="${fallback?.url ?? ""}"\n    srcset="${jpegSet}"\n    sizes="${SIZES_DEFAULT}"\n    loading="lazy"\n    decoding="async"\n    alt="${alt.replace(/"/g, "&quot;")}" />\n</picture>`;
+  const srcset = webps.map((v) => `${v.url} ${v.width}w`).join(",\n          ");
+  const fallback = webps[webps.length - 1];
+
+  return `<img
+  src="${fallback.url}"
+  srcset="${srcset}"
+  sizes="${SIZES_DEFAULT}"
+  loading="lazy"
+  decoding="async"
+  alt="${alt.replace(/"/g, "&quot;")}" />`;
 };
 
 export const formatBytes = (bytes: number | null | undefined): string => {
@@ -47,7 +61,14 @@ export const formatBytes = (bytes: number | null | undefined): string => {
 
 export const computeSavings = (original: number, optimized: number | null | undefined): number => {
   if (!optimized || !original) return 0;
-  // Compare to weight of one fallback (avg jpeg 800) instead of sum of all variants
-  // Better metric: assume browser picks one per page load; show vs. original.
   return Math.max(0, Math.round(((original - optimized) / original) * 100));
+};
+
+/** Helper to find a variant by device label, with a sensible fallback. */
+export const findByDevice = (
+  variants: OptimizedVariant[] | null | undefined,
+  label: DeviceLabel,
+): OptimizedVariant | undefined => {
+  if (!variants?.length) return undefined;
+  return variants.find((v) => v.format === "webp" && v.device_label === label);
 };

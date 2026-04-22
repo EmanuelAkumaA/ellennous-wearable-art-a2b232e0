@@ -142,7 +142,7 @@ const downloadWithProgress = async (
 const waitForOptimization = async (
   optimizedImageId: string,
   onPoll: (elapsedMs: number) => void,
-  timeoutMs = 90000,
+  timeoutMs = 30000,
 ): Promise<{ variants: OptimizedVariant[] | null; status: string }> => {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -158,7 +158,7 @@ const waitForOptimization = async (
       };
     }
     onPoll(Date.now() - start);
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 800));
   }
   return { variants: null, status: "timeout" };
 };
@@ -181,7 +181,8 @@ export const migrateLegacyImage = async (
   onStatus("optimizing", { progress: 60, optimizedImageId: uploaded.optimizedImageId });
 
   const opt = await waitForOptimization(uploaded.optimizedImageId, (elapsed) => {
-    const pct = 60 + Math.min(38, Math.round(elapsed / 2500));
+    // New pipeline ~3-5s per image: ramp to 98% in ~10s
+    const pct = 60 + Math.min(38, Math.round(elapsed / 260));
     onStatus("optimizing", { progress: pct });
   });
   if (opt.status === "error") throw new Error("Falha na otimização");
@@ -207,7 +208,7 @@ export const migrateLegacyImage = async (
 export const runBackfill = async (
   items: LegacyImageItem[],
   onItemUpdate: (id: string, patch: Partial<BackfillProgressItem>) => void,
-  concurrency = 2,
+  concurrency = 4,
 ): Promise<{ done: number; failed: number }> => {
   let cursor = 0;
   let done = 0;

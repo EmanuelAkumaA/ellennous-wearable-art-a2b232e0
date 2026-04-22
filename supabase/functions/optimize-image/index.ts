@@ -1,6 +1,5 @@
 // Edge function: optimize-image
-// Pre-generates AVIF / WebP / JPEG variants in 4 widths from a previously
-// uploaded original image.
+// Generates 3 WebP variants (mobile/tablet/desktop) — fast pipeline.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 // @ts-ignore — Deno types not present in this client repo
@@ -17,11 +16,19 @@ const corsHeaders = {
 };
 
 const BUCKET = "optimized-images";
-const TARGET_WIDTHS = [400, 800, 1200, 1600] as const;
+
+type DeviceLabel = "mobile" | "tablet" | "desktop";
+
+const TARGET_VARIANTS: Array<{ label: DeviceLabel; width: number; quality: number }> = [
+  { label: "mobile", width: 480, quality: 78 },
+  { label: "tablet", width: 1024, quality: 80 },
+  { label: "desktop", width: 1600, quality: 82 },
+];
 
 type Variant = {
   width: number;
-  format: "avif" | "webp" | "jpeg";
+  format: "webp";
+  device_label: DeviceLabel;
   path: string;
   url: string;
   size_bytes: number;
@@ -38,31 +45,24 @@ let _decodeJpeg: ((b: ArrayBuffer) => Promise<ImageData>) | null = null;
 let _decodePng: ((b: ArrayBuffer) => Promise<ImageData>) | null = null;
 let _decodeWebp: ((b: ArrayBuffer) => Promise<ImageData>) | null = null;
 let _resize: ((img: ImageData, opts: { width: number; height: number }) => Promise<ImageData>) | null = null;
-let _encJpeg: ((img: ImageData, opts?: { quality: number }) => Promise<ArrayBuffer>) | null = null;
 let _encWebp: ((img: ImageData, opts?: { quality: number }) => Promise<ArrayBuffer>) | null = null;
-let _encAvif: ((img: ImageData, opts?: { quality: number }) => Promise<ArrayBuffer>) | null = null;
 
 async function loadCodecs() {
-  if (_decodeJpeg && _decodePng && _decodeWebp && _resize && _encJpeg && _encWebp && _encAvif) return;
-  const [jpegMod, pngMod, webpMod, avifMod, resizeMod] = await Promise.all([
+  if (_decodeJpeg && _decodePng && _decodeWebp && _resize && _encWebp) return;
+  const [jpegMod, pngMod, webpMod, resizeMod] = await Promise.all([
     import("https://esm.sh/@jsquash/jpeg@1.5.0?bundle"),
     import("https://esm.sh/@jsquash/png@3.0.1?bundle"),
     import("https://esm.sh/@jsquash/webp@1.4.0?bundle"),
-    import("https://esm.sh/@jsquash/avif@1.4.0?bundle"),
     import("https://esm.sh/@jsquash/resize@2.1.0?bundle"),
   ]);
   // @ts-ignore
   _decodeJpeg = jpegMod.decode;
-  // @ts-ignore
-  _encJpeg = jpegMod.encode;
   // @ts-ignore
   _decodePng = pngMod.decode;
   // @ts-ignore
   _decodeWebp = webpMod.decode;
   // @ts-ignore
   _encWebp = webpMod.encode;
-  // @ts-ignore
-  _encAvif = avifMod.encode;
   // @ts-ignore
   _resize = resizeMod.default ?? resizeMod.resize;
 }
@@ -72,7 +72,6 @@ async function decodeAny(bytes: ArrayBuffer, mime: string): Promise<ImageData> {
   if (lower.includes("jpeg") || lower.includes("jpg")) return _decodeJpeg!(bytes);
   if (lower.includes("png")) return _decodePng!(bytes);
   if (lower.includes("webp")) return _decodeWebp!(bytes);
-  // try jpeg as last resort
   return _decodeJpeg!(bytes);
 }
 
@@ -140,39 +139,34 @@ Deno.serve(async (req) => {
 
       const folder = row.original_path.split("/").slice(0, -1).join("/");
 
-      const widths = TARGET_WIDTHS.filter((w) => w <= srcW);
-      // Always include at least the original width if all targets are larger
-      if (widths.length === 0) widths.push(srcW as 400);
-
       const variants: Variant[] = [];
       let totalBytes = 0;
 
-      for (const width of widths) {
+      for (const target of TARGET_VARIANTS) {
+        // Don't upscale: cap at source width
+        const width = Math.min(target.width, srcW);
         const height = Math.max(1, Math.round((srcH / srcW) * width));
-        const resized = width === srcW ? decoded : await _resize!(decoded, { width, height });
-
-        const formats: Array<{ ext: "avif" | "webp" | "jpeg"; mime: string; encode: () => Promise<ArrayBuffer> }> = [
-          { ext: "avif", mime: "image/avif", encode: () => _encAvif!(resized, { quality: 60 }) },
-          { ext: "webp", mime: "image/webp", encode: () => _encWebp!(resized, { quality: 75 }) },
-          { ext: "jpeg", mime: "image/jpeg", encode: () => _encJpeg!(resized, { quality: 85 }) },
-        ];
-
-        for (const fmt of formats) {
-          try {
-            const out = await fmt.encode();
-            const ext = fmt.ext === "jpeg" ? "jpg" : fmt.ext;
-            const path = `${folder}/${width}.${ext}`;
-            const { error: upErr } = await admin.storage
-              .from(BUCKET)
-              .upload(path, out, { contentType: fmt.mime, upsert: true });
-            if (upErr) throw upErr;
-            const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
-            const size = out.byteLength;
-            totalBytes += size;
-            variants.push({ width, format: fmt.ext, path, url: pub.publicUrl, size_bytes: size });
-          } catch (e) {
-            console.error(`Encode/upload failed for ${width}.${fmt.ext}:`, e);
-          }
+        try {
+          const resized = width === srcW ? decoded : await _resize!(decoded, { width, height });
+          const out = await _encWebp!(resized, { quality: target.quality });
+          const path = `${folder}/${target.label}.webp`;
+          const { error: upErr } = await admin.storage
+            .from(BUCKET)
+            .upload(path, out, { contentType: "image/webp", upsert: true });
+          if (upErr) throw upErr;
+          const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
+          const size = out.byteLength;
+          totalBytes += size;
+          variants.push({
+            width,
+            format: "webp",
+            device_label: target.label,
+            path,
+            url: pub.publicUrl,
+            size_bytes: size,
+          });
+        } catch (e) {
+          console.error(`Encode/upload failed for ${target.label}:`, e);
         }
       }
 

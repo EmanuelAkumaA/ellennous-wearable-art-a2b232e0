@@ -138,12 +138,15 @@ export const ImageOptimizer = () => {
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
     const totalOriginal = ready.reduce((s, i) => s + (i.original_size_bytes ?? 0), 0);
-    const totalFallback = ready.reduce((s, i) => {
-      const f = i.variants.find((v) => v.format === "jpeg" && v.width === 800)
-        ?? i.variants.find((v) => v.format === "jpeg");
-      return s + (f?.size_bytes ?? 0);
+    // Use tablet WebP (representative middle variant) for savings calc.
+    const totalRepresentative = ready.reduce((s, i) => {
+      const tablet =
+        i.variants.find((v) => v.format === "webp" && v.device_label === "tablet") ??
+        i.variants.find((v) => v.format === "webp") ??
+        i.variants.find((v) => v.format === "jpeg");
+      return s + (tablet?.size_bytes ?? 0);
     }, 0);
-    const savedPct = totalOriginal > 0 ? Math.round(((totalOriginal - totalFallback) / totalOriginal) * 100) : 0;
+    const savedPct = totalOriginal > 0 ? Math.round(((totalOriginal - totalRepresentative) / totalOriginal) * 100) : 0;
     return { count: items.length, ready: ready.length, totalOriginal, savedPct };
   }, [items]);
 
@@ -253,9 +256,12 @@ export const ImageOptimizer = () => {
 
       <div className="rounded-lg border border-primary/10 bg-primary/[0.03] px-4 py-3 flex items-start gap-3">
         <Sparkles className="h-4 w-4 mt-0.5 text-primary-glow shrink-0" />
-        <div className="text-xs text-muted-foreground leading-relaxed">
-          Cada imagem é processada em <strong className="text-foreground">12 variantes</strong> (4 larguras × AVIF/WebP/JPG).
-          O navegador escolhe automaticamente o melhor formato suportado em cada aparelho.
+        <div className="text-xs text-muted-foreground leading-relaxed flex-1">
+          Pipeline rápido: cada imagem gera <strong className="text-foreground">3 variantes WebP</strong> — 📱 mobile (480px), 💻 tablet (1024px) e 🖥 desktop (1600px).
+          O navegador escolhe automaticamente o tamanho ideal para cada aparelho.
+          <span className="ml-2 text-muted-foreground/70">
+            Otimização ~3-5s por imagem.
+          </span>
         </div>
       </div>
 

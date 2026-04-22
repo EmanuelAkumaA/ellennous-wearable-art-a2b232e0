@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatBytes } from "@/lib/imageSnippet";
+import { formatBytes, findByDevice, type DeviceLabel, type OptimizedVariant } from "@/lib/imageSnippet";
 import type { OptimizedImage } from "./ImageCard";
 
 const BUCKET = "optimized-images";
@@ -38,11 +38,13 @@ interface ImageRowProps {
   selectionMode?: boolean;
 }
 
-const findVariant = (
-  image: OptimizedImage,
-  width: number,
-  format: "jpeg" | "webp" | "avif" = "jpeg",
-) => image.variants.find((v) => v.format === format && v.width === width);
+/** Legacy fallback: pick the closest variant in any format for the chip display. */
+const findLegacyFor = (variants: OptimizedVariant[], targetWidth: number): OptimizedVariant | undefined => {
+  const sorted = [...variants]
+    .filter((v) => v.format === "webp" || v.format === "jpeg")
+    .sort((a, b) => Math.abs(a.width - targetWidth) - Math.abs(b.width - targetWidth));
+  return sorted[0];
+};
 
 export const ImageRow = ({
   image,
@@ -56,15 +58,14 @@ export const ImageRow = ({
 }: ImageRowProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
 
-  const previewUrl =
-    findVariant(image, 400, "webp")?.url ??
-    findVariant(image, 800, "webp")?.url ??
-    findVariant(image, 800, "jpeg")?.url ??
-    supabase.storage.from(BUCKET).getPublicUrl(image.original_path).data.publicUrl;
+  const mobile = findByDevice(image.variants, "mobile") ?? findLegacyFor(image.variants, 480);
+  const tablet = findByDevice(image.variants, "tablet") ?? findLegacyFor(image.variants, 1024);
+  const desktop = findByDevice(image.variants, "desktop") ?? findLegacyFor(image.variants, 1600);
 
-  const mobile = findVariant(image, 400, "jpeg");
-  const tablet = findVariant(image, 800, "jpeg");
-  const desktop = findVariant(image, 1200, "jpeg");
+  const previewUrl =
+    mobile?.url ??
+    tablet?.url ??
+    supabase.storage.from(BUCKET).getPublicUrl(image.original_path).data.publicUrl;
 
   const isLinked = !!pieceLink;
   const isActive = isLinked || image.used_count > 0;
@@ -107,7 +108,7 @@ export const ImageRow = ({
   };
 
   const toggleActive = async () => {
-    if (isLinked) return; // readonly when linked to a piece
+    if (isLinked) return;
     setBusy("use");
     try {
       await supabase
@@ -130,11 +131,13 @@ export const ImageRow = ({
   const DeviceChip = ({
     icon: Icon,
     label,
+    deviceLabel,
     variant,
   }: {
     icon: typeof Smartphone;
     label: string;
-    variant: ReturnType<typeof findVariant>;
+    deviceLabel: DeviceLabel;
+    variant: OptimizedVariant | undefined;
   }) => {
     const original = image.original_size_bytes;
     let savedPct: number | null = null;
@@ -171,7 +174,7 @@ export const ImageRow = ({
           </TooltipTrigger>
           <TooltipContent>
             {variant
-              ? `${variant.width}px · ${variant.format.toUpperCase()}${
+              ? `${variant.width}px · ${variant.format.toUpperCase()} (${deviceLabel})${
                   savedBytes > 0 ? ` · ${formatBytes(savedBytes)} economizados` : ""
                 }`
               : "Variante não disponível"}
@@ -191,7 +194,6 @@ export const ImageRow = ({
       } ${selectionMode ? "cursor-pointer" : ""}`}
     >
       <div className="flex flex-col sm:flex-row gap-3 p-3">
-        {/* Selection checkbox */}
         {onToggleSelect && (
           <label
             className={`absolute top-2 left-2 z-10 sm:static sm:self-center flex items-center justify-center h-6 w-6 rounded-md border bg-background/80 backdrop-blur cursor-pointer transition-all shrink-0 ${
@@ -212,7 +214,6 @@ export const ImageRow = ({
           </label>
         )}
 
-        {/* Thumb */}
         <div className="relative w-full sm:w-16 h-32 sm:h-16 shrink-0 rounded-md overflow-hidden bg-secondary/30">
           {image.status === "processing" ? (
             <div className="absolute inset-0 flex items-center justify-center text-primary-glow">
@@ -233,7 +234,6 @@ export const ImageRow = ({
           )}
         </div>
 
-        {/* Name + ID + piece link */}
         <div className="min-w-0 flex-1 sm:max-w-[220px] flex flex-col justify-center">
           <p className="text-sm font-medium truncate" title={image.name}>
             {image.name}
@@ -249,14 +249,12 @@ export const ImageRow = ({
           )}
         </div>
 
-        {/* Device sizes */}
         <div className="flex flex-wrap items-center gap-1.5 sm:flex-1 sm:justify-center">
-          <DeviceChip icon={Smartphone} label="Mob" variant={mobile} />
-          <DeviceChip icon={Tablet} label="Tab" variant={tablet} />
-          <DeviceChip icon={Monitor} label="Desk" variant={desktop} />
+          <DeviceChip icon={Smartphone} label="Mob" deviceLabel="mobile" variant={mobile} />
+          <DeviceChip icon={Tablet} label="Tab" deviceLabel="tablet" variant={tablet} />
+          <DeviceChip icon={Monitor} label="Desk" deviceLabel="desktop" variant={desktop} />
         </div>
 
-        {/* Active toggle */}
         <div className="flex items-center gap-2 sm:w-32 sm:justify-end shrink-0">
           <TooltipProvider delayDuration={200}>
             <Tooltip>
@@ -288,7 +286,6 @@ export const ImageRow = ({
           </TooltipProvider>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-1 shrink-0 sm:self-center">
           <button
             type="button"
