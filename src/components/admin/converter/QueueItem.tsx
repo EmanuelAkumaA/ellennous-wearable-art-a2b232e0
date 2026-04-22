@@ -171,9 +171,21 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
       }
       setProgress(95);
       const mainUrl = URL.createObjectURL(mainBlob);
+      // Build per-variant blob URLs for the "variantes geradas" grid.
+      const newVariantUrls: Partial<Record<VariantKey, string>> = preset
+        ? {
+            mobile: URL.createObjectURL(preset.mobile.blob),
+            tablet: URL.createObjectURL(preset.tablet.blob),
+            desktop: URL.createObjectURL(preset.desktop.blob),
+          }
+        : {};
       setConverted((prev) => {
         if (prev) URL.revokeObjectURL(prev.mainUrl);
         return { mainBlob, mainUrl, preset, totalSize };
+      });
+      setVariantUrls((prev) => {
+        (Object.values(prev) as string[]).forEach((u) => u && URL.revokeObjectURL(u));
+        return newVariantUrls;
       });
       setProgress(100);
       updateStatus("done");
@@ -229,6 +241,7 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
   useEffect(() => {
     return () => {
       if (converted?.mainUrl) URL.revokeObjectURL(converted.mainUrl);
+      (Object.values(variantUrls) as string[]).forEach((u) => u && URL.revokeObjectURL(u));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
