@@ -361,10 +361,12 @@ export const Gallery = () => {
                 </Accordion>
                 <Button
                   asChild
-                  className="font-accent text-base tracking-[0.2em] uppercase mt-8 bg-gradient-purple-wine border border-primary-glow/40 hover:shadow-glow text-white rounded-none h-12"
+                  className="font-accent text-base tracking-[0.2em] uppercase mt-8 bg-gradient-purple-wine border border-primary-glow/40 hover:shadow-glow text-white rounded-none h-12 transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]"
                 >
                   <a
-                    href={buildWhatsAppLink(`Quero algo no nível de "${selected.nome}". Me conta como começamos.`)}
+                    href={buildWhatsAppLink(
+                      `Olá! Vi a obra "${selected.nome}"${selected.categoria ? ` (${selected.categoria})` : ""} na galeria e quero algo nesse nível. Pode me contar como começamos um projeto exclusivo?`
+                    )}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={handleCtaClick}
