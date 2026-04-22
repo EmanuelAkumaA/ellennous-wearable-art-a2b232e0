@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+
+vi.mock("@/lib/clientTelemetry", () => ({
+  trackClientEvent: vi.fn(() => Promise.resolve()),
+}));
+
 import { ResponsivePicture } from "./responsive-picture";
 import { __setWebpSupportForTests } from "@/lib/webpSupport";
+import { trackClientEvent } from "@/lib/clientTelemetry";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
 
 const SIZES = "(max-width:640px) 480px, (max-width:1024px) 1024px, 1600px";
@@ -18,6 +24,7 @@ const makeVariant = (
 beforeEach(() => {
   // Default: assume WebP is supported so most assertions reflect the modern path.
   __setWebpSupportForTests(true);
+  (trackClientEvent as unknown as ReturnType<typeof vi.fn>).mockClear();
 });
 
 describe("ResponsivePicture", () => {
