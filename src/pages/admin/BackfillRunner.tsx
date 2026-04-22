@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -580,7 +580,7 @@ const LiveStat = ({
   value,
   tone = "default",
 }: {
-  icon: React.ComponentType<{ className?: string }> | ((props: { className?: string }) => JSX.Element);
+  icon: ComponentType<{ className?: string }>;
   label: string;
   value: string;
   tone?: LiveStatTone;
