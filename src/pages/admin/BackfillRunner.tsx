@@ -149,9 +149,18 @@ export const BackfillRunner = () => {
 
   const start = async () => {
     if (running) return;
-    const pending = items.filter((i) => i.status === "pending" || i.status === "error");
-    if (pending.length === 0) {
-      toast({ title: "Nada a fazer", description: "Todas as imagens já estão otimizadas." });
+    // Eligible = pending OR error AND (selection is non-empty ? in selection : all)
+    const eligible = items.filter((i) => i.status === "pending" || i.status === "error");
+    const target = selected.size > 0
+      ? eligible.filter((i) => selected.has(i.id))
+      : eligible;
+    if (target.length === 0) {
+      toast({
+        title: "Nada a fazer",
+        description: selected.size > 0
+          ? "Nenhuma das imagens selecionadas está pendente."
+          : "Todas as imagens já estão otimizadas.",
+      });
       return;
     }
     // Reset live stats for this run
@@ -167,9 +176,9 @@ export const BackfillRunner = () => {
 
     setRunning(true);
     setShowSuccess(false);
-    pending.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
+    target.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
 
-    const legacy: LegacyImageItem[] = pending.map(
+    const legacy: LegacyImageItem[] = target.map(
       ({ id, kind, pieceId, pieceName, url, storagePath, filename }) => ({
         id,
         kind,
@@ -184,6 +193,7 @@ export const BackfillRunner = () => {
     const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
     setRunning(false);
     setRunEndedAt(Date.now());
+    setSelected(new Set());
 
     if (failed === 0 && done > 0) {
       setShowSuccess(true);
