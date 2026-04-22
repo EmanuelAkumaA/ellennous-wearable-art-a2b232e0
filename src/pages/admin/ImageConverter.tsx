@@ -78,10 +78,20 @@ export const ImageConverter = () => {
   }, [queue, counts.inProgress]);
 
   const clearDone = () => {
+    const doneIds = new Set(queue.filter((q) => q.status === "done").map((q) => q.id));
     setQueue((prev) => prev.filter((q) => q.status !== "done"));
+    setItemProgress((prev) => {
+      const next: Record<string, number> = {};
+      for (const [k, v] of Object.entries(prev)) if (!doneIds.has(k)) next[k] = v;
+      return next;
+    });
   };
 
-  const clearAll = () => setQueue([]);
+  const clearAll = () => {
+    setQueue([]);
+    setItemProgress({});
+    setCompletionTimes([]);
+  };
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">
