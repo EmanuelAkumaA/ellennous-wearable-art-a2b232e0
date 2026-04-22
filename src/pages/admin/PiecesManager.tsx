@@ -597,12 +597,21 @@ export const PiecesManager = () => {
   const handleUpload = async (files: FileList | null) => {
     if (guardOffline()) return;
     if (!files || !workingPieceId) return;
+    const { valid, errors } = validateFiles(Array.from(files));
+    if (errors.length) {
+      toast({
+        title: `${errors.length} arquivo(s) rejeitado(s)`,
+        description: errors.slice(0, 3).map((e) => `${e.file.name}: ${e.reason}`).join("\n"),
+        variant: "destructive",
+      });
+    }
+    if (!valid.length) return;
     setUploading(true);
     try {
       let baseOrdem = (editing?.gallery_piece_images.length ?? 0) + draftImages.length;
       const newDrafts: DraftImage[] = [];
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) continue;
+      for (const file of valid) {
+        const t0 = performance.now();
         try {
           const result = await uploadGalleryImage({ file, pieceId: workingPieceId });
           const reduction = Math.max(0, Math.round((1 - result.optimizedSize / result.originalSize) * 100));
@@ -612,13 +621,38 @@ export const PiecesManager = () => {
             previewUrl: result.desktopUrl,
             ordem: baseOrdem++,
             desktopPath: result.desktopPath,
+            status: "ready",
+            progress: 100,
+          });
+          void logConversion({
+            source: "piece_upload",
+            pieceId: workingPieceId,
+            filename: file.name,
+            originalSize: result.originalSize,
+            optimizedSize: result.optimizedSize,
+            originalFormat: file.type || null,
+            status: "success",
+            durationMs: result.ms,
+            desktopPath: result.desktopPath,
           });
           toast({
             title: file.name,
             description: `Convertida em ${(result.ms / 1000).toFixed(1)}s · −${reduction}%`,
           });
         } catch (e) {
-          toast({ title: "Falha no upload", description: (e as Error).message, variant: "destructive" });
+          const msg = (e as Error).message;
+          toast({ title: "Falha no upload", description: msg, variant: "destructive" });
+          void logConversion({
+            source: "piece_upload",
+            pieceId: workingPieceId,
+            filename: file.name,
+            originalSize: file.size,
+            optimizedSize: 0,
+            originalFormat: file.type || null,
+            status: "error",
+            errorMessage: msg,
+            durationMs: Math.round(performance.now() - t0),
+          });
         }
       }
       if (newDrafts.length > 0) {
