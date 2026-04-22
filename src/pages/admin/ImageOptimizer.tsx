@@ -496,7 +496,8 @@ export const ImageOptimizer = () => {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Bulk action bar */}
