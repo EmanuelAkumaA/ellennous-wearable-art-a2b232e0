@@ -10,6 +10,7 @@ import { ResponsivePicture } from "@/components/ui/responsive-picture";
 import { ZoomOverlay } from "./ZoomOverlay";
 import { useGalleryData, type PieceData } from "./useGalleryData";
 import { trackPieceEvent } from "@/lib/analytics";
+import { useDominantColor } from "@/hooks/use-dominant-color";
 import {
   Accordion,
   AccordionItem,
@@ -183,7 +184,7 @@ export const Gallery = () => {
             <button
               key={cat}
               onClick={() => handleFilter(cat)}
-              className={`font-accent px-4 md:px-5 py-2 text-sm md:text-base tracking-[0.15em] uppercase border transition-all duration-500 ${
+              className={`font-accent px-4 md:px-5 py-2 text-sm md:text-base tracking-[0.15em] uppercase border transition-all duration-500 hover:-translate-y-0.5 active:scale-95 ${
                 filter === cat
                   ? "bg-primary text-primary-foreground border-primary shadow-glow"
                   : "border-border/60 text-muted-foreground hover:border-primary-glow hover:text-foreground"
@@ -208,46 +209,14 @@ export const Gallery = () => {
               const isNew = idx >= animateFromRef.current;
               const delay = isNew ? (idx - animateFromRef.current) * 150 : 0;
               return (
-                <button
+                <PieceCard
                   key={piece.id}
-                  ref={idx === step - 1 ? lastInitialItemRef : undefined}
-                  onClick={() => handleSelectPiece(piece)}
-                  style={isNew ? { animationDelay: `${delay}ms` } : undefined}
-                  className={`group relative aspect-[4/5] overflow-hidden bg-card border border-border/40 hover:border-primary-glow/60 transition-all duration-700 text-left ${isNew ? "animate-fade-up" : ""}`}
-                >
-                  <ResponsivePicture
-                    src={piece.capa || piece.imagens[0]}
-                    variants={piece.capaVariants}
-                    alt={`${piece.nome} — ${piece.categoria}`}
-                    loading="lazy"
-                    width={1024}
-                    height={1280}
-                    sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 420px"
-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
-                  <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
-                    {piece.novo && (
-                      <span className="font-accent text-xs tracking-[0.15em] uppercase bg-primary/90 text-primary-foreground px-3 py-1">
-                        Novo
-                      </span>
-                    )}
-                    {piece.destaque && (
-                      <span className="font-accent text-xs tracking-[0.15em] uppercase bg-brand-red/90 text-white px-3 py-1">
-                        Destaque
-                      </span>
-                    )}
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-6">
-                    <p className="font-accent text-xs tracking-[0.15em] uppercase text-primary-glow mb-2">{piece.categoria}</p>
-                    <h3 className="font-display text-2xl text-foreground group-hover:text-gradient-brand transition-colors">
-                      {piece.nome}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                      Clique para ver detalhes →
-                    </p>
-                  </div>
-                </button>
+                  piece={piece}
+                  isNew={isNew}
+                  delay={delay}
+                  onSelect={handleSelectPiece}
+                  innerRef={idx === step - 1 ? lastInitialItemRef : undefined}
+                />
               );
             })}
           </div>
