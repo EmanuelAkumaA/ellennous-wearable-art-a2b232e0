@@ -243,13 +243,29 @@ const ImageRowImpl = ({
 
         <div className="relative w-full sm:w-16 h-32 sm:h-16 shrink-0 rounded-md overflow-hidden bg-secondary/30">
           {image.status === "processing" ? (
-            <div className="absolute inset-0 flex items-center justify-center text-primary-glow">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-primary-glow">
               <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="font-mono text-[8px] tabular-nums text-muted-foreground/80">
+                ~{Math.round(elapsedMs / 1000)}s · ETA ~{Math.round(etaMs / 1000)}s
+              </span>
+              {stale && (
+                <span className="text-[8px] font-accent tracking-wide uppercase text-amber-300">
+                  Demorando
+                </span>
+              )}
             </div>
           ) : image.status === "error" ? (
-            <div className="absolute inset-0 flex items-center justify-center text-destructive">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setErrorOpen(true);
+              }}
+              className="absolute inset-0 flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+              title="Ver histórico de erros"
+            >
               <AlertCircle className="h-5 w-5" />
-            </div>
+            </button>
           ) : (
             <img
               src={previewUrl}
