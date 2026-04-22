@@ -384,8 +384,37 @@ export const ImageOptimizer = () => {
             active={statusFilter === "orphan"}
             onClick={() => setStatusFilter("orphan")}
             label="Órfãs"
-          count={orphanCount}
-        />
+            count={orphanCount}
+          />
+        </div>
+
+        {legacyCount > 0 && (
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleModernizeLegacy}
+                  disabled={!!bulkBusy}
+                  className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary-glow transition-colors disabled:opacity-40"
+                >
+                  {bulkBusy === "modernize" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5" />
+                  )}
+                  {bulkBusy === "modernize" && bulkProgress
+                    ? `Modernizando ${bulkProgress.done}/${bulkProgress.total}`
+                    : `Modernizar antigas (${legacyCount})`}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+                Reprocessa imagens que ainda não têm variantes mobile/tablet/desktop
+                no novo pipeline WebP.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
 
       {/* Bulk action bar */}
