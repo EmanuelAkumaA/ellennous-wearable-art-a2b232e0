@@ -169,6 +169,7 @@ export const ResponsivePicture = ({
         className={className}
         style={style}
         onClick={onClick}
+        onLoad={onLoad}
       />
     );
   }
@@ -191,6 +192,7 @@ export const ResponsivePicture = ({
         className={className}
         style={style}
         onClick={onClick}
+        onLoad={onLoad}
       />
     );
   }
