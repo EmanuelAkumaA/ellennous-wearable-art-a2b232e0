@@ -224,9 +224,16 @@ export const migrateLegacyImage = async (
 
     const file = new File([blob], item.filename, { type: blob.type || guessMime(item.filename) });
 
-    onStatus("uploading", { progress: 50 });
+    onStatus("converting", { progress: 45 });
     const role: ImageRole = item.kind === "cover" ? "cover" : "gallery";
-    const uploaded = await uploadToOptimizer({ file, pieceId: item.pieceId, role }).catch((e) => {
+    const uploaded = await uploadToOptimizer({
+      file,
+      pieceId: item.pieceId,
+      role,
+      onConversionDone: (ms) => {
+        onStatus("uploading", { progress: 50, conversionMs: ms });
+      },
+    }).catch((e) => {
       throw new StagedError("upload", e instanceof Error ? e.message : String(e));
     });
     optimizedImageId = uploaded.optimizedImageId;
