@@ -121,8 +121,9 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
     const t0 = performance.now();
 
     const validation = await validateFileDeep(file);
-    if (!validation.ok) {
-      setError(validation.reason);
+    if (validation.ok !== true) {
+      const reason = validation.reason;
+      setError(reason);
       updateStatus("error");
       void logConversion({
         source: "converter",
@@ -131,7 +132,7 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
         optimizedSize: 0,
         originalFormat: file.type || null,
         status: "error",
-        errorMessage: validation.reason,
+        errorMessage: reason,
         durationMs: Math.round(performance.now() - t0),
       });
       return;
