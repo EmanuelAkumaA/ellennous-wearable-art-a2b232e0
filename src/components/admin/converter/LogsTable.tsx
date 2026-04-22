@@ -290,10 +290,11 @@ export const LogsTable = () => {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-md bg-card/95 backdrop-blur-xl border-border/40">
+        <SheetContent side="right" className="w-full sm:max-w-md bg-card/95 backdrop-blur-xl border-border/40 overflow-y-auto pb-20">
           <SheetHeader>
             <SheetTitle className="font-display">Detalhes do log</SheetTitle>
           </SheetHeader>
