@@ -64,6 +64,8 @@ const BUCKET = "optimized-images";
 
 const ImageCardImpl = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected = false, onToggleSelect, selectionMode = false }: ImageCardProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
+  const [errorOpen, setErrorOpen] = useState(false);
+  const eta = useProcessingEta(image.updated_at, image.status === "processing");
 
   // New pipeline: prefer device-tagged WebP. Legacy: any webp/jpeg.
   const tabletWebp =
