@@ -733,7 +733,7 @@ const StatusBadge = ({ item }: { item: BackfillProgressItem }) => {
   );
 };
 
-const BackfillRow = ({ item, selected = false, selectable = false, onToggle }: BackfillRowProps) => {
+const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle }: BackfillRowProps) => {
   const animate = ACTIVE_STATUSES.includes(item.status);
   const showBar = animate || item.status === "done";
   const barPct = item.status === "done" ? 100 : item.progress || 0;
@@ -807,6 +807,21 @@ const BackfillRow = ({ item, selected = false, selectable = false, onToggle }: B
     </div>
   );
 };
+
+/**
+ * Memoized: only re-renders when status, progress, selection or selectability
+ * changes. During a 50-image backfill this prevents 49 re-renders per tick.
+ */
+const BackfillRow = memo(
+  BackfillRowImpl,
+  (prev, next) =>
+    prev.item.status === next.item.status &&
+    prev.item.progress === next.item.progress &&
+    prev.item.error === next.item.error &&
+    prev.selected === next.selected &&
+    prev.selectable === next.selectable &&
+    prev.onToggle === next.onToggle,
+);
 
 const Stat = ({
   label,
