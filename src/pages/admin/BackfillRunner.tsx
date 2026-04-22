@@ -334,9 +334,15 @@ export const BackfillRunner = () => {
     const ids = items.filter(isPickable).map((i) => i.id);
     setSelected(new Set(ids));
   };
+  const selectAtRisk = () => {
+    // No backfill, "em risco" = pending + error (mesmo conceito que isPickable hoje).
+    const ids = items.filter((i) => i.status === "pending" || i.status === "error").map((i) => i.id);
+    setSelected(new Set(ids));
+  };
   const clearSelection = () => setSelected(new Set());
 
   const totalPending = items.filter(isPickable).length;
+  const atRiskCount = items.filter((i) => i.status === "pending" || i.status === "error").length;
   const selectionEligibleCount = items.filter((i) => selected.has(i.id) && isPickable(i)).length;
 
   return (
