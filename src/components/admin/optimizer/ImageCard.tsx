@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Code2, Trash2, RefreshCw, Loader2, Star, AlertCircle, CheckCircle2, Eye, CheckSquare, Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -31,7 +31,7 @@ interface ImageCardProps {
 
 const BUCKET = "optimized-images";
 
-export const ImageCard = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected = false, onToggleSelect, selectionMode = false }: ImageCardProps) => {
+const ImageCardImpl = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected = false, onToggleSelect, selectionMode = false }: ImageCardProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
 
   // New pipeline: prefer device-tagged WebP. Legacy: any webp/jpeg.
@@ -227,3 +227,20 @@ export const ImageCard = ({ image, onOpenSnippet, onOpenDetail, onChanged, selec
     </div>
   );
 };
+
+/** Memoized to prevent grid-wide re-renders during bulk operations. */
+export const ImageCard = memo(
+  ImageCardImpl,
+  (prev, next) =>
+    prev.image.id === next.image.id &&
+    prev.image.status === next.image.status &&
+    prev.image.variants.length === next.image.variants.length &&
+    prev.image.used_count === next.image.used_count &&
+    prev.image.error_message === next.image.error_message &&
+    prev.selected === next.selected &&
+    prev.selectionMode === next.selectionMode &&
+    prev.onOpenSnippet === next.onOpenSnippet &&
+    prev.onOpenDetail === next.onOpenDetail &&
+    prev.onToggleSelect === next.onToggleSelect &&
+    prev.onChanged === next.onChanged,
+);

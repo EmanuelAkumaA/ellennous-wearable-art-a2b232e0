@@ -1,4 +1,4 @@
-import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -27,6 +27,7 @@ import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
+import { runWithLock } from "@/lib/runtimeLock";
 import {
   detectLegacyImages,
   runBackfill,
@@ -75,10 +76,17 @@ export const BackfillRunner = () => {
   const [completedCount, setCompletedCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
 
-  // Tick every second while running so the elapsed timer stays live.
+  // Synchronous double-click guard.
+  const startingRef = useRef(false);
+
+  // Tick every second while running, but only when the tab is visible — keeps
+  // the elapsed timer live without burning CPU on a hidden tab.
   useEffect(() => {
     if (!running) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const id = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      setNow((n) => (n === 0 ? Date.now() : n + 1000));
+    }, 1000);
     return () => window.clearInterval(id);
   }, [running]);
 
@@ -149,12 +157,16 @@ export const BackfillRunner = () => {
 
   const start = async () => {
     if (running) return;
+    if (startingRef.current) return;
+    startingRef.current = true;
+
     // Eligible = pending OR error AND (selection is non-empty ? in selection : all)
     const eligible = items.filter((i) => i.status === "pending" || i.status === "error");
     const target = selected.size > 0
       ? eligible.filter((i) => selected.has(i.id))
       : eligible;
     if (target.length === 0) {
+      startingRef.current = false;
       toast({
         title: "Nada a fazer",
         description: selected.size > 0
@@ -163,49 +175,66 @@ export const BackfillRunner = () => {
       });
       return;
     }
-    // Reset live stats for this run
-    timingsRef.current = new Map();
-    completedTimingsRef.current = [];
-    setCompletedCount(0);
-    setFailedCount(0);
-    setBytesOriginal(0);
-    setBytesOptimized(0);
-    setRunStartedAt(Date.now());
-    setRunEndedAt(null);
-    setNow(Date.now());
 
-    setRunning(true);
-    setShowSuccess(false);
-    target.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
+    const lockResult = await runWithLock("optimizer:backfill", async () => {
+      // Reset live stats for this run
+      timingsRef.current = new Map();
+      completedTimingsRef.current = [];
+      setCompletedCount(0);
+      setFailedCount(0);
+      setBytesOriginal(0);
+      setBytesOptimized(0);
+      setRunStartedAt(Date.now());
+      setRunEndedAt(null);
+      setNow(Date.now());
 
-    const legacy: LegacyImageItem[] = target.map(
-      ({ id, kind, pieceId, pieceName, url, storagePath, filename }) => ({
-        id,
-        kind,
-        pieceId,
-        pieceName,
-        url,
-        storagePath,
-        filename,
-      }),
-    );
+      setRunning(true);
+      setShowSuccess(false);
+      target.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
 
-    const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
-    setRunning(false);
-    setRunEndedAt(Date.now());
-    setSelected(new Set());
+      const legacy: LegacyImageItem[] = target.map(
+        ({ id, kind, pieceId, pieceName, url, storagePath, filename }) => ({
+          id,
+          kind,
+          pieceId,
+          pieceName,
+          url,
+          storagePath,
+          filename,
+        }),
+      );
 
-    if (failed === 0 && done > 0) {
-      setShowSuccess(true);
-      sonnerToast.success("Tudo otimizado!", {
-        description: `${done} imagem(ns) migrada(s) para o pipeline WebP.`,
-        duration: 6000,
-      });
-    } else {
-      toast({
-        title: `Backfill concluído`,
-        description: `${done} otimizada(s)${failed ? `, ${failed} falha(s)` : ""}.`,
-        variant: failed > 0 && done === 0 ? "destructive" : "default",
+      try {
+        const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
+        setRunEndedAt(Date.now());
+        setSelected(new Set());
+
+        if (failed === 0 && done > 0) {
+          setShowSuccess(true);
+          sonnerToast.success("Tudo otimizado!", {
+            description: `${done} imagem(ns) migrada(s) para o pipeline WebP.`,
+            duration: 6000,
+          });
+        } else {
+          toast({
+            title: `Backfill concluído`,
+            description: `${done} otimizada(s)${failed ? `, ${failed} falha(s)` : ""}.`,
+            variant: failed > 0 && done === 0 ? "destructive" : "default",
+          });
+        }
+      } finally {
+        setRunning(false);
+      }
+    });
+
+    startingRef.current = false;
+
+    if (!lockResult.acquired) {
+      sonnerToast.warning("Outro backfill já está em andamento.", {
+        description: lockResult.fallback
+          ? "Aguarde o término da execução em andamento nesta aba."
+          : "Aguarde o término — pode estar em outra aba.",
+        duration: 4000,
       });
     }
   };
@@ -704,7 +733,7 @@ const StatusBadge = ({ item }: { item: BackfillProgressItem }) => {
   );
 };
 
-const BackfillRow = ({ item, selected = false, selectable = false, onToggle }: BackfillRowProps) => {
+const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle }: BackfillRowProps) => {
   const animate = ACTIVE_STATUSES.includes(item.status);
   const showBar = animate || item.status === "done";
   const barPct = item.status === "done" ? 100 : item.progress || 0;
@@ -778,6 +807,21 @@ const BackfillRow = ({ item, selected = false, selectable = false, onToggle }: B
     </div>
   );
 };
+
+/**
+ * Memoized: only re-renders when status, progress, selection or selectability
+ * changes. During a 50-image backfill this prevents 49 re-renders per tick.
+ */
+const BackfillRow = memo(
+  BackfillRowImpl,
+  (prev, next) =>
+    prev.item.status === next.item.status &&
+    prev.item.progress === next.item.progress &&
+    prev.item.error === next.item.error &&
+    prev.selected === next.selected &&
+    prev.selectable === next.selectable &&
+    prev.onToggle === next.onToggle,
+);
 
 const Stat = ({
   label,
