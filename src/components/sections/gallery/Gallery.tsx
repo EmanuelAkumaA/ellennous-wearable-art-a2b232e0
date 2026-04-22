@@ -373,10 +373,25 @@ interface PieceCardProps {
 const PieceCard = ({ piece, isNew, delay, onSelect, innerRef }: PieceCardProps) => {
   const coverUrl = piece.capa || piece.imagens[0] || null;
   const dominantColor = useDominantColor(coverUrl);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [skeletonTimeout, setSkeletonTimeout] = useState(false);
+
+  // Safety net: never trap the card in skeleton state if the color hook
+  // somehow never resolves (CORS, network, etc.). After 600 ms post-image
+  // load we drop the skeleton regardless.
+  useEffect(() => {
+    if (!imgLoaded) return;
+    const t = setTimeout(() => setSkeletonTimeout(true), 600);
+    return () => clearTimeout(t);
+  }, [imgLoaded]);
+
+  const isReady = imgLoaded && (dominantColor !== null || skeletonTimeout);
   const ringColor = dominantColor ?? "hsl(var(--primary-glow))";
+
   return (
     <div
       className="card-glow-ring rounded-sm"
+      data-loading={!isReady}
       style={{ ["--ring-color" as string]: ringColor }}
     >
       <button
@@ -396,7 +411,18 @@ const PieceCard = ({ piece, isNew, delay, onSelect, innerRef }: PieceCardProps) 
           height={1280}
           sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 420px"
           className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+          onLoad={() => setImgLoaded(true)}
         />
+        <div
+          className={`gallery-skeleton transition-opacity duration-700 ${
+            isReady ? "opacity-0 pointer-events-none" : "opacity-100"
+          }`}
+          aria-hidden="true"
+        >
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Dragon className="w-24 h-24 opacity-10" />
+          </div>
+        </div>
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent opacity-90" />
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-primary/0 to-primary/15 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
         <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
