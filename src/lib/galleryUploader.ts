@@ -59,6 +59,7 @@ export const uploadGalleryImage = async ({
     { key: "desktop", blob: preset.desktop.blob, w: preset.desktop.width, h: preset.desktop.height },
   ];
 
+  let completed = 0;
   const uploads = await Promise.all(
     items.map(async (item) => {
       const path = `${folder}/${item.key}.webp`;
@@ -67,9 +68,12 @@ export const uploadGalleryImage = async ({
         .upload(path, item.blob, { contentType: "image/webp", upsert: false });
       if (error) throw error;
       const { data } = supabase.storage.from(GALLERY_BUCKET).getPublicUrl(path);
+      completed += 1;
+      onProgress?.(55 + Math.round((completed / items.length) * 40), "uploading");
       return { ...item, path, url: data.publicUrl };
     }),
   );
+  onProgress?.(100, "done");
 
   const desktop = uploads.find((u) => u.key === "desktop")!;
   const variants: OptimizedVariant[] = uploads.map((u) => ({
