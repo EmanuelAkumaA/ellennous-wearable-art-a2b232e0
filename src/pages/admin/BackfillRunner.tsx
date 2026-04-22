@@ -161,21 +161,22 @@ export const BackfillRunner = () => {
     updateItem(id, patch);
   };
 
-  const start = async () => {
+  const start = async (overrideIds?: Set<string>) => {
     if (running) return;
     if (startingRef.current) return;
     startingRef.current = true;
 
     // Eligible = pending OR error AND (selection is non-empty ? in selection : all)
     const eligible = items.filter((i) => i.status === "pending" || i.status === "error");
-    const target = selected.size > 0
-      ? eligible.filter((i) => selected.has(i.id))
+    const effectiveSelection = overrideIds ?? selected;
+    const target = effectiveSelection.size > 0
+      ? eligible.filter((i) => effectiveSelection.has(i.id))
       : eligible;
     if (target.length === 0) {
       startingRef.current = false;
       toast({
         title: "Nada a fazer",
-        description: selected.size > 0
+        description: effectiveSelection.size > 0
           ? "Nenhuma das imagens selecionadas está pendente."
           : "Todas as imagens já estão otimizadas.",
       });
