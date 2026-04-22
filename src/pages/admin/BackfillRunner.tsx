@@ -832,6 +832,11 @@ const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle 
       <div className="min-w-0 flex-1">
         <p className="text-sm truncate font-medium" title={item.filename}>
           {item.filename}
+          {item.conversionMs != null && (
+            <span className="ml-2 text-[10px] font-accent tracking-[0.2em] uppercase text-blue-400/90">
+              WebP em {(item.conversionMs / 1000).toFixed(1)}s
+            </span>
+          )}
         </p>
         <p className="text-[10px] text-muted-foreground/80 truncate">
           <span className="font-accent tracking-[0.2em] uppercase">
