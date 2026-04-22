@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Smartphone, Tablet, Monitor, ImageOff } from "lucide-react";
 import { formatBytes } from "@/lib/imageSnippet";
+import { logConversion } from "@/lib/conversionLogs";
 
 export type VariantKey = "mobile" | "tablet" | "desktop";
 
@@ -38,9 +39,19 @@ const META: Record<VariantKey, { label: string; Icon: typeof Smartphone; default
   desktop: { label: "Desktop", Icon: Monitor, defaultWidth: 1200 },
 };
 
+// Track which URLs we've already reported as failed to avoid log spam on re-renders.
+const reportedErrors = new Set<string>();
+
 const Thumb = ({ url, alt, square }: { url: string | null; alt: string; square: boolean }) => {
   const [errored, setErrored] = useState(false);
+  const startedAtRef = useRef<number>(performance.now());
   const baseCls = `w-full ${square ? "aspect-square" : "aspect-[4/3]"} bg-secondary/30 overflow-hidden rounded-md flex items-center justify-center`;
+
+  useEffect(() => {
+    setErrored(false);
+    startedAtRef.current = performance.now();
+  }, [url]);
+
   if (!url || errored) {
     return (
       <div className={baseCls}>
@@ -58,7 +69,22 @@ const Thumb = ({ url, alt, square }: { url: string | null; alt: string; square: 
         alt={alt}
         loading="lazy"
         decoding="async"
-        onError={() => setErrored(true)}
+        onError={() => {
+          setErrored(true);
+          if (!reportedErrors.has(url)) {
+            reportedErrors.add(url);
+            const filename = url.split("/").slice(-2).join("/");
+            void logConversion({
+              source: "image_load",
+              filename,
+              originalSize: 0,
+              optimizedSize: 0,
+              status: "error",
+              errorMessage: `Falha ao carregar do bucket: ${url}`,
+              durationMs: Math.round(performance.now() - startedAtRef.current),
+            });
+          }
+        }}
         className="w-full h-full object-cover"
       />
     </div>
@@ -75,6 +101,7 @@ export const VariantGrid = ({ slots, square = true, size = "comfortable" }: Vari
         const w = slot.width ?? defaultWidth;
         const h = slot.height;
         const inactive = slot.active === false;
+        const noUrl = !slot.url;
         return (
           <div
             key={slot.key}
@@ -107,13 +134,17 @@ export const VariantGrid = ({ slots, square = true, size = "comfortable" }: Vari
               <button
                 type="button"
                 onClick={slot.onToggleActive}
+                disabled={noUrl}
+                title={noUrl ? "Variante indisponível para esta imagem" : inactive ? "Ativar esta variante" : "Desativar esta variante"}
                 className={`text-[9px] font-accent tracking-[0.2em] uppercase rounded px-2 py-1 transition-colors ${
-                  inactive
-                    ? "bg-muted/30 text-muted-foreground line-through"
+                  noUrl
+                    ? "bg-muted/20 text-muted-foreground/40 cursor-not-allowed"
+                    : inactive
+                    ? "bg-muted/30 text-muted-foreground line-through hover:bg-muted/50"
                     : "bg-primary/15 text-primary-glow hover:bg-primary/25"
                 }`}
               >
-                {inactive ? "Inativa" : "✓ Ativa"}
+                {noUrl ? "Indisp." : inactive ? "Inativa" : "✓ Ativa"}
               </button>
             )}
             {slot.actions && <div className="flex flex-col gap-1.5 mt-auto">{slot.actions}</div>}
