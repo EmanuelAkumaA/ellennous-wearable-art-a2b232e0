@@ -61,12 +61,24 @@ export const ImageOptimizer = () => {
   const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete" | "modernize" | "atrisk">(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
+  /** Synchronous guard to block double-clicks before React commits the state. */
+  const runningRef = useRef(false);
+  /** Throttle bulk-progress writes to avoid 50× re-renders during a 50-image bulk. */
+  const lastProgressAtRef = useRef(0);
+  const pushProgress = useCallback((done: number, total: number) => {
+    const now = Date.now();
+    if (done === total || now - lastProgressAtRef.current >= PROGRESS_THROTTLE_MS) {
+      lastProgressAtRef.current = now;
+      setBulkProgress({ done, total });
+    }
+  }, []);
+
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim().toLowerCase()), 250);
     return () => clearTimeout(t);
   }, [search]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const query = supabase.from("optimized_images").select("*").limit(PAGE_SIZE);
     if (sort === "recent") query.order("created_at", { ascending: false });
@@ -103,23 +115,21 @@ export const ImageOptimizer = () => {
       }
     }
     setLoading(false);
-  };
+  }, [sort]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
+  }, [load]);
 
-  useEffect(() => {
-    const channel = supabase
-      .channel("optimized_images_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "optimized_images" }, () => load())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
+  // Coalesced realtime: pause refetches during bulk runs (single trailing fetch
+  // when the bulk finishes).
+  useCoalescedRealtime({
+    table: "optimized_images",
+    channelKey: `optimizer_${sort}`,
+    onChange: load,
+    paused: !!bulkBusy,
+    debounceMs: 800,
+  });
 
   const filtered = useMemo(() => {
     let out = items;
