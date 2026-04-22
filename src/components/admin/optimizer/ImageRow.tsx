@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   Code2,
   Trash2,
@@ -12,12 +12,15 @@ import {
   Tablet,
   Monitor,
   Link2,
+  CheckCircle2,
+  Hourglass,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatBytes, findByDevice, type DeviceLabel, type OptimizedVariant } from "@/lib/imageSnippet";
+import { ErrorHistoryDialog } from "@/components/admin/optimizer/ErrorHistoryDialog";
 import type { OptimizedImage } from "./ImageCard";
 
 const BUCKET = "optimized-images";
