@@ -293,6 +293,73 @@ export const BackfillRunner = () => {
         </div>
       )}
 
+      {/* Live stats panel — visible during and after a run */}
+      {liveStats.hasData && (
+        <div className="rounded-lg border border-border/40 bg-card/40 backdrop-blur p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="h-3.5 w-3.5 text-primary-glow" />
+              <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
+                {running ? "Estatísticas em tempo real" : "Estatísticas do último run"}
+              </p>
+            </div>
+            {!running && (
+              <button
+                type="button"
+                onClick={clearStats}
+                className="inline-flex items-center gap-1 text-[10px] font-accent tracking-[0.2em] uppercase text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Eraser className="h-3 w-3" /> Limpar
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <LiveStat
+              icon={Timer}
+              label="Decorrido"
+              value={formatDuration(liveStats.elapsedMs)}
+              tone="primary"
+            />
+            <LiveStat
+              icon={Gauge}
+              label="Tempo médio"
+              value={liveStats.avgMs > 0 ? `${(liveStats.avgMs / 1000).toFixed(1)}s` : "—"}
+              tone="primary"
+            />
+            <LiveStat
+              icon={CheckCircle2}
+              label="Sucesso"
+              value={`${liveStats.successRate}%`}
+              tone={
+                liveStats.successRate >= 95
+                  ? "success"
+                  : liveStats.successRate >= 80
+                    ? "warning"
+                    : "destructive"
+              }
+            />
+            <LiveStat
+              icon={Activity}
+              label="Img/min"
+              value={liveStats.imgsPerMin > 0 ? liveStats.imgsPerMin.toFixed(1) : "—"}
+              tone="primary"
+            />
+            <LiveStat
+              icon={Hourglass}
+              label="ETA"
+              value={running && liveStats.etaMs > 0 ? formatDuration(liveStats.etaMs) : "—"}
+              tone="default"
+            />
+            <LiveStat
+              icon={TrendingDown}
+              label="Economizado"
+              value={liveStats.bytesSaved > 0 ? formatBytes(liveStats.bytesSaved) : "—"}
+              tone="success"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="Detectadas" value={String(stats.total)} />
