@@ -171,13 +171,29 @@ const ImageCardImpl = ({ image, onOpenSnippet, onOpenDetail, onChanged, selected
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin text-primary-glow" />
             <span className="font-accent text-[10px] tracking-[0.3em] uppercase">Processando</span>
+            <span className="font-mono text-[10px] tabular-nums text-muted-foreground/80">
+              ~{Math.round(eta.elapsed / 1000)}s · ETA ~{Math.round(eta.etaMs / 1000)}s
+            </span>
+            {eta.stale && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-accent tracking-[0.2em] uppercase text-amber-300">
+                <Hourglass className="h-2.5 w-2.5" /> Demorando mais
+              </span>
+            )}
           </div>
         ) : image.status === "error" ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-destructive p-4 text-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setErrorOpen(true);
+            }}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-destructive p-4 text-center hover:bg-destructive/5 transition-colors"
+            title="Ver histórico de erros"
+          >
             <AlertCircle className="h-6 w-6" />
-            <span className="font-accent text-[10px] tracking-[0.3em] uppercase">Erro</span>
+            <span className="font-accent text-[10px] tracking-[0.3em] uppercase">Erro · ver detalhes</span>
             <p className="text-[10px] text-muted-foreground line-clamp-2">{image.error_message}</p>
-          </div>
+          </button>
         ) : (
           <img
             src={previewUrl}
