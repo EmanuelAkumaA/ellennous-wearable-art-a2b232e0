@@ -669,8 +669,14 @@ export const PiecesManager = () => {
     if (!files || !workingPieceId) return;
     const file = files[0];
     if (!file) return;
-    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) return;
+    const { valid, errors } = validateFiles([file]);
+    if (errors.length) {
+      toast({ title: "Arquivo rejeitado", description: errors[0].reason, variant: "destructive" });
+      return;
+    }
+    if (!valid.length) return;
     setCoverUploading(true);
+    const t0 = performance.now();
     try {
       const result = await uploadGalleryImage({ file, pieceId: workingPieceId });
       const reduction = Math.max(0, Math.round((1 - result.optimizedSize / result.originalSize) * 100));
@@ -680,12 +686,35 @@ export const PiecesManager = () => {
         previewUrl: result.desktopUrl,
         desktopPath: result.desktopPath,
       });
+      void logConversion({
+        source: "piece_upload",
+        pieceId: workingPieceId,
+        filename: file.name,
+        originalSize: result.originalSize,
+        optimizedSize: result.optimizedSize,
+        originalFormat: file.type || null,
+        status: "success",
+        durationMs: result.ms,
+        desktopPath: result.desktopPath,
+      });
       toast({
         title: "Capa enviada",
         description: `Convertida em ${(result.ms / 1000).toFixed(1)}s · −${reduction}%`,
       });
     } catch (err) {
-      toast({ title: "Erro no upload da capa", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "";
+      toast({ title: "Erro no upload da capa", description: msg, variant: "destructive" });
+      void logConversion({
+        source: "piece_upload",
+        pieceId: workingPieceId,
+        filename: file.name,
+        originalSize: file.size,
+        optimizedSize: 0,
+        originalFormat: file.type || null,
+        status: "error",
+        errorMessage: msg,
+        durationMs: Math.round(performance.now() - t0),
+      });
     } finally {
       setCoverUploading(false);
       if (coverRef.current) coverRef.current.value = "";
