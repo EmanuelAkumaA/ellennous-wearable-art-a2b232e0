@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { ImageCard, type OptimizedImage } from "@/components/admin/optimizer/ImageCard";
 import { ImageRow, type PieceLink } from "@/components/admin/optimizer/ImageRow";
