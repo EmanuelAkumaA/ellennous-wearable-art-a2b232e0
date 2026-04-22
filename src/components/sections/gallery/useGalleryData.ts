@@ -36,8 +36,35 @@ type RawPiece = {
   novo: boolean;
   ordem: number;
   cover_url?: string | null;
+  cover_url_mobile?: string | null;
+  cover_url_tablet?: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Array<{ id: string; url: string; ordem: number }> | null;
+};
+
+const PRESET_WIDTHS = { mobile: 480, tablet: 768, desktop: 1200 } as const;
+
+/** Builds 3 webp variants when at least one explicit per-device cover is set. */
+const buildCoverVariants = (
+  desktop: string | null,
+  mobile: string | null,
+  tablet: string | null,
+): OptimizedVariant[] | null => {
+  if (!desktop && !mobile && !tablet) return null;
+  const fallback = desktop ?? mobile ?? tablet ?? "";
+  const make = (label: "mobile" | "tablet" | "desktop", url: string): OptimizedVariant => ({
+    width: PRESET_WIDTHS[label],
+    format: "webp",
+    device_label: label,
+    path: "",
+    url,
+    size_bytes: 0,
+  });
+  return [
+    make("mobile", mobile ?? fallback),
+    make("tablet", tablet ?? fallback),
+    make("desktop", desktop ?? fallback),
+  ];
 };
 
 const buildPieces = (rawPieces: RawPiece[]): PieceData[] =>
@@ -49,7 +76,9 @@ const buildPieces = (rawPieces: RawPiece[]): PieceData[] =>
       url,
       variants: deriveGalleryVariants(url),
     }));
-    const capaVariants = capa ? deriveGalleryVariants(capa) : null;
+    // Prefer explicit per-device covers; fall back to deriving from desktop URL.
+    const explicitCover = buildCoverVariants(p.cover_url ?? null, p.cover_url_mobile ?? null, p.cover_url_tablet ?? null);
+    const capaVariants = explicitCover ?? (capa ? deriveGalleryVariants(capa) : null);
     return {
       id: p.id,
       nome: p.nome,
