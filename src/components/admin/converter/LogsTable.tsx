@@ -21,6 +21,7 @@ import { formatBytes } from "@/lib/imageSnippet";
 const SOURCE_LABEL: Record<ConversionSource, string> = {
   converter: "Conversor",
   piece_upload: "Cadastro de obra",
+  image_load: "Carregamento",
 };
 
 const formatDate = (iso: string) => {
@@ -133,6 +134,7 @@ export const LogsTable = () => {
               <SelectItem value="all">Todas</SelectItem>
               <SelectItem value="converter">Conversor</SelectItem>
               <SelectItem value="piece_upload">Cadastro de obra</SelectItem>
+              <SelectItem value="image_load">Carregamento</SelectItem>
             </SelectContent>
           </Select>
         </div>

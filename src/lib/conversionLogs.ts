@@ -6,7 +6,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-export type ConversionSource = "converter" | "piece_upload";
+export type ConversionSource = "converter" | "piece_upload" | "image_load";
 export type ConversionStatus = "success" | "error";
 
 export interface ConversionLogPayload {
