@@ -1,117 +1,110 @@
 
 
-## Plano: Skeleton artístico + cache persistente e debounce no `useDominantColor`
+## Plano: Fallback de capa + telemetria de carregamento + pré-carregamento no hover + remover anel animado
 
-### 1. Skeleton/placeholder artístico no card da galeria
+### 1. Remover a animação que circula o card (referência da imagem 01)
 
-Hoje o card mostra a imagem com `loading="lazy"` direto e a borda colorida começa cinza/glow padrão até o hook `useDominantColor` resolver — gera um leve "flicker" no primeiro hover.
+Em `src/index.css`, remover o pseudo-elemento `.card-glow-ring::before` (anel cônico rotativo) e o `::after` (glow radial). Manter o wrapper `.card-glow-ring` apenas como container neutro (ou remover completamente). Resultado: card limpo, sem borda animada nem halo.
 
-**Mudanças em `src/components/sections/gallery/Gallery.tsx`** (componente `PieceCard`):
+- Remove `.card-glow-ring::before`, `.card-glow-ring:hover::before`, `.card-glow-ring::after`, `.card-glow-ring:hover::after`, `@keyframes ring-rotate` e a regra `[data-loading="true"]::before`.
+- Em `Gallery.tsx` (`PieceCard`): remove o atributo `style={{ "--ring-color": ringColor }}` e o cálculo de `ringColor`. Mantém `data-loading` (não usado pelo CSS, mas inofensivo) — opcionalmente removido.
+- O hook `useDominantColor` continua sendo chamado **apenas** para alimentar telemetria (próximo item) e o pré-carregamento. Não controla mais visual.
 
-- Estado local `imgLoaded` (`onLoad` no `<img>` real → `true`).
-- Estado derivado `isReady = imgLoaded && dominantColor !== null` (ou timeout de 600 ms para não travar caso o hook falhe).
-- Renderizar um overlay **absoluto** dentro do card, por cima da imagem, enquanto `!isReady`:
-  - Gradiente sutil em diagonal usando a paleta da marca + shimmer:
-    `bg-gradient-to-br from-card via-secondary/40 to-card`
-  - Faixa de shimmer animada (keyframe `shimmer` translateX -100% → 100%, 1.6 s linear infinite) com `bg-gradient-to-r from-transparent via-primary-glow/15 to-transparent`.
-  - Ícone discreto centralizado (silhueta do `Dragon` em `opacity-10 w-24 h-24`) reforçando a identidade premium.
-  - `transition-opacity duration-700` e fade-out (`opacity-0 pointer-events-none`) quando `isReady`.
-- Antes de pintar, o `--ring-color` cai para `hsl(var(--primary-glow))` com `opacity` reduzida no anel — o anel só "acende" depois que a cor dominante chega (já é o comportamento; vamos só travar a opacidade do `::before` para 0 enquanto `!dominantColor`).
+### 2. Fallback robusto quando a capa falha (CORS / 404 / rede)
 
-**Novo CSS em `src/index.css`** (camada `components`):
+Em `Gallery.tsx` (`PieceCard`):
 
-```css
-.gallery-skeleton {
-  position: absolute; inset: 0; z-index: 2;
-  background: linear-gradient(135deg,
-    hsl(var(--card)) 0%, hsl(var(--secondary) / 0.5) 50%, hsl(var(--card)) 100%);
-  overflow: hidden;
-}
-.gallery-skeleton::after {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(90deg,
-    transparent 0%, hsl(var(--primary-glow) / 0.18) 50%, transparent 100%);
-  transform: translateX(-100%);
-  animation: gallery-shimmer 1.6s linear infinite;
-}
-@keyframes gallery-shimmer { to { transform: translateX(100%); } }
-.card-glow-ring[data-loading="true"]::before { opacity: 0 !important; }
-```
+- Novo estado `imgError: boolean`.
+- `<ResponsivePicture onError={...} />` — adicionar prop `onError` ao `ResponsivePicture` (encadeada igual ao `onLoad`) e propagar para o `<img>`. Quando dispara:
+  - Marca `imgError = true`.
+  - Remove o card do estado de skeleton: `isReady = true` forçado quando `imgError`.
+  - Renderiza um placeholder estético (Dragon + nome da peça em opacidade baixa, fundo `bg-card`) no lugar da imagem.
+  - Loga em `client_telemetry` via novo evento `gallery_image_load_error` com `{ url, pieceId, reason }`. Registra também em `conversion_logs` via `logConversion({ source: "image_load", filename: url, status: "error", errorMessage: reason, ... })` (já existe esse caminho).
+- O motivo (`reason`) é inferido: se `image.naturalWidth === 0` e o navegador não fornece detalhe, gravamos `"network_or_cors"`. Caso `crossOrigin` venha bloqueado pelo Supabase (raro), o resource timing reportará `transferSize === 0`.
+- `isReady` agora é `(imgLoaded || imgError) && (dominantColor !== null || skeletonTimeout)` — o skeleton sai imediatamente em erro.
 
-O wrapper `card-glow-ring` recebe `data-loading={!isReady}` para suprimir o anel até a cor estar pronta — elimina o flicker de cinza-para-cor ao passar o mouse.
+### 3. Telemetria de tempo de carregamento e tempo até cor dominante
 
-### 2. Cache persistente + debounce no `useDominantColor`
-
-**Mudanças em `src/hooks/use-dominant-color.ts`:**
-
-#### 2a. Cache persistente (localStorage)
-
-- Chave única: `ellennous:dominantColor:v1` → `Record<url, { color: string | null; ts: number }>`.
-- Hidratação **lazy** (apenas uma vez no módulo) para o `Map<string, string | null>` em memória existente:
-  ```ts
-  const STORAGE_KEY = "ellennous:dominantColor:v1";
-  const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
-  let hydrated = false;
-  const hydrate = () => {
-    if (hydrated || typeof window === "undefined") return;
-    hydrated = true;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const obj = JSON.parse(raw) as Record<string, { color: string | null; ts: number }>;
-      const now = Date.now();
-      for (const [url, v] of Object.entries(obj)) {
-        if (now - v.ts < TTL_MS) CACHE.set(url, v.color);
-      }
-    } catch { /* ignore */ }
-  };
-  ```
-- Persistência **debounced**: após `CACHE.set(url, color)`, agendar `flushPersist()` em 400 ms (clearTimeout/setTimeout). `flushPersist` serializa o `CACHE` inteiro (com timestamps) e grava em `localStorage` com `try/catch` (quota silencioso).
-- Limite de tamanho: se `CACHE.size > 200`, descartar os 50 mais antigos antes de gravar.
-
-#### 2b. Debounce do cálculo (canvas)
-
-Hoje, ao filtrar a galeria, vários cards montam/desmontam rapidamente e cada um inicia um `Image()` + canvas. Vamos atrasar o início:
-
-- Dentro do `useEffect`, em vez de chamar `computeColor(url)` imediatamente, agendar via `setTimeout` de **150 ms**. Se o componente desmontar antes (filtro mudou, scroll rápido), `clearTimeout` cancela e nenhum canvas é criado.
-- Cache em memória continua sendo consultado **antes** do `setTimeout` (hits permanecem instantâneos).
-- O `PENDING` Map já evita cálculos duplicados para a mesma URL — manter.
-
+**Novo evento em `clientTelemetry.ts`** — ampliar `TelemetryEvent`:
 ```ts
-useEffect(() => {
-  if (!url) { setColor(null); return; }
-  hydrate();
-  if (CACHE.has(url)) { setColor(CACHE.get(url) ?? null); return; }
-  let cancelled = false;
-  const handle = setTimeout(() => {
-    let promise = PENDING.get(url);
-    if (!promise) {
-      promise = computeColor(url).then((c) => {
-        CACHE.set(url, c);
-        PENDING.delete(url);
-        schedulePersist();
-        return c;
-      });
-      PENDING.set(url, promise);
-    }
-    promise.then((c) => { if (!cancelled) setColor(c); });
-  }, 150);
-  return () => { cancelled = true; clearTimeout(handle); };
-}, [url]);
+| "gallery_image_load_slow"
+| "gallery_dominant_color_slow"
+| "gallery_image_load_error"
 ```
 
-### 3. Integração
+**Em `PieceCard`** (Gallery.tsx):
+- `mountAtRef = useRef(performance.now())`.
+- No `onLoad` da capa: calcula `imgMs = performance.now() - mountAtRef.current`. Se `> 2500 ms`, dispara `gallery_image_load_slow` com `{ pieceId, ms: Math.round(imgMs), url }` (sem `oncePerSession` — queremos saber por peça, mas com debounce próprio: usar um `Set` em módulo `loggedSlowImg` para evitar repetir a mesma peça).
+- `useEffect` que observa `dominantColor`: quando muda de `null → string`, calcula `colorMs = performance.now() - mountAtRef.current`. Se `> 1500 ms`, dispara `gallery_dominant_color_slow` com `{ pieceId, ms, url }` (mesma deduplicação por peça).
+- Constantes no topo: `IMG_SLOW_MS = 2500`, `COLOR_SLOW_MS = 1500`.
+- Os limiares são exportados para fácil ajuste futuro.
 
-- `PieceCard` em `Gallery.tsx`: adicionar `imgLoaded` state, atributo `data-loading` no wrapper, overlay `<div className="gallery-skeleton">` com `Dragon` interno, fade-out controlado.
-- `ResponsivePicture` já expõe o `<img>` final mas não emite `onLoad` para o consumidor — vamos passar um `onLoad` opcional pela prop e encadeá-lo ao `handleLoad` interno (alteração mínima retrocompatível).
+**Importante**: passar `oncePerSession: false` para esses três novos eventos no `trackClientEvent` (a deduplicação por peça é feita localmente). Atualizar `clientTelemetry.ts` para que `oncePerSession` seja respeitado (já é).
+
+### 4. Pré-carregamento da imagem e da cor ao hover/focus
+
+Objetivo: quando o usuário passa o cursor sobre o card (ou foca via teclado/tap no mobile), iniciamos o download da imagem em **resolução do modal** (a maior do `imagensData[0].variants` desktop) e disparamos o `useDominantColor` para a próxima peça.
+
+**Estratégia**:
+
+1. **Novo helper** `src/lib/imagePrefetch.ts`:
+   ```ts
+   const prefetched = new Set<string>();
+   export const prefetchImage = (url: string) => {
+     if (!url || prefetched.has(url)) return;
+     prefetched.add(url);
+     const link = document.createElement("link");
+     link.rel = "prefetch";
+     link.as = "image";
+     link.href = url;
+     link.crossOrigin = "anonymous";
+     document.head.appendChild(link);
+   };
+   ```
+   Usa `<link rel="prefetch" as="image">` — ignora se já prefetched. Cache global (Set) compartilhado.
+
+2. **Em `PieceCard`** — adicionar handlers no `<button>`:
+   - `onMouseEnter`, `onFocus`, `onTouchStart` → executa **uma vez por peça** (ref `prefetchedRef`):
+     - Chama `prefetchImage(piece.imagens[0])` (a primeira imagem do carrossel — a que aparece quando abrir o modal).
+     - Dispara também `prefetchImage` para `piece.imagens[1]` se existir (próximo slide).
+     - Chama `void warmDominantColor(coverUrl)` — função exportada nova do hook que força o cálculo (ignorando o debounce de 150 ms) e popula o cache.
+
+3. **Em `use-dominant-color.ts`** — exportar:
+   ```ts
+   export const warmDominantColor = (url: string | null | undefined) => {
+     if (!url) return;
+     hydrate();
+     if (CACHE.has(url) || PENDING.has(url)) return;
+     const p = computeColor(url).then((c) => {
+       CACHE.set(url, { color: c, ts: Date.now() });
+       PENDING.delete(url);
+       schedulePersist();
+       return c;
+     });
+     PENDING.set(url, p);
+   };
+   ```
+   Reutiliza o pipeline existente. Não bloqueia o caller.
+
+### 5. Atualização do `ResponsivePicture`
+
+Adicionar prop opcional `onError?: (e: SyntheticEvent<HTMLImageElement>) => void` e encadear nos três `<img>` retornados (igual ao `onLoad`). Sem mudanças visuais.
 
 ### Arquivos
 
+**Novos**
+- `src/lib/imagePrefetch.ts` — helper `prefetchImage` com Set global.
+
 **Editados**
-- `src/hooks/use-dominant-color.ts` — hidratação lazy do `localStorage`, persistência debounced (400 ms), TTL de 30 dias, limite de 200 entradas, debounce de 150 ms no `computeColor`.
-- `src/components/sections/gallery/Gallery.tsx` — `PieceCard` com `imgLoaded`, overlay de skeleton, `data-loading` no wrapper.
-- `src/components/ui/responsive-picture.tsx` — aceitar e encadear prop `onLoad` opcional.
-- `src/index.css` — utilitário `.gallery-skeleton`, keyframe `gallery-shimmer`, regra `data-loading="true"` que suprime o `::before` do anel.
+- `src/index.css` — remove `.card-glow-ring::before/::after`, `@keyframes ring-rotate` e `[data-loading="true"]` (mantém `.gallery-skeleton`).
+- `src/components/sections/gallery/Gallery.tsx` (`PieceCard`):
+  - Remove `--ring-color`/`ringColor`.
+  - Adiciona `imgError` state, `onError` handler com fallback artístico (Dragon + nome) e logs.
+  - Adiciona telemetria de tempo (`IMG_SLOW_MS`, `COLOR_SLOW_MS`) com dedup por peça.
+  - Adiciona `onMouseEnter` / `onFocus` / `onTouchStart` no `<button>` chamando `prefetchImage` e `warmDominantColor`.
+- `src/components/ui/responsive-picture.tsx` — aceitar/encadear `onError` nos três `<img>`.
+- `src/lib/clientTelemetry.ts` — ampliar `TelemetryEvent` com 3 novos tipos.
+- `src/hooks/use-dominant-color.ts` — exportar `warmDominantColor`.
 
 **Sem migration. Sem mudanças em libs externas.**
 
