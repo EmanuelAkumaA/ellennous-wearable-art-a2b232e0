@@ -657,6 +657,13 @@ type WebpTelemetryRow = {
   session_id: string;
   user_agent: string | null;
   created_at: string;
+  meta: { loadMs?: number; originalBytes?: number; webpBytesEstimate?: number } | null;
+};
+
+type ImpactBucket = {
+  sessions: number;
+  avgLoadMs: number;
+  avgBytes: number;
 };
 
 type WebpTelemetryStats = {
@@ -667,6 +674,8 @@ type WebpTelemetryStats = {
   topUserAgents: { ua: string; count: number }[];
   totalSessions30d: number;
   fallbackPct30d: number;
+  impactWebp: ImpactBucket;
+  impactFallback: ImpactBucket;
 };
 
 const WebpTelemetryCard = () => {
@@ -680,11 +689,13 @@ const WebpTelemetryCard = () => {
     const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("client_telemetry")
-      .select("event_type, session_id, user_agent, created_at")
-      .in("event_type", ["webp_unsupported", "webp_fallback_used"])
+      .select("event_type, session_id, user_agent, created_at, meta")
+      .in("event_type", ["webp_unsupported", "webp_fallback_used", "webp_served"])
       .gte("created_at", since30)
       .order("created_at", { ascending: false })
       .limit(5000);
+
+    const emptyImpact: ImpactBucket = { sessions: 0, avgLoadMs: 0, avgBytes: 0 };
 
     if (error || !data) {
       setStats({
@@ -695,6 +706,8 @@ const WebpTelemetryCard = () => {
         topUserAgents: [],
         totalSessions30d: 0,
         fallbackPct30d: 0,
+        impactWebp: emptyImpact,
+        impactFallback: emptyImpact,
       });
       setLoading(false);
       setRefreshing(false);
