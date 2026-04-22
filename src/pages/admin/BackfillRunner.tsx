@@ -18,7 +18,11 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Smartphone,
+  Tablet,
+  Monitor,
 } from "lucide-react";
+import { ErrorHistoryDialog } from "@/components/admin/optimizer/ErrorHistoryDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
