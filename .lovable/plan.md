@@ -1,123 +1,89 @@
 
 
-## Plano: 4 melhorias no pipeline de imagens
+## Plano: telemetria de fallback WebP + Backfill agrupado por obra com seleção
 
-### 1. Testes do `ResponsivePicture`
+### Parte 1 — Telemetria de fallback WebP
 
-**Novo:** `src/components/ui/responsive-picture.test.tsx`
+Já existe `useWebpSupport` em `responsive-picture.tsx` e `webpSupport.ts` (com `console.warn` único). Vou adicionar telemetria persistida:
 
-Cenários cobertos com Vitest + Testing Library:
-- **Pipeline novo (com `device_label`)**: passa 3 variantes WebP marcadas mobile/tablet/desktop → `srcset` deve conter as 3 URLs ordenadas por largura, `src` aponta pra desktop, `sizes` definido.
-- **Apenas device_label parcial**: passa só mobile + desktop → `srcset` mantém ordem por largura, sem quebrar.
-- **Legado sem `device_label`**: passa 4 variantes WebP de larguras diferentes → seleciona todas ordenadas, fallback = maior largura.
-- **Sem WebP, só JPEG (legado puro)**: cai no fallback `<img src=jpeg>` sem `srcset`.
-- **`variants` nulo/vazio**: renderiza `<img>` plano com `src` recebido.
-- **Atributos passados**: `loading`, `fetchPriority`, `alt`, `className`, `onClick` propagam corretamente.
+**Nova tabela** `client_telemetry` (migration):
+- `id uuid pk`, `created_at timestamptz`, `event_type text`, `session_id text`, `user_agent text`, `meta jsonb`
+- RLS: `INSERT` aberto para `anon/authenticated`, `SELECT` apenas para admins.
 
-Já existe `vitest.config.ts` + `src/test/setup.ts`, então não há setup novo.
+**Novo arquivo** `src/lib/clientTelemetry.ts`:
+- `trackClientEvent(eventType, meta?)` — insert fire-and-forget (try/catch silencioso, mesmo padrão do `analytics.ts`).
+- Deduplicação por sessão: usa `sessionStorage` para enviar `webp_unsupported` apenas 1× por sessão, evitando flood.
+
+**Editar** `src/lib/webpSupport.ts`:
+- Quando detecção resolve `false`, chamar `trackClientEvent("webp_unsupported", { ua: navigator.userAgent })` além do `console.warn`.
+
+**Editar** `src/components/ui/responsive-picture.tsx`:
+- Quando `webpOk === false` E `variants` existem (ou seja, perdemos uma otimização), incrementar contador local + emitir `trackClientEvent("webp_fallback_used", { variantCount })` 1× por sessão.
+
+**Nova aba "Telemetria"** em `src/pages/admin/ImageOptimizer.tsx` (ou banner no topo):
+- Card mostrando: total de eventos `webp_unsupported`, total `webp_fallback_used`, % do tráfego nos últimos 7/30 dias, top user agents.
+- Query: `select event_type, count(*), count(distinct session_id) from client_telemetry where created_at > now() - interval '7 days' group by event_type`.
+- Permite correlacionar: se a taxa de fallback for alta, o ganho do otimizador é menor para parte do público.
 
 ---
 
-### 2. Botão "Reprocessar variantes faltantes"
+### Parte 2 — Backfill agrupado por obra, com seleção e status por item
 
-**Editar:** `src/pages/admin/ImageOptimizer.tsx`
+**Editar** `src/pages/admin/BackfillRunner.tsx` — reestruturar a lista plana atual num layout agrupado:
 
-- Acima da lista, novo botão **"Modernizar antigas (N)"** que aparece somente quando há imagens detectadas como "antigo formato".
-- Critério de "formato antigo": `status === "ready"` E (não tem nenhuma variante com `device_label === "desktop"` OU possui formato `avif`/`jpeg` mas nenhum WebP marcado por device).
-- Ao clicar:
-  1. Filtra os IDs candidatos
-  2. Marca status `processing` na UI + DB
-  3. Dispara `optimize-image` com concorrência 3 (reusa `runWithConcurrency` existente)
-  4. Mostra progresso `{done}/{total}` no botão
-  5. Toast final com sucesso/erros
-- Tooltip: "Reprocessa imagens que ainda não têm variantes mobile/tablet/desktop no novo pipeline WebP."
+```text
+┌─ Ações ────────────────────────────────────┐
+│ [▶ Otimizar selecionadas (N)] [Selecionar │
+│  todas pendentes] [Limpar seleção]        │
+└────────────────────────────────────────────┘
 
-Helper novo em `src/lib/imageSnippet.ts`:
-```ts
-export const isLegacyFormat = (variants: OptimizedVariant[]): boolean => {
-  if (!variants.length) return false;
-  const hasNewPipeline = variants.some(v => v.format === "webp" && v.device_label === "desktop");
-  return !hasNewPipeline;
-};
+▼ Colar Negro · 3 imagens · 2 pendentes · 1 otimizada
+  ☐ [thumb] cover.jpg          [Capa]    Pronta ✓ 100%
+  ☑ [thumb] detail-1.jpg       [Galeria] Pendente ▓▓▓░░ 0%
+  ☑ [thumb] detail-2.jpg       [Galeria] Otimizando ▓▓▓▓░ 72%
+
+▼ Anel Sangria · 2 imagens · 0 pendentes
+  (todas otimizadas — colapsado por padrão)
+
+▼ Brinco Pétala · 4 imagens · 4 pendentes
+  ☐ Selecionar todas desta obra
+  ☐ [thumb] ...
 ```
 
----
+**Mudanças concretas:**
 
-### 3. Detecção de suporte a WebP no frontend
+1. **Estado de seleção**: novo `selected: Set<string>` no componente.
+2. **Agrupamento**: `useMemo` que agrupa `items` por `pieceId` → `Map<pieceId, { pieceName, items, pending, done, error }>`; ordenado por nome.
+3. **UI**: cada grupo vira um `<Collapsible>` (já temos `@/components/ui/collapsible`) com cabeçalho clicável (chevron, nome, contadores). Auto-colapsa quando todos `done`.
+4. **Checkboxes**:
+   - Por imagem: marca/desmarca no `Set`.
+   - Por obra ("Selecionar todas desta obra"): marca todos os `pending`/`error` do grupo.
+   - Global: "Selecionar todas pendentes".
+5. **Botão principal vira "Otimizar selecionadas (N)"** — usa `selected` em vez de todos os pendentes. Se nada selecionado, ele vira "Selecionar tudo" (atalho).
+6. **Status por linha (`BackfillRow` ampliado)**:
+   - Badge à direita com 3 estados visuais distintos:
+     - 🟢 **Otimizada** (verde, ícone CheckCircle2) quando `status === "done"` ou já estava no formato novo.
+     - 🟡 **Otimizando…** (amarelo pulsante) com barra de progresso + percentual em tempo real (`item.progress`).
+     - ⚪ **Não otimizada** (cinza) quando `pending`.
+     - 🔴 **Erro** (vermelho) com tooltip do `item.error`.
+   - Mostrar etapa atual em texto pequeno: "Baixando 32%", "Enviando", "Otimizando 78%".
+   - Barra inline já existente vira mais grossa (h-1.5) e colorida conforme estado.
+7. **Persistência visual**: imagens já `done` permanecem visíveis no grupo com badge verde, não somem.
+8. **Header de grupo** mostra mini-progresso agregado da obra (ex: "2/3 otimizadas") + barra horizontal pequena.
 
-**Novo:** `src/lib/webpSupport.ts`
+**Arquivos novos/editados:**
 
-```ts
-let cached: boolean | null = null;
-export const supportsWebP = async (): Promise<boolean> => {
-  if (cached !== null) return cached;
-  if (typeof window === "undefined") return false;
-  // Browser modern check via canvas
-  try {
-    const canvas = document.createElement("canvas");
-    if (canvas.toDataURL) {
-      cached = canvas.toDataURL("image/webp").startsWith("data:image/webp");
-      return cached;
-    }
-  } catch { /* ignore */ }
-  cached = false;
-  return false;
-};
-```
-
-**Editar:** `src/components/ui/responsive-picture.tsx`
-- Hook `useWebpSupport()` (estado local + efeito) → enquanto não resolver, assume `true` (97% dos navegadores suportam).
-- Se `false`, ignora WebP e usa o fallback original (`src` recebido como prop, que é a URL do arquivo original em JPEG/PNG no bucket).
-- Telemetria: log único `console.warn("WebP unsupported, using original fallback")` para depuração.
-
-Como o pipeline novo gera **só WebP**, navegadores sem suporte (IE, Safari muito antigo) caem no `original_path` que é o JPEG/PNG enviado pelo admin — já preservado no Storage.
-
-**Ajuste em `getBestUrlForPiece`** (`src/lib/optimizerUpload.ts`): expor variante `getBestUrlForPieceWithWebpSupport(variants, fallback, supportsWebp)` que respeita a flag.
-
----
-
-### 4. Tela "Status" do BackfillRunner
-
-**Editar:** `src/pages/admin/BackfillRunner.tsx`
-
-Adicionar painel de **Estatísticas em tempo real** acima da lista (visível durante e após o run):
-
-| Métrica | Como calcula |
-|---|---|
-| **Tempo médio por imagem** | soma de `(end - start)` por item concluído / contagem |
-| **Taxa de sucesso** | `done / (done + failed) * 100` |
-| **Imagens por minuto** | `done / elapsedMin` (atualiza a cada 1s via `setInterval`) |
-| **Tempo total decorrido** | `now - runStart` formatado mm:ss |
-| **ETA restante** | `pendingCount * avgMs` formatado |
-| **Bytes economizados** | acumula `original_size - tablet.size_bytes` por item concluído |
-
-Implementação:
-- Novos estados: `runStartedAt`, `runEndedAt`, `perItemTimings: Map<id, {start, end?}>`, `bytesOriginal`, `bytesOptimized`.
-- Wrap `migrateLegacyImage` em hook que registra início/fim por id.
-- Card grid 2x3 com cores: tempo (primary), sucesso (emerald se ≥95%, amber se 80-95%, destructive abaixo).
-- Mantido após o run, com botão "Limpar estatísticas" que reseta os timings.
-- Auto-refresh do "tempo decorrido" via `setInterval(1000)` enquanto `running === true`.
-
----
-
-### Arquivos editados/criados
-
-**Novo:**
-- `src/components/ui/responsive-picture.test.tsx` — 6 cenários
-- `src/lib/webpSupport.ts` — detecção via canvas com cache
-- `src/components/ui/__tests__/webpSupport.test.ts` (opcional, smoke test)
-
-**Editado:**
-- `src/components/ui/responsive-picture.tsx` — integra `useWebpSupport`
-- `src/lib/imageSnippet.ts` — helper `isLegacyFormat`
-- `src/lib/optimizerUpload.ts` — versão com flag webp
-- `src/pages/admin/ImageOptimizer.tsx` — botão "Modernizar antigas"
-- `src/pages/admin/BackfillRunner.tsx` — painel de estatísticas em tempo real
+- **Novo**: `supabase/migrations/<ts>_client_telemetry.sql` — tabela + RLS.
+- **Novo**: `src/lib/clientTelemetry.ts` — helper de envio com dedupe por sessão.
+- **Editado**: `src/lib/webpSupport.ts` — dispara telemetria no fallback.
+- **Editado**: `src/components/ui/responsive-picture.tsx` — telemetria quando perde otimização por falta de WebP.
+- **Editado**: `src/pages/admin/BackfillRunner.tsx` — agrupamento por obra, seleção, status por linha.
+- **Editado**: `src/pages/admin/ImageOptimizer.tsx` — card "Telemetria do navegador" com contadores 7d/30d.
 
 ### Validação
 
-1. `npm run test` → `responsive-picture.test.tsx` passa todos os cenários.
-2. No Otimizador, botão "Modernizar antigas" só aparece se houver imagens sem `device_label === "desktop"`. Clicar reprocessa apenas elas.
-3. DevTools → simular Safari 13 (sem WebP) ou definir `cached = false` manualmente → galeria carrega o JPEG original em vez do WebP, sem broken images.
-4. Rodar Backfill → painel mostra "00:12 decorrido · 2.3s/img · 100% sucesso · 4.2 imgs/min · 1.8 MB economizados"; números atualizam a cada segundo.
+1. Forçar `__setWebpSupportForTests(false)` no console → ao recarregar galeria, aparece registro em `client_telemetry` com `event_type='webp_fallback_used'` (apenas 1 por sessão).
+2. Card "Telemetria" no admin mostra contagem agregada.
+3. Em `/admin/backfill`: imagens aparecem agrupadas por obra com chevron expansível; checkboxes aparecem em cada linha; "Otimizar selecionadas" só roda nas marcadas; cada linha mostra etapa + % em tempo real; badges Otimizada / Otimizando / Não otimizada / Erro aparecem corretamente.
+4. Marcar 2 imagens de obras diferentes → rodar → apenas elas processam, demais permanecem "Não otimizada".
 
