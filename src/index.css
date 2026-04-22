@@ -199,61 +199,10 @@
     transform: translateY(0);
   }
 
-  /* ===== Animated colored ring driven by --ring-color ===== */
+  /* ===== Gallery card wrapper (kept as neutral container) ===== */
   .card-glow-ring {
     position: relative;
     isolation: isolate;
-  }
-  .card-glow-ring::before {
-    content: "";
-    position: absolute;
-    inset: -2px;
-    border-radius: inherit;
-    padding: 2px;
-    background: conic-gradient(
-      from 0deg,
-      var(--ring-color, hsl(var(--primary-glow))) 0%,
-      transparent 30%,
-      transparent 70%,
-      var(--ring-color, hsl(var(--primary-glow))) 100%
-    );
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-            mask-composite: exclude;
-    opacity: 0.45;
-    transition: opacity 0.6s var(--ease-smooth);
-    animation: ring-rotate 8s linear infinite;
-    pointer-events: none;
-    z-index: 1;
-  }
-  .card-glow-ring:hover::before,
-  .card-glow-ring:focus-within::before {
-    opacity: 0.95;
-  }
-  .card-glow-ring::after {
-    content: "";
-    position: absolute;
-    inset: -10px;
-    border-radius: inherit;
-    background: radial-gradient(circle at 50% 50%, var(--ring-color, hsl(var(--primary-glow))), transparent 65%);
-    opacity: 0;
-    filter: blur(22px);
-    transition: opacity 0.6s var(--ease-smooth);
-    pointer-events: none;
-    z-index: 0;
-  }
-  .card-glow-ring:hover::after,
-  .card-glow-ring:focus-within::after {
-    opacity: 0.35;
-  }
-  @keyframes ring-rotate {
-    to { transform: rotate(360deg); }
-  }
-  /* Suppress the conic ring while the dominant color is still resolving,
-     so the card never flashes from grey to color on first hover. */
-  .card-glow-ring[data-loading="true"]::before {
-    opacity: 0 !important;
   }
 
   /* ===== Artistic skeleton overlay for gallery cards ===== */

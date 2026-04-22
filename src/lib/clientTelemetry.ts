@@ -14,7 +14,10 @@ export type TelemetryEvent =
   | "webp_unsupported"
   | "webp_fallback_used"
   | "webp_served"
-  | "webp_client_conversion";
+  | "webp_client_conversion"
+  | "gallery_image_load_slow"
+  | "gallery_dominant_color_slow"
+  | "gallery_image_load_error";
 
 const ONCE_KEY = (eventType: string) => `telemetry_once_${eventType}`;
 
