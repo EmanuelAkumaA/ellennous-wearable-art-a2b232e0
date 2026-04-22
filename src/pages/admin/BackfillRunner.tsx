@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -9,10 +9,18 @@ import {
   RefreshCw,
   ExternalLink,
   X,
+  Timer,
+  Gauge,
+  TrendingDown,
+  Activity,
+  Hourglass,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
 import {
   detectLegacyImages,
   runBackfill,
