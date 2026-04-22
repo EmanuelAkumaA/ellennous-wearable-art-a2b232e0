@@ -1,111 +1,107 @@
 
 
-## Plano: corrigir erros do backfill + indicadores de progresso e prontidão
+## Plano: pré-conversão para WebP no cliente + painel de tempos médios
 
-### Diagnóstico — por que dá "Erro" no backfill
+### Conceito da nova dinâmica
 
-O log da edge function `optimize-image` mostra:
+Hoje: **upload do original (JPG/PNG) → edge function decodifica + redimensiona + encoda WebP**. Quando o original é pesado/grande, o decoder WASM da edge consome muita memória e dá `error` (foi a causa raiz dos travamentos recentes).
+
+Nova dinâmica: o **navegador** faz a conversão original → WebP **antes** de subir. A edge só precisa fazer resize + encode (mais leve, mais rápido, menos erros). O original em JPG/PNG é descartado depois que as 3 variantes estão prontas.
 
 ```
-TypeError: userClient.auth.getClaims is not a function
+[browser] file picker
+   │
+   ├─ 1. Convert (original → WebP master) via canvas
+   │      → mostra "Convertendo… ~1.5s"
+   │
+   ├─ 2. Upload WebP master para optimized-images bucket
+   │      → row em optimized_images com status='processing'
+   │      → galeria já mostra a imagem (preview do master)
+   │
+   ├─ 3. Edge function gera mobile/tablet/desktop a partir do master
+   │      → status='ready'
+   │
+   └─ 4. Cleanup: remove o master WebP (mantém só as 3 variantes)
+          → galeria troca preview master pela URL desktop
 ```
-
-A função tenta validar o token com `userClient.auth.getClaims(token)`, mas esse método **não existe** em `@supabase/supabase-js@2.45.0`. Resultado: toda chamada do otimizador retorna 500, e:
-
-- O backfill marca a imagem como `error` (com mensagem genérica do invoke).
-- 3 imagens já estão **presas em `processing` para sempre** no banco (`1776656362618-0.jpg`, `cover-1776656408394.jpg`, `anime2.jpg`) — por isso aparecem com o spinner roxo eterno na imagem 02.
 
 ---
 
-### 1. Corrigir a falha do `optimize-image`
+### 1. Conversor cliente-side (novo: `src/lib/clientWebpConverter.ts`)
 
-**Editar `supabase/functions/optimize-image/index.ts`:**
+- Função `convertToWebp(file: File, quality = 0.9): Promise<{ blob: Blob; width: number; height: number; ms: number }>`.
+- Usa `createImageBitmap(file)` → `OffscreenCanvas` (fallback `<canvas>` em Safari) → `canvas.convertToBlob({ type: 'image/webp', quality })`.
+- Cap de dimensão máxima (3200px no maior lado) para evitar canvas absurdo e dar conversão consistente em ~1-3s.
+- Se já for `image/webp` → retorna o file direto sem reprocessar.
+- Se navegador não suportar canvas WebP (Safari < 14) → retorna o original e pula etapa, edge function continua aceitando JPG/PNG.
+- Telemetria: grava `meta.conversionMs` no `client_telemetry` (event `webp_client_conversion`) para alimentar o painel de tempos médios.
 
-- Trocar `userClient.auth.getClaims(token)` por `userClient.auth.getUser()` (API estável e disponível em todas as versões do supabase-js v2). A função recebe o token via `Authorization` header e devolve `{ data: { user }, error }`. `user.id` substitui `claims.sub`.
-- Verificação de admin continua via RPC `has_role`.
-- Redeploy automático ao salvar.
+### 2. Atualizar `uploadToOptimizer` (`src/lib/optimizerUpload.ts`)
 
-**"Reset" das 3 imagens travadas em `processing`:**
+- Antes do `supabase.storage.upload`, chama `convertToWebp(file)` quando `file.type !== 'image/webp'`.
+- Path passa de `images/{id}/original.{ext}` para `images/{id}/master.webp` (nome semântico — fica claro que é descartável).
+- Insere row com `original_path = master.webp`, `status='processing'`.
+- Toast: "Convertido para WebP em 1.4s, otimizando…" (feedback imediato).
+- Loga em `optimization_error_log` se a conversão falhar (stage `'client_convert'`) com fallback automático para upload do original.
 
-- Migration leve que faz `update optimized_images set status='error', error_message='Função de otimização indisponível (corrigida em 22/04)' where status='processing' and updated_at < now() - interval '5 minutes'`. Isso destrava as 3 órfãs e elas passam a ser **clicáveis para reprocessar** (botão refresh já existente). Após o fix da edge function, um clique em "Reprocessar" resolve cada uma.
+### 3. Edge function `optimize-image` — adicionar cleanup do master
 
----
+- Após gerar as 3 variantes (mobile/tablet/desktop) com sucesso, **remove o `original_path`** (`master.webp`) do bucket.
+- Se alguma variante falhar, **mantém o master** (para permitir reprocesso e debug).
+- Atualiza row: `original_path = null` quando deletado, mantém `original_size_bytes` para o cálculo de economia.
+- A galeria não quebra: `getBestUrlForPiece` já prefere a variante `desktop` quando disponível; só cai no `original_path` quando `variants` está vazio (cenário `processing` curto).
 
-### 2. Histórico de erros por imagem (clicar no chip "Erro" abre detalhes)
+### 4. Galeria mostra a imagem imediatamente
 
-**Nova tabela `optimization_error_log`** (migration):
+- Já é o caso hoje (`PiecesManager` faz `setDraftImages` com `previewUrl: result.originalUrl` antes da otimização terminar). Apenas confirmar que continua funcionando: o `previewUrl` aponta agora para o `master.webp`, que é instantaneamente mostrável no `<img>` (todo navegador moderno suporta WebP).
+- Quando `optimized_images.status` vira `'ready'` via realtime, o draft atualiza para `getBestUrlForPiece(variants, previewUrl)` e a URL final passa a ser a variante desktop.
+- Após o cleanup, o `previewUrl` antigo (`master.webp`) deixa de existir mas já não é mais referenciado.
 
+### 5. Painel "Tempos médios estimados" (novo card no Image Optimizer)
+
+Novo componente `<ProcessingTimingsCard />` em `src/pages/admin/ImageOptimizer.tsx`, ao lado do `WebpTelemetryCard`.
+
+**Fonte de dados:** agrega métricas das últimas 30 imagens processadas com sucesso (últimos 7 dias):
+- **Conversão (cliente)**: `client_telemetry` filtrado por `event_type = 'webp_client_conversion'` → média de `meta.conversionMs`.
+- **Upload**: estimado pelo `optimized_images.original_size_bytes / banda média` (banda média = `original_size_bytes ÷ (created_at - upload_started)` capturado num novo campo do telemetry).
+- **Otimização (edge)**: `optimized_images.updated_at - created_at` quando `status='ready'`.
+- **Total p/imagem**: soma das três.
+
+**Layout do card:**
 ```
-id uuid pk · optimized_image_id uuid · created_at timestamptz
-error_message text · stage text · piece_id uuid (nullable) · meta jsonb
+┌── Tempos médios (últimas 30 imagens) ──────────────┐
+│  Conversão WebP  │  Upload  │  Otimização │ Total  │
+│      1.4s        │   0.8s   │    4.2s     │  6.4s  │
+│  ▰▰▰▱▱▱▱▱▱▱      ▰▰▱▱▱▱▱▱▱▱   ▰▰▰▰▰▰▰▱▱▱   ▰▰▰▰▰▰▰▰│
+│                                                     │
+│  ⓘ Aguarde ~6s antes de reprocessar uma imagem.    │
+│  ⓘ Lote de 10 imagens: ~22s (3 paralelas).         │
+└─────────────────────────────────────────────────────┘
 ```
 
-RLS: `INSERT` para `authenticated` (admin via `has_role`), `SELECT` apenas admin. Index em `(optimized_image_id, created_at desc)`.
+- Cada barra com cor (conversão = blue, upload = amber, otimização = emerald).
+- Texto-guia dinâmico: "Aguarde ~Xs antes de reprocessar" usa o `Total p99` (não a média).
+- Estimativa de lote leva em conta `BULK_CONCURRENCY = 3` que já existe.
+- Estado vazio: "Coletando dados — processe algumas imagens para ver as estimativas".
 
-**Onde gravar:**
+### 6. Validação
 
-- **Edge function `optimize-image`**: no `catch` final, antes de marcar `status='error'`, faz `insert` no log com `stage='processing'` e `meta` contendo `{ srcW, srcH, mime, attempted_variants }` quando disponível.
-- **`optimizerBackfill.ts → migrateLegacyImage`**: no `catch` que faz `onItemUpdate(... 'error')`, também faz `insert` direto (cliente, RLS admin) com `stage` = qual etapa falhou (`download | upload | optimize | persist`) e `meta = { url, kind, pieceId }`.
-- **`optimizerUpload.ts`**: idem para falhas de upload inicial.
-
-**UI no BackfillRunner — `BackfillRow` `StatusBadge` (status `error`):**
-
-- Hoje o badge "Erro" é um tooltip estático. Vira um **botão clicável** que abre um `<Dialog>` "Histórico de erros desta imagem":
-  - Lista cronológica reversa (`created_at`, `stage`, `error_message`).
-  - Inclui o erro atual da sessão (mesmo que ainda não tenha sido persistido, mostra primeiro como "Sessão atual").
-  - Botão "Reprocessar agora" que dispara o mesmo fluxo do botão refresh por linha.
-  - Botão "Copiar log" (copia JSON para área de transferência — útil para suporte).
-- Cabeçalho do grupo (obra) também ganha contagem clicável: "1 erro(s)" → abre dialog filtrado por `pieceId` mostrando todos os erros das imagens dessa obra agregados.
-
-**UI no ImageOptimizer (lista principal):**
-
-- Card/Row com `status='error'` ganha o mesmo botão "Ver histórico" no badge. Reaproveita o mesmo `<Dialog>`.
-
----
-
-### 3. ETA por imagem em otimização + chips verdes quando variantes prontas
-
-**Editar `src/components/admin/optimizer/ImageRow.tsx`:**
-
-- **Tempo médio de processamento** vem do `liveStats.avgMs` quando há um run em andamento, mas no `ImageRow` (lista principal do Otimizador), criar um cálculo simples:
-  - Quando `image.status === 'processing'`: calcular `elapsed = now - new Date(image.updated_at).getTime()`.
-  - Mostrar ao lado do spinner: **"~Xs decorridos · ETA ~Ys"** onde `Ys = max(0, AVG_PROCESS_MS - elapsed)` e `AVG_PROCESS_MS = 6000` (constante calibrada com base no log das ~3-5s reais por imagem). Uma vez por segundo via `setInterval` que **só roda se houver alguma imagem `processing` visível** (gating de performance).
-  - Se `elapsed > AVG_PROCESS_MS * 3` (ex: > 18s), mostrar texto âmbar "Demorando mais que o normal" + botão "Marcar como erro" (faz update local `status=error`).
-- **DeviceChips ficam verdes quando a variante específica está disponível** — a lógica do tone hoje só leva em conta `savedPct`. Mudar para:
-  - Sem variante → `bg-secondary/20 text-muted-foreground/50` + ícone do dispositivo apagado (cinza), badge "—" (atual).
-  - Com variante → tom **`bg-emerald-500/20 text-emerald-300`** com **ícone do dispositivo verde** + um pequeno `<CheckCircle2>` no canto + bytes economizados.
-  - Tooltip atualizado: "Variante mobile pronta · 245 KB · −62%" / "Variante mobile ainda não disponível".
-- Em estado `processing`: cada chip mostra `<Loader2 class="animate-spin">` em vez do tamanho, sinalizando claramente "ainda gerando esta variante específica". Se uma variante já chegou no banco (incremental), só aquela fica verde — as outras continuam com spinner.
-
-**Editar `src/components/admin/optimizer/ImageCard.tsx`** (modo grade):
-- Mesma melhoria: estado `processing` mostra ETA "~Xs · ETA Ys" por baixo do spinner.
-
-**Editar `src/pages/admin/BackfillRunner.tsx` → `BackfillRowImpl`:**
-- Quando `status` está em `ACTIVE_STATUSES`, a barra atual já mostra %. Adicionar **3 mini-pontos coloridos** (mobile/tablet/desktop) ao lado da barra. Cada ponto vira verde **assim que a variante correspondente chega via update do `optimized_images`** (o `optimizedImageId` já é capturado em `trackedUpdate`). Como o backfill já faz polling de `waitForOptimization`, ampliar esse polling para **emitir progresso por variante** (3 ticks visuais: mobile → tablet → desktop) e expor isso no `BackfillProgressItem` como `readyDevices: Set<DeviceLabel>`.
-
----
+1. **Upload de JPG 5MB**: mostra "Convertendo… 1.5s", master WebP aparece no bucket (~600KB), galeria exibe imediatamente, depois das 3 variantes o master é removido. `original_path` na DB vira `null`.
+2. **Upload de PNG transparente**: WebP preserva alpha (canvas garante), variantes geradas mantêm transparência.
+3. **Upload de WebP**: pula conversão, vai direto pro upload (toast "Já é WebP").
+4. **Navegador sem `convertToBlob('image/webp')`** (Safari < 14): caí no fluxo antigo (envia original), nada quebra.
+5. **Falha de conversão**: log em `optimization_error_log` com `stage='client_convert'`, fallback automático para upload do original.
+6. **Painel**: após processar 3-4 imagens, card mostra médias e estimativa "aguarde ~6s antes de reprocessar".
 
 ### Arquivos editados/criados
 
 **Novo:**
-- `supabase/migrations/<ts>_optimization_error_log.sql` — tabela + RLS.
-- `supabase/migrations/<ts>_unstuck_processing.sql` — destrava as 3 imagens.
-- `src/components/admin/optimizer/ErrorHistoryDialog.tsx` — modal reutilizável.
+- `src/lib/clientWebpConverter.ts` — conversor canvas → WebP com cap dimensional.
+- `src/components/admin/optimizer/ProcessingTimingsCard.tsx` — painel de tempos médios.
 
 **Editado:**
-- `supabase/functions/optimize-image/index.ts` — `auth.getUser()` + `insert` no log de erro.
-- `src/lib/optimizerBackfill.ts` — log no catch, `readyDevices` no progress item.
-- `src/lib/optimizerUpload.ts` — log no catch de upload.
-- `src/pages/admin/BackfillRunner.tsx` — badge "Erro" clicável + dialog, mini-pontos por dispositivo.
-- `src/components/admin/optimizer/ImageRow.tsx` — chips verdes quando variante pronta + ETA + dialog de erro.
-- `src/components/admin/optimizer/ImageCard.tsx` — ETA no spinner + dialog de erro.
-- `src/integrations/supabase/types.ts` — regenerado automaticamente para a nova tabela.
-
-### Validação
-
-1. Após redeploy, log do `optimize-image` para de mostrar `getClaims is not a function`.
-2. As 3 imagens órfãs aparecem como "Erro" → clicar em **Reprocessar** gera as 3 variantes WebP em ~5s cada.
-3. No backfill, badge "Erro" fica clicável → abre histórico cronológico com mensagem da edge function.
-4. Em qualquer imagem `processing`, aparece "~3s decorridos · ETA ~3s" e cada chip dispositivo está com spinner; quando a variante mobile chega, o chip mobile vira verde com `−65%` mostrado, os outros continuam carregando.
-5. Após 18s sem terminar, chip âmbar "Demorando mais que o normal" + botão para marcar erro manualmente, evitando novos zumbis em `processing`.
+- `src/lib/optimizerUpload.ts` — chama conversor antes do upload, path `master.webp`, toast com tempo.
+- `src/lib/clientTelemetry.ts` — adicionar `'webp_client_conversion'` ao tipo `TelemetryEvent`.
+- `supabase/functions/optimize-image/index.ts` — remover `original_path` do bucket após sucesso, setar `original_path = null` na row.
+- `src/pages/admin/ImageOptimizer.tsx` — montar `<ProcessingTimingsCard />` ao lado do telemetry card.
 
