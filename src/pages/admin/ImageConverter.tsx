@@ -130,6 +130,8 @@ export const ImageConverter = () => {
           done={counts.done}
           failed={counts.failed}
           inProgress={counts.inProgress}
+          itemProgress={itemProgress}
+          completionTimes={completionTimes}
           hasDone={counts.done > 0}
           onClearDone={clearDone}
         />
