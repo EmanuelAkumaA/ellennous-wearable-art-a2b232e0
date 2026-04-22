@@ -266,7 +266,47 @@ export const ImageOptimizer = () => {
     load();
   };
 
-  const handleBulkDelete = async () => {
+  const handleAutoOptimizeAtRisk = async () => {
+    const ids = [...atRiskIds];
+    if (!ids.length) return;
+    setBulkBusy("atrisk");
+    setBulkProgress({ done: 0, total: ids.length });
+
+    setItems((prev) =>
+      prev.map((it) =>
+        ids.includes(it.id) ? { ...it, status: "processing", error_message: null } : it,
+      ),
+    );
+    await supabase
+      .from("optimized_images")
+      .update({ status: "processing", error_message: null })
+      .in("id", ids);
+
+    let done = 0;
+    let failed = 0;
+    await runWithConcurrency(ids, BULK_CONCURRENCY, async (id) => {
+      const { error } = await supabase.functions.invoke("optimize-image", { body: { imageId: id } });
+      if (error) failed++;
+      done++;
+      setBulkProgress({ done, total: ids.length });
+    });
+
+    setBulkBusy(null);
+    setBulkProgress(null);
+    if (failed > 0) {
+      toast({
+        title: `Auto-otimização concluída com ${failed} erro(s)`,
+        description: `${ids.length - failed}/${ids.length} reprocessadas.`,
+        variant: failed === ids.length ? "destructive" : "default",
+      });
+    } else {
+      toast({
+        title: `${ids.length} imagem(ns) em risco reprocessadas`,
+        description: "Variantes WebP do novo pipeline foram regeneradas.",
+      });
+    }
+    load();
+  };
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
     if (!confirm(`Excluir ${ids.length} imagem(ns) selecionada(s)? Esta ação não pode ser desfeita.`)) return;
