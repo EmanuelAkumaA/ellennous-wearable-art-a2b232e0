@@ -498,7 +498,8 @@ export const ImageOptimizer = () => {
                     type="button"
                     onClick={handleAutoOptimizeAtRisk}
                     disabled={!!bulkBusy}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-colors disabled:opacity-40"
+                    aria-busy={bulkBusy === "atrisk"}
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-colors disabled:opacity-40 ${bulkBusy ? "cursor-not-allowed" : ""} ${bulkBusy && bulkBusy !== "atrisk" ? "pointer-events-none" : ""}`}
                   >
                     {bulkBusy === "atrisk" ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -525,7 +526,8 @@ export const ImageOptimizer = () => {
                   type="button"
                   onClick={handleModernizeLegacy}
                   disabled={!!bulkBusy}
-                  className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary-glow transition-colors disabled:opacity-40"
+                  aria-busy={bulkBusy === "modernize"}
+                  className={`ml-auto inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary-glow transition-colors disabled:opacity-40 ${bulkBusy ? "cursor-not-allowed" : ""} ${bulkBusy && bulkBusy !== "modernize" ? "pointer-events-none" : ""}`}
                 >
                   {bulkBusy === "modernize" ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
