@@ -41,6 +41,7 @@ export const uploadToOptimizer = async ({
   file,
   pieceId,
   role,
+  onConversionDone,
 }: UploadParams): Promise<OptimizerUploadResult> => {
   if (!OPTIMIZER_ACCEPTED.includes(file.type)) {
     throw new Error(`Formato não suportado: ${file.type}`);
