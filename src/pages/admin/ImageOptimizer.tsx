@@ -307,6 +307,8 @@ export const ImageOptimizer = () => {
         </div>
       </div>
 
+      <WebpTelemetryCard />
+
       <div className="rounded-lg border border-primary/10 bg-primary/[0.03] px-4 py-3 flex items-start gap-3">
         <Sparkles className="h-4 w-4 mt-0.5 text-primary-glow shrink-0" />
         <div className="text-xs text-muted-foreground leading-relaxed flex-1">
