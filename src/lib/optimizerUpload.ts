@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { toast as sonnerToast } from "sonner";
+import { convertToWebp } from "./clientWebpConverter";
 
 export const OPTIMIZER_BUCKET = "optimized-images";
 export const OPTIMIZER_ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
@@ -19,13 +21,19 @@ interface UploadParams {
   role: ImageRole;
 }
 
+const CONVERT_TOAST_ID = (id: string) => `optimizer-convert-${id}`;
+
 /**
  * Uploads an image to the optimizer pipeline:
- *  - stores the original in the optimized-images bucket
+ *  - converts the original to WebP in the browser (master.webp) when possible
+ *  - stores the master in the optimized-images bucket
  *  - inserts a row in optimized_images with piece_id + image_role
  *  - fires the optimize-image edge function (fire-and-forget)
- * Returns the new optimized_images id and the public URL of the original
+ * Returns the new optimized_images id and the public URL of the master
  * (used as a temporary preview / fallback while variants are being generated).
+ *
+ * The master is removed from storage by the edge function once the 3 device
+ * variants are ready, keeping the bucket lean.
  */
 export const uploadToOptimizer = async ({
   file,
@@ -39,22 +47,61 @@ export const uploadToOptimizer = async ({
     throw new Error("Arquivo maior que 10MB");
   }
 
-  const ext = file.name.split(".").pop()?.toLowerCase() || (file.type.split("/")[1] ?? "jpg");
   const id = crypto.randomUUID();
-  const path = `images/${id}/original.${ext}`;
+
+  // 1) Client-side WebP conversion (graceful fallback to original on failure)
+  let uploadBlob: Blob = file;
+  let uploadType = file.type;
+  let uploadExt = file.name.split(".").pop()?.toLowerCase() || (file.type.split("/")[1] ?? "jpg");
+  let convertedToWebp = false;
+
+  if (file.type !== "image/webp") {
+    sonnerToast.loading("Convertendo para WebP…", { id: CONVERT_TOAST_ID(id) });
+    try {
+      const conv = await convertToWebp(file);
+      if (conv.converted) {
+        uploadBlob = conv.blob;
+        uploadType = "image/webp";
+        uploadExt = "webp";
+        convertedToWebp = true;
+        sonnerToast.success(
+          `Convertido para WebP em ${(conv.ms / 1000).toFixed(1)}s, otimizando…`,
+          { id: CONVERT_TOAST_ID(id), duration: 2500 },
+        );
+      } else {
+        sonnerToast.dismiss(CONVERT_TOAST_ID(id));
+      }
+    } catch (e) {
+      // Log + fall back to original upload
+      void supabase.from("optimization_error_log").insert([
+        {
+          optimized_image_id: id,
+          piece_id: pieceId ?? null,
+          stage: "client_convert",
+          error_message: ((e as Error).message ?? "Conversão WebP falhou").slice(0, 500),
+          meta: { name: file.name, size: file.size, type: file.type } as never,
+        },
+      ]);
+      sonnerToast.dismiss(CONVERT_TOAST_ID(id));
+    }
+  }
+
+  const path = convertedToWebp || file.type === "image/webp"
+    ? `images/${id}/master.webp`
+    : `images/${id}/original.${uploadExt}`;
 
   const { error: upErr } = await supabase.storage
     .from(OPTIMIZER_BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, uploadBlob, { contentType: uploadType, upsert: false });
   if (upErr) {
     // Log to error history (non-blocking)
     void supabase.from("optimization_error_log").insert([
       {
         optimized_image_id: id,
-        piece_id: pieceId ?? undefined,
+        piece_id: pieceId ?? null,
         stage: "upload",
         error_message: upErr.message.slice(0, 500),
-        meta: { name: file.name, size: file.size, type: file.type } as never,
+        meta: { name: file.name, size: file.size, type: uploadType } as never,
       },
     ]);
     throw upErr;
