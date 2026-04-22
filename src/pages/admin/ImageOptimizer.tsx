@@ -199,167 +199,199 @@ export const ImageOptimizer = () => {
   const selectAllVisible = () => setSelectedIds(new Set(filtered.map((i) => i.id)));
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleBulkReprocess = async () => {
-    const ids = Array.from(selectedIds);
+  /**
+   * Single shared executor for all bulk-optimization handlers (reprocess /
+   * modernize / atrisk). Holds:
+   *  - synchronous `runningRef` to block double-clicks within one tick
+   *  - `runWithLock("optimizer:bulk")` for cross-tab safety
+   *  - throttled progress + sonner toast with stable id
+   */
+  const runBulkInvoke = async (
+    mode: "reprocess" | "modernize" | "atrisk",
+    ids: string[],
+    successCopy: { title: (n: number) => string; description?: string },
+    failCopy: { title: (failed: number, total: number) => string; description: (failed: number, total: number) => string },
+    afterSuccess?: () => void,
+  ) => {
     if (!ids.length) return;
-    setBulkBusy("reprocess");
-    setBulkProgress({ done: 0, total: ids.length });
+    if (runningRef.current) return;
+    runningRef.current = true;
 
-    setItems((prev) =>
-      prev.map((it) =>
-        selectedIds.has(it.id) ? { ...it, status: "processing", error_message: null } : it,
-      ),
-    );
+    const lockResult = await runWithLock("optimizer:bulk", async () => {
+      setBulkBusy(mode);
+      setBulkProgress({ done: 0, total: ids.length });
+      sonnerToast.loading(`${successCopy.title(ids.length)}…`, {
+        id: BULK_TOAST_ID,
+        description: `0/${ids.length}`,
+      });
 
-    await supabase
-      .from("optimized_images")
-      .update({ status: "processing", error_message: null })
-      .in("id", ids);
+      try {
+        setItems((prev) =>
+          prev.map((it) =>
+            ids.includes(it.id) ? { ...it, status: "processing", error_message: null } : it,
+          ),
+        );
+        await supabase
+          .from("optimized_images")
+          .update({ status: "processing", error_message: null })
+          .in("id", ids);
 
-    let done = 0;
-    let failed = 0;
-    await runWithConcurrency(ids, BULK_CONCURRENCY, async (id) => {
-      const { error } = await supabase.functions.invoke("optimize-image", { body: { imageId: id } });
-      if (error) failed++;
-      done++;
-      setBulkProgress({ done, total: ids.length });
+        let done = 0;
+        let failed = 0;
+        await runWithConcurrency(ids, BULK_CONCURRENCY, async (id) => {
+          const { error } = await supabase.functions.invoke("optimize-image", {
+            body: { imageId: id },
+          });
+          if (error) failed++;
+          done++;
+          pushProgress(done, ids.length);
+          sonnerToast.loading(`${successCopy.title(ids.length)}…`, {
+            id: BULK_TOAST_ID,
+            description: `${done}/${ids.length}${failed ? ` · ${failed} erro(s)` : ""}`,
+          });
+        });
+
+        if (failed > 0) {
+          sonnerToast.error(failCopy.title(failed, ids.length), {
+            id: BULK_TOAST_ID,
+            description: failCopy.description(failed, ids.length),
+            duration: 5000,
+          });
+        } else {
+          sonnerToast.success(successCopy.title(ids.length), {
+            id: BULK_TOAST_ID,
+            description: successCopy.description,
+            duration: 4000,
+          });
+          afterSuccess?.();
+        }
+      } finally {
+        setBulkBusy(null);
+        setBulkProgress(null);
+        load();
+      }
     });
 
-    setBulkBusy(null);
-    setBulkProgress(null);
-    if (failed > 0) {
-      toast({
-        title: `Reprocessamento concluído com ${failed} erro(s)`,
-        description: `${ids.length - failed}/${ids.length} disparados com sucesso.`,
-        variant: failed === ids.length ? "destructive" : "default",
+    runningRef.current = false;
+
+    if (!lockResult.acquired) {
+      sonnerToast.warning("Outra otimização em massa já está em andamento.", {
+        description: lockResult.fallback
+          ? "Aguarde o término da execução em andamento nesta aba."
+          : "Aguarde o término da execução em andamento (pode estar em outra aba).",
+        duration: 4000,
       });
-    } else {
-      toast({ title: `${ids.length} imagens reprocessando…` });
     }
-    clearSelection();
-    load();
   };
 
-  const handleModernizeLegacy = async () => {
-    const ids = [...legacyIds];
-    if (!ids.length) return;
-    setBulkBusy("modernize");
-    setBulkProgress({ done: 0, total: ids.length });
-
-    setItems((prev) =>
-      prev.map((it) =>
-        ids.includes(it.id) ? { ...it, status: "processing", error_message: null } : it,
-      ),
+  const handleBulkReprocess = () =>
+    runBulkInvoke(
+      "reprocess",
+      Array.from(selectedIds),
+      { title: (n) => `${n} imagem(ns) reprocessando` },
+      {
+        title: (failed) => `Reprocessamento concluído com ${failed} erro(s)`,
+        description: (failed, total) => `${total - failed}/${total} disparados com sucesso.`,
+      },
+      clearSelection,
     );
-    await supabase
-      .from("optimized_images")
-      .update({ status: "processing", error_message: null })
-      .in("id", ids);
 
-    let done = 0;
-    let failed = 0;
-    await runWithConcurrency(ids, BULK_CONCURRENCY, async (id) => {
-      const { error } = await supabase.functions.invoke("optimize-image", { body: { imageId: id } });
-      if (error) failed++;
-      done++;
-      setBulkProgress({ done, total: ids.length });
-    });
-
-    setBulkBusy(null);
-    setBulkProgress(null);
-    if (failed > 0) {
-      toast({
-        title: `Modernização concluída com ${failed} erro(s)`,
-        description: `${ids.length - failed}/${ids.length} reprocessadas no novo pipeline WebP.`,
-        variant: failed === ids.length ? "destructive" : "default",
-      });
-    } else {
-      toast({
-        title: `${ids.length} imagem(ns) modernizadas`,
+  const handleModernizeLegacy = () =>
+    runBulkInvoke(
+      "modernize",
+      [...legacyIds],
+      {
+        title: (n) => `${n} imagem(ns) modernizadas`,
         description: "Variantes mobile/tablet/desktop geradas no novo pipeline.",
-      });
-    }
-    load();
-  };
-
-  const handleAutoOptimizeAtRisk = async () => {
-    const ids = [...atRiskIds];
-    if (!ids.length) return;
-    setBulkBusy("atrisk");
-    setBulkProgress({ done: 0, total: ids.length });
-
-    setItems((prev) =>
-      prev.map((it) =>
-        ids.includes(it.id) ? { ...it, status: "processing", error_message: null } : it,
-      ),
+      },
+      {
+        title: (failed) => `Modernização concluída com ${failed} erro(s)`,
+        description: (failed, total) =>
+          `${total - failed}/${total} reprocessadas no novo pipeline WebP.`,
+      },
     );
-    await supabase
-      .from("optimized_images")
-      .update({ status: "processing", error_message: null })
-      .in("id", ids);
 
-    let done = 0;
-    let failed = 0;
-    await runWithConcurrency(ids, BULK_CONCURRENCY, async (id) => {
-      const { error } = await supabase.functions.invoke("optimize-image", { body: { imageId: id } });
-      if (error) failed++;
-      done++;
-      setBulkProgress({ done, total: ids.length });
-    });
-
-    setBulkBusy(null);
-    setBulkProgress(null);
-    if (failed > 0) {
-      toast({
-        title: `Auto-otimização concluída com ${failed} erro(s)`,
-        description: `${ids.length - failed}/${ids.length} reprocessadas.`,
-        variant: failed === ids.length ? "destructive" : "default",
-      });
-    } else {
-      toast({
-        title: `${ids.length} imagem(ns) em risco reprocessadas`,
+  const handleAutoOptimizeAtRisk = () =>
+    runBulkInvoke(
+      "atrisk",
+      [...atRiskIds],
+      {
+        title: (n) => `${n} imagem(ns) em risco reprocessadas`,
         description: "Variantes WebP do novo pipeline foram regeneradas.",
-      });
-    }
-    load();
-  };
+      },
+      {
+        title: (failed) => `Auto-otimização concluída com ${failed} erro(s)`,
+        description: (failed, total) => `${total - failed}/${total} reprocessadas.`,
+      },
+    );
 
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
     if (!confirm(`Excluir ${ids.length} imagem(ns) selecionada(s)? Esta ação não pode ser desfeita.`)) return;
+    if (runningRef.current) return;
+    runningRef.current = true;
 
-    setBulkBusy("delete");
-    setBulkProgress({ done: 0, total: ids.length });
+    const lockResult = await runWithLock("optimizer:bulk", async () => {
+      setBulkBusy("delete");
+      setBulkProgress({ done: 0, total: ids.length });
+      sonnerToast.loading(`Excluindo ${ids.length} imagem(ns)…`, {
+        id: BULK_TOAST_ID,
+        description: `0/${ids.length}`,
+      });
 
-    const targets = items.filter((i) => selectedIds.has(i.id));
-    let done = 0;
-    let failed = 0;
-
-    await runWithConcurrency(targets, BULK_CONCURRENCY, async (img) => {
       try {
-        const folder = img.original_path.split("/").slice(0, -1).join("/");
-        const { data: list } = await supabase.storage.from(BUCKET).list(folder);
-        if (list?.length) {
-          await supabase.storage.from(BUCKET).remove(list.map((f) => `${folder}/${f.name}`));
+        const targets = items.filter((i) => selectedIds.has(i.id));
+        let done = 0;
+        let failed = 0;
+
+        await runWithConcurrency(targets, BULK_CONCURRENCY, async (img) => {
+          try {
+            const folder = img.original_path.split("/").slice(0, -1).join("/");
+            const { data: list } = await supabase.storage.from(BUCKET).list(folder);
+            if (list?.length) {
+              await supabase.storage.from(BUCKET).remove(list.map((f) => `${folder}/${f.name}`));
+            }
+          } catch {
+            failed++;
+          }
+          done++;
+          pushProgress(done, ids.length);
+          sonnerToast.loading(`Excluindo ${ids.length} imagem(ns)…`, {
+            id: BULK_TOAST_ID,
+            description: `${done}/${ids.length}`,
+          });
+        });
+
+        await supabase.from("optimized_images").delete().in("id", ids);
+
+        if (failed > 0) {
+          sonnerToast.error(`${ids.length - failed} excluída(s) · ${failed} falha(s)`, {
+            id: BULK_TOAST_ID,
+            description: `${failed} falha(s) ao limpar storage.`,
+            duration: 5000,
+          });
+        } else {
+          sonnerToast.success(`${ids.length} imagem(ns) excluída(s)`, {
+            id: BULK_TOAST_ID,
+            duration: 3500,
+          });
         }
-      } catch {
-        failed++;
+        clearSelection();
+      } finally {
+        setBulkBusy(null);
+        setBulkProgress(null);
+        load();
       }
-      done++;
-      setBulkProgress({ done, total: ids.length });
     });
 
-    await supabase.from("optimized_images").delete().in("id", ids);
+    runningRef.current = false;
 
-    setBulkBusy(null);
-    setBulkProgress(null);
-    toast({
-      title: `${ids.length - failed} imagem(ns) excluída(s)`,
-      ...(failed > 0 ? { description: `${failed} falha(s) ao limpar storage.`, variant: "destructive" as const } : {}),
-    });
-    clearSelection();
-    load();
+    if (!lockResult.acquired) {
+      sonnerToast.warning("Outra operação em massa já está em andamento.", {
+        duration: 4000,
+      });
+    }
   };
 
   const selectionCount = selectedIds.size;
