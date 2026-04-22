@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
   // Fetch row
   const { data: row, error: rowErr } = await admin
     .from("optimized_images")
-    .select("id, original_path, name")
+    .select("id, original_path, name, piece_id")
     .eq("id", imageId)
     .maybeSingle();
   if (rowErr || !row) return json({ error: "Image not found" }, 404);
