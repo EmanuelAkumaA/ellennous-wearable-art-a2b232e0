@@ -54,21 +54,17 @@ interface Image { id: string; url: string; storage_path: string | null; ordem: n
 
 // Draft images live in the modal state before the piece is saved (or as new uploads on edit).
 interface DraftImage {
-  optimizedImageId: string;
+  tempId: string;
   name: string;
-  previewUrl: string;          // current best preview (original → variant once ready)
-  status: "processing" | "ready" | "error";
-  variants: OptimizedVariant[];
+  previewUrl: string;          // public URL of the desktop variant
   ordem: number;
-  originalPath: string;
+  desktopPath: string;
 }
 interface DraftCover {
-  optimizedImageId: string;
+  tempId: string;
   name: string;
   previewUrl: string;
-  status: "processing" | "ready" | "error";
-  variants: OptimizedVariant[];
-  originalPath: string;
+  desktopPath: string;
 }
 interface Piece {
   id: string;
