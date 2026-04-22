@@ -181,9 +181,17 @@ Deno.serve(async (req) => {
       await admin.from("optimized_images").update(update).eq("id", imageId);
     } catch (e) {
       console.error("optimize-image failed:", e);
+      const message = (e as Error).message?.slice(0, 500) ?? "Unknown error";
+      await admin.from("optimization_error_log").insert({
+        optimized_image_id: imageId,
+        piece_id: row.piece_id ?? null,
+        stage: "processing",
+        error_message: message,
+        meta: { name: row.name, original_path: row.original_path },
+      });
       await admin
         .from("optimized_images")
-        .update({ status: "error", error_message: (e as Error).message?.slice(0, 500) ?? "Unknown error" })
+        .update({ status: "error", error_message: message })
         .eq("id", imageId);
     }
   })();
