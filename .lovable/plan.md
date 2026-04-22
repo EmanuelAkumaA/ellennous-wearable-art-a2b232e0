@@ -1,107 +1,66 @@
 
 
-## Plano: pré-conversão para WebP no cliente + painel de tempos médios
+## Plano: rodar conversão WebP + otimização em todas as imagens do Backfill
 
-### Conceito da nova dinâmica
+### Contexto
 
-Hoje: **upload do original (JPG/PNG) → edge function decodifica + redimensiona + encoda WebP**. Quando o original é pesado/grande, o decoder WASM da edge consome muita memória e dá `error` (foi a causa raiz dos travamentos recentes).
-
-Nova dinâmica: o **navegador** faz a conversão original → WebP **antes** de subir. A edge só precisa fazer resize + encode (mais leve, mais rápido, menos erros). O original em JPG/PNG é descartado depois que as 3 variantes estão prontas.
+A pré-conversão WebP no cliente (que implementamos no plano anterior) **já está integrada** em `optimizerUpload.ts`. Toda imagem que passa pelo backfill hoje **já é convertida para WebP no navegador** antes do upload e antes da edge gerar as 3 variantes. O fluxo no backfill é:
 
 ```
-[browser] file picker
-   │
-   ├─ 1. Convert (original → WebP master) via canvas
-   │      → mostra "Convertendo… ~1.5s"
-   │
-   ├─ 2. Upload WebP master para optimized-images bucket
-   │      → row em optimized_images com status='processing'
-   │      → galeria já mostra a imagem (preview do master)
-   │
-   ├─ 3. Edge function gera mobile/tablet/desktop a partir do master
-   │      → status='ready'
-   │
-   └─ 4. Cleanup: remove o master WebP (mantém só as 3 variantes)
-          → galeria troca preview master pela URL desktop
+[backfill] cada imagem
+   ├─ download do legado (JPG/PNG do bucket gallery)
+   ├─ uploadToOptimizer  ← já chama convertToWebp() internamente
+   │     → master.webp no bucket optimized-images
+   ├─ edge function gera mobile/tablet/desktop
+   ├─ atualiza gallery_pieces / gallery_piece_images com a URL nova
+   └─ master.webp é removido após sucesso
 ```
 
----
+Então o que falta é só **disparar isso para todas as imagens detectadas** com um único clique e dar feedback claro de que a conversão WebP está acontecendo etapa por etapa.
 
-### 1. Conversor cliente-side (novo: `src/lib/clientWebpConverter.ts`)
+### 1. Botão "Converter tudo para WebP e otimizar"
 
-- Função `convertToWebp(file: File, quality = 0.9): Promise<{ blob: Blob; width: number; height: number; ms: number }>`.
-- Usa `createImageBitmap(file)` → `OffscreenCanvas` (fallback `<canvas>` em Safari) → `canvas.convertToBlob({ type: 'image/webp', quality })`.
-- Cap de dimensão máxima (3200px no maior lado) para evitar canvas absurdo e dar conversão consistente em ~1-3s.
-- Se já for `image/webp` → retorna o file direto sem reprocessar.
-- Se navegador não suportar canvas WebP (Safari < 14) → retorna o original e pula etapa, edge function continua aceitando JPG/PNG.
-- Telemetria: grava `meta.conversionMs` no `client_telemetry` (event `webp_client_conversion`) para alimentar o painel de tempos médios.
+**Editar `src/pages/admin/BackfillRunner.tsx`:**
 
-### 2. Atualizar `uploadToOptimizer` (`src/lib/optimizerUpload.ts`)
+- Novo botão primário no topo da barra de ações: **"Converter tudo para WebP e otimizar (N)"** onde N = `atRiskCount` (pendentes + erros).
+- Clicar no botão:
+  1. Chama `selectAtRisk()` para marcar todos os elegíveis.
+  2. Imediatamente chama `start()` para disparar o backfill.
+  3. Toast: "Iniciando conversão WebP + otimização de N imagens".
+- Protegido pelo mesmo `runWithLock("optimizer:backfill")` que já existe — cliques duplos / multi-aba são bloqueados.
+- Botão fica `disabled` quando `running || atRiskCount === 0` (e visualmente "concluído" se 0).
 
-- Antes do `supabase.storage.upload`, chama `convertToWebp(file)` quando `file.type !== 'image/webp'`.
-- Path passa de `images/{id}/original.{ext}` para `images/{id}/master.webp` (nome semântico — fica claro que é descartável).
-- Insere row com `original_path = master.webp`, `status='processing'`.
-- Toast: "Convertido para WebP em 1.4s, otimizando…" (feedback imediato).
-- Loga em `optimization_error_log` se a conversão falhar (stage `'client_convert'`) com fallback automático para upload do original.
+### 2. Status "Convertendo WebP" visível no progresso
 
-### 3. Edge function `optimize-image` — adicionar cleanup do master
+Hoje o `BackfillProgressItem.status` tem: `pending | downloading | uploading | optimizing | done | skipped | error`. A conversão WebP acontece **dentro** do `uploading` (em `uploadToOptimizer`), invisível para o usuário.
 
-- Após gerar as 3 variantes (mobile/tablet/desktop) com sucesso, **remove o `original_path`** (`master.webp`) do bucket.
-- Se alguma variante falhar, **mantém o master** (para permitir reprocesso e debug).
-- Atualiza row: `original_path = null` quando deletado, mantém `original_size_bytes` para o cálculo de economia.
-- A galeria não quebra: `getBestUrlForPiece` já prefere a variante `desktop` quando disponível; só cai no `original_path` quando `variants` está vazio (cenário `processing` curto).
+**Adicionar status `"converting"`** entre `downloading` e `uploading`:
 
-### 4. Galeria mostra a imagem imediatamente
+- `src/lib/optimizerBackfill.ts → migrateLegacyImage`: após `downloading` (40%), emitir `onStatus("converting", { progress: 45 })` antes de chamar `uploadToOptimizer`.
+- `uploadToOptimizer` ganha um callback opcional `onConversionDone?: (ms: number) => void` — quando o WebP fica pronto, o backfill move para `uploading` (50%).
+- `STATUS_LABEL.converting = "Convertendo WebP"` e `STATUS_TONE.converting = "text-blue-400"`.
+- Ícone: `Sparkles` ou `Wand2` para destacar a etapa nova.
 
-- Já é o caso hoje (`PiecesManager` faz `setDraftImages` com `previewUrl: result.originalUrl` antes da otimização terminar). Apenas confirmar que continua funcionando: o `previewUrl` aponta agora para o `master.webp`, que é instantaneamente mostrável no `<img>` (todo navegador moderno suporta WebP).
-- Quando `optimized_images.status` vira `'ready'` via realtime, o draft atualiza para `getBestUrlForPiece(variants, previewUrl)` e a URL final passa a ser a variante desktop.
-- Após o cleanup, o `previewUrl` antigo (`master.webp`) deixa de existir mas já não é mais referenciado.
+### 3. Mostrar tempo de conversão por imagem
 
-### 5. Painel "Tempos médios estimados" (novo card no Image Optimizer)
+- `BackfillProgressItem` ganha campo opcional `conversionMs?: number`.
+- Após a conversão, `migrateLegacyImage` faz `onStatus("uploading", { conversionMs })`.
+- `BackfillRow` exibe sutilmente "WebP em 1.4s" ao lado do nome do arquivo quando disponível, dando feedback do ganho.
 
-Novo componente `<ProcessingTimingsCard />` em `src/pages/admin/ImageOptimizer.tsx`, ao lado do `WebpTelemetryCard`.
+### 4. Reaproveitar painel de tempos médios
 
-**Fonte de dados:** agrega métricas das últimas 30 imagens processadas com sucesso (últimos 7 dias):
-- **Conversão (cliente)**: `client_telemetry` filtrado por `event_type = 'webp_client_conversion'` → média de `meta.conversionMs`.
-- **Upload**: estimado pelo `optimized_images.original_size_bytes / banda média` (banda média = `original_size_bytes ÷ (created_at - upload_started)` capturado num novo campo do telemetry).
-- **Otimização (edge)**: `optimized_images.updated_at - created_at` quando `status='ready'`.
-- **Total p/imagem**: soma das três.
+O `<ProcessingTimingsCard />` que adicionamos no `ImageOptimizer` já agrega o tempo de conversão (`webp_client_conversion`). Sem mudança extra: a cada imagem do backfill, ele alimenta as métricas e o card mostra a média atualizada.
 
-**Layout do card:**
-```
-┌── Tempos médios (últimas 30 imagens) ──────────────┐
-│  Conversão WebP  │  Upload  │  Otimização │ Total  │
-│      1.4s        │   0.8s   │    4.2s     │  6.4s  │
-│  ▰▰▰▱▱▱▱▱▱▱      ▰▰▱▱▱▱▱▱▱▱   ▰▰▰▰▰▰▰▱▱▱   ▰▰▰▰▰▰▰▰│
-│                                                     │
-│  ⓘ Aguarde ~6s antes de reprocessar uma imagem.    │
-│  ⓘ Lote de 10 imagens: ~22s (3 paralelas).         │
-└─────────────────────────────────────────────────────┘
-```
+### Validação
 
-- Cada barra com cor (conversão = blue, upload = amber, otimização = emerald).
-- Texto-guia dinâmico: "Aguarde ~Xs antes de reprocessar" usa o `Total p99` (não a média).
-- Estimativa de lote leva em conta `BULK_CONCURRENCY = 3` que já existe.
-- Estado vazio: "Coletando dados — processe algumas imagens para ver as estimativas".
+1. Detectar imagens legadas → ver contagem N no botão "Converter tudo para WebP e otimizar".
+2. Clicar uma vez → todas selecionadas, run inicia.
+3. Cada linha mostra fluxo completo: `Baixando → Convertendo WebP (azul) → Enviando → Otimizando → Pronta`.
+4. Após o run, `<ProcessingTimingsCard />` no Otimizador mostra média de conversão calculada com os dados do backfill.
 
-### 6. Validação
+### Arquivos editados
 
-1. **Upload de JPG 5MB**: mostra "Convertendo… 1.5s", master WebP aparece no bucket (~600KB), galeria exibe imediatamente, depois das 3 variantes o master é removido. `original_path` na DB vira `null`.
-2. **Upload de PNG transparente**: WebP preserva alpha (canvas garante), variantes geradas mantêm transparência.
-3. **Upload de WebP**: pula conversão, vai direto pro upload (toast "Já é WebP").
-4. **Navegador sem `convertToBlob('image/webp')`** (Safari < 14): caí no fluxo antigo (envia original), nada quebra.
-5. **Falha de conversão**: log em `optimization_error_log` com `stage='client_convert'`, fallback automático para upload do original.
-6. **Painel**: após processar 3-4 imagens, card mostra médias e estimativa "aguarde ~6s antes de reprocessar".
-
-### Arquivos editados/criados
-
-**Novo:**
-- `src/lib/clientWebpConverter.ts` — conversor canvas → WebP com cap dimensional.
-- `src/components/admin/optimizer/ProcessingTimingsCard.tsx` — painel de tempos médios.
-
-**Editado:**
-- `src/lib/optimizerUpload.ts` — chama conversor antes do upload, path `master.webp`, toast com tempo.
-- `src/lib/clientTelemetry.ts` — adicionar `'webp_client_conversion'` ao tipo `TelemetryEvent`.
-- `supabase/functions/optimize-image/index.ts` — remover `original_path` do bucket após sucesso, setar `original_path = null` na row.
-- `src/pages/admin/ImageOptimizer.tsx` — montar `<ProcessingTimingsCard />` ao lado do telemetry card.
+- `src/lib/optimizerBackfill.ts` — novo status `"converting"`, callback de conversão, captura de `conversionMs`.
+- `src/lib/optimizerUpload.ts` — aceita callback `onConversionDone`.
+- `src/pages/admin/BackfillRunner.tsx` — novo botão "Converter tudo para WebP e otimizar", labels/ícones do status `converting`, exibição de `conversionMs`.
 
