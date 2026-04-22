@@ -539,4 +539,64 @@ const Stat = ({
   </div>
 );
 
+type LiveStatTone = "default" | "primary" | "success" | "warning" | "destructive";
+
+const TONE_CLASSES: Record<LiveStatTone, { border: string; bg: string; icon: string; value: string }> = {
+  default: {
+    border: "border-border/40",
+    bg: "bg-card/30",
+    icon: "text-muted-foreground",
+    value: "text-foreground",
+  },
+  primary: {
+    border: "border-primary/30",
+    bg: "bg-primary/5",
+    icon: "text-primary-glow",
+    value: "text-primary-glow",
+  },
+  success: {
+    border: "border-emerald-500/30",
+    bg: "bg-emerald-500/10",
+    icon: "text-emerald-400",
+    value: "text-emerald-400",
+  },
+  warning: {
+    border: "border-amber-500/30",
+    bg: "bg-amber-500/10",
+    icon: "text-amber-400",
+    value: "text-amber-400",
+  },
+  destructive: {
+    border: "border-destructive/40",
+    bg: "bg-destructive/10",
+    icon: "text-destructive",
+    value: "text-destructive",
+  },
+};
+
+const LiveStat = ({
+  icon: Icon,
+  label,
+  value,
+  tone = "default",
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  tone?: LiveStatTone;
+}) => {
+  const t = TONE_CLASSES[tone];
+  return (
+    <div className={`rounded-md border ${t.border} ${t.bg} px-3 py-2.5`}>
+      <div className="flex items-center gap-1.5">
+        <Icon className={`h-3 w-3 ${t.icon}`} />
+        <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground truncate">
+          {label}
+        </p>
+      </div>
+      <p className={`font-display text-base mt-0.5 tabular-nums ${t.value}`}>{value}</p>
+    </div>
+  );
+};
+
 export default BackfillRunner;
