@@ -895,4 +895,98 @@ const MiniStat = ({
   );
 };
 
+const ImpactSection = ({
+  webp,
+  fallback,
+}: {
+  webp: ImpactBucket;
+  fallback: ImpactBucket;
+}) => {
+  const MIN_SAMPLES = 3;
+  const enough = webp.sessions >= MIN_SAMPLES && fallback.sessions >= MIN_SAMPLES;
+
+  if (webp.sessions === 0 && fallback.sessions === 0) return null;
+
+  if (!enough) {
+    return (
+      <div className="rounded-md border border-border/40 bg-card/30 px-3 py-2">
+        <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground/70 mb-1">
+          Impacto por sessão (30d)
+        </p>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          Aguardando mais dados para correlação confiável ({webp.sessions} c/ WebP · {fallback.sessions} em fallback).
+        </p>
+      </div>
+    );
+  }
+
+  const dLoad = fallback.avgLoadMs - webp.avgLoadMs;
+  const dBytes = fallback.avgBytes - webp.avgBytes;
+  const severity = dLoad < 100 ? "success" : dLoad < 300 ? "warning" : "destructive";
+  const severityCls =
+    severity === "success"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      : severity === "warning"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+        : "border-destructive/40 bg-destructive/10 text-destructive";
+  const severityLabel =
+    severity === "success"
+      ? "Impacto mínimo"
+      : severity === "warning"
+        ? "Impacto moderado"
+        : "Impacto significativo — considere otimizar JPEGs originais";
+
+  return (
+    <div className="space-y-2">
+      <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground/70">
+        Impacto por sessão (30d)
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <ImpactBucketCard label="Sessões com WebP" tone="success" bucket={webp} />
+        <ImpactBucketCard label="Sessões em fallback" tone="warning" bucket={fallback} />
+      </div>
+      <div className={`rounded-md border px-3 py-2 text-[11px] flex items-center gap-2 ${severityCls}`}>
+        <Activity className="h-3 w-3 shrink-0" />
+        <span className="font-medium">{severityLabel}</span>
+        <span className="text-muted-foreground ml-auto tabular-nums">
+          Δ {dLoad >= 0 ? "+" : ""}{Math.round(dLoad)} ms · Δ {dBytes >= 0 ? "+" : ""}{formatBytes(Math.abs(dBytes))} por imagem
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const ImpactBucketCard = ({
+  label,
+  tone,
+  bucket,
+}: {
+  label: string;
+  tone: "success" | "warning";
+  bucket: ImpactBucket;
+}) => {
+  const toneCls = tone === "success" ? "text-emerald-400" : "text-amber-400";
+  return (
+    <div className="rounded-md border border-border/40 bg-card/30 px-3 py-2 space-y-1">
+      <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground truncate">
+        {label} <span className="text-muted-foreground/60 normal-case tracking-normal">· {bucket.sessions} sessões</span>
+      </p>
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground/70">Tempo</p>
+          <p className={`font-display text-sm tabular-nums ${toneCls}`}>
+            {bucket.avgLoadMs > 0 ? `${bucket.avgLoadMs} ms` : "—"}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground/70">Tamanho</p>
+          <p className={`font-display text-sm tabular-nums ${toneCls}`}>
+            {bucket.avgBytes > 0 ? formatBytes(bucket.avgBytes) : "—"}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default ImageOptimizer;
