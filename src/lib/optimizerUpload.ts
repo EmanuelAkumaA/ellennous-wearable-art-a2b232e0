@@ -103,3 +103,22 @@ export const getBestUrlForPiece = (
       .sort((a, b) => b.width - a.width)[0];
   return legacy?.url ?? fallback;
 };
+
+/**
+ * WebP-aware variant resolver. When the browser does not support WebP,
+ * skips the WebP variants and returns the largest JPEG (legacy) or the
+ * original (JPEG/PNG) fallback URL.
+ */
+export const getBestUrlForPieceWithWebpSupport = (
+  variants:
+    | Array<{ format: string; width: number; url: string; device_label?: string }>
+    | null
+    | undefined,
+  fallback: string,
+  supportsWebp: boolean,
+): string => {
+  if (supportsWebp) return getBestUrlForPiece(variants, fallback);
+  if (!variants?.length) return fallback;
+  const jpegs = [...variants].filter((v) => v.format === "jpeg").sort((a, b) => b.width - a.width);
+  return jpegs[0]?.url ?? fallback;
+};

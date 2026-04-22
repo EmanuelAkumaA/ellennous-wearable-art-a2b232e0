@@ -1,5 +1,6 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
+import { supportsWebP, supportsWebPSync } from "@/lib/webpSupport";
 
 interface ResponsivePictureProps {
   src: string;
@@ -16,6 +17,27 @@ interface ResponsivePictureProps {
   style?: CSSProperties;
   onClick?: () => void;
 }
+
+/**
+ * Resolves the browser's WebP support. Defaults optimistically to `true`
+ * (97%+ of browsers) so the first paint isn't blocked. Resolves to `false`
+ * only on legacy browsers, in which case the original (JPEG/PNG) src is used.
+ */
+const useWebpSupport = (): boolean => {
+  const initial = supportsWebPSync();
+  const [supported, setSupported] = useState<boolean>(initial ?? true);
+  useEffect(() => {
+    if (initial !== null) return;
+    let cancelled = false;
+    supportsWebP().then((ok) => {
+      if (!cancelled) setSupported(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initial]);
+  return supported;
+};
 
 /**
  * Picks WebP variants for the new pipeline (mobile/tablet/desktop),
@@ -50,6 +72,26 @@ export const ResponsivePicture = ({
   style,
   onClick,
 }: ResponsivePictureProps) => {
+  const webpOk = useWebpSupport();
+
+  // Browser doesn't support WebP — serve the original JPEG/PNG.
+  if (!webpOk) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        loading={loading}
+        decoding={decoding}
+        fetchPriority={fetchPriority}
+        width={width}
+        height={height}
+        className={className}
+        style={style}
+        onClick={onClick}
+      />
+    );
+  }
+
   if (!variants || variants.length === 0) {
     return (
       <img
