@@ -162,6 +162,7 @@ export const ImageConverter = () => {
               onSavedToHistory={() => setHistoryKey((k) => k + 1)}
               onStatusChange={handleStatusChange}
               onStagingSaved={() => setStagingKey((k) => k + 1)}
+              onProgressChange={handleProgressChange}
             />
           ))}
         </div>
