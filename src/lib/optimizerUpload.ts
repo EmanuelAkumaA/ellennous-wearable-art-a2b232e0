@@ -19,6 +19,8 @@ interface UploadParams {
   file: File;
   pieceId: string;
   role: ImageRole;
+  /** Called as soon as client-side WebP conversion finishes (skipped for native WebP). */
+  onConversionDone?: (ms: number) => void;
 }
 
 const CONVERT_TOAST_ID = (id: string) => `optimizer-convert-${id}`;
