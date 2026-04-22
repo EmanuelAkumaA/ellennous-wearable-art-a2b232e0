@@ -222,6 +222,36 @@ export type Database = {
           },
         ]
       }
+      optimization_error_log: {
+        Row: {
+          created_at: string
+          error_message: string
+          id: string
+          meta: Json
+          optimized_image_id: string
+          piece_id: string | null
+          stage: string
+        }
+        Insert: {
+          created_at?: string
+          error_message: string
+          id?: string
+          meta?: Json
+          optimized_image_id: string
+          piece_id?: string | null
+          stage: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string
+          id?: string
+          meta?: Json
+          optimized_image_id?: string
+          piece_id?: string | null
+          stage?: string
+        }
+        Relationships: []
+      }
       optimized_images: {
         Row: {
           created_at: string
