@@ -3,7 +3,7 @@ import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, Trash2, Star, Link2, RefreshCw, Image as ImageIcon } from "lucide-react";
+import { Loader2, Trash2, Star, Link2, RefreshCw, Image as ImageIcon, MoveRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -12,12 +12,17 @@ import {
 import { removeGalleryVariants, deriveGalleryVariants } from "@/lib/galleryUploader";
 import { formatBytes } from "@/lib/imageSnippet";
 import { AssociatePieceDialog } from "./AssociatePieceDialog";
+import { VariantGrid, type VariantKey, type VariantSlot } from "./VariantGrid";
 
 interface PieceRow {
   id: string;
   nome: string;
   cover_url: string | null;
   cover_storage_path: string | null;
+  cover_url_mobile: string | null;
+  cover_path_mobile: string | null;
+  cover_url_tablet: string | null;
+  cover_path_tablet: string | null;
   gallery_categories: { nome: string } | null;
   gallery_piece_images: Array<{
     id: string;
@@ -32,17 +37,31 @@ interface GalleryTabProps {
   refreshKey: number;
 }
 
-const VARIANT_LABELS: Array<{ key: "mobile" | "tablet" | "desktop"; label: string; px: number }> = [
-  { key: "mobile",  label: "Mobile",  px: 480 },
-  { key: "tablet",  label: "Tablet",  px: 768 },
-  { key: "desktop", label: "Desktop", px: 1200 },
-];
+const PRESET_WIDTHS: Record<VariantKey, number> = { mobile: 480, tablet: 768, desktop: 1200 };
+
+/**
+ * Builds the URL for a specific variant from a desktop URL like
+ * `…/{folder}/desktop.webp` → `…/{folder}/{key}.webp`. Returns null when the
+ * URL doesn't match the convention (legacy images).
+ */
+const variantUrlFromDesktop = (desktopUrl: string, key: VariantKey): string | null => {
+  const match = desktopUrl.match(/^(.*)\/desktop\.webp(\?.*)?$/);
+  if (!match) return null;
+  return `${match[1]}/${key}.webp${match[2] ?? ""}`;
+};
+
+const variantPathFromDesktop = (desktopPath: string | null, key: VariantKey): string | null => {
+  if (!desktopPath || !desktopPath.endsWith("/desktop.webp")) return null;
+  const folder = desktopPath.slice(0, -"/desktop.webp".length);
+  return `${folder}/${key}.webp`;
+};
 
 export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
   const [staging, setStaging] = useState<StagingRow[]>([]);
   const [pieces, setPieces] = useState<PieceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [associateTarget, setAssociateTarget] = useState<StagingRow | null>(null);
+  const [moveTarget, setMoveTarget] = useState<{ pieceId: string; imageId: string; url: string; path: string | null } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -51,7 +70,7 @@ export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
         listStaging(),
         supabase
           .from("gallery_pieces")
-          .select("id, nome, cover_url, cover_storage_path, gallery_categories(nome), gallery_piece_images(id, url, storage_path, ordem, variant_overrides)")
+          .select("id, nome, cover_url, cover_storage_path, cover_url_mobile, cover_path_mobile, cover_url_tablet, cover_path_tablet, gallery_categories(nome), gallery_piece_images(id, url, storage_path, ordem, variant_overrides)")
           .order("ordem", { ascending: true }),
       ]);
       setStaging(stg);
@@ -92,26 +111,54 @@ export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
     await load();
   };
 
-  const handlePromoteCover = async (piece: PieceRow, imageId: string, url: string, path: string | null) => {
-    if (!confirm("Definir esta imagem como capa da obra?")) return;
+  /** Move an existing image (3 variants) from one piece to another. */
+  const handleMoveImage = async (toPieceId: string) => {
+    if (!moveTarget) return;
     try {
-      // Move existing cover into the gallery (if any) so nothing is lost
-      if (piece.cover_url && piece.cover_storage_path) {
-        const newOrdem = piece.gallery_piece_images.length;
-        await supabase.from("gallery_piece_images").insert({
-          piece_id: piece.id,
-          url: piece.cover_url,
-          storage_path: piece.cover_storage_path,
-          ordem: newOrdem,
-        });
-      }
-      await supabase.from("gallery_piece_images").delete().eq("id", imageId);
+      // Compute next ordem on destination piece
+      const { count } = await supabase
+        .from("gallery_piece_images")
+        .select("id", { count: "exact", head: true })
+        .eq("piece_id", toPieceId);
+      const nextOrdem = count ?? 0;
       const { error } = await supabase
-        .from("gallery_pieces")
-        .update({ cover_url: url, cover_storage_path: path })
-        .eq("id", piece.id);
+        .from("gallery_piece_images")
+        .update({ piece_id: toPieceId, ordem: nextOrdem })
+        .eq("id", moveTarget.imageId);
       if (error) throw error;
-      toast({ title: "Capa definida" });
+      toast({ title: "Imagem movida" });
+      setMoveTarget(null);
+      await load();
+    } catch (e) {
+      toast({ title: "Erro ao mover", description: (e as Error).message, variant: "destructive" });
+    }
+  };
+
+  /**
+   * Sets a specific device variant of this image as the cover for that device.
+   * Desktop uses the legacy `cover_url`/`cover_storage_path` columns.
+   */
+  const handleSetCoverPerDevice = async (
+    piece: PieceRow,
+    image: PieceRow["gallery_piece_images"][number],
+    key: VariantKey,
+  ) => {
+    const url = key === "desktop" ? image.url : variantUrlFromDesktop(image.url, key);
+    const path = key === "desktop" ? image.storage_path : variantPathFromDesktop(image.storage_path, key);
+    if (!url) {
+      toast({ title: "Variante indisponível", description: "Esta imagem não segue o padrão responsivo.", variant: "destructive" });
+      return;
+    }
+    const patch =
+      key === "mobile"
+        ? { cover_url_mobile: url, cover_path_mobile: path }
+        : key === "tablet"
+        ? { cover_url_tablet: url, cover_path_tablet: path }
+        : { cover_url: url, cover_storage_path: path };
+    try {
+      const { error } = await supabase.from("gallery_pieces").update(patch).eq("id", piece.id);
+      if (error) throw error;
+      toast({ title: `Capa ${key === "mobile" ? "Mobile" : key === "tablet" ? "Tablet" : "Desktop"} definida` });
       await load();
     } catch (e) {
       toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
@@ -134,11 +181,10 @@ export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
   const handleToggleVariant = async (
     imageId: string,
     overrides: Record<string, boolean> | null,
-    key: "mobile" | "tablet" | "desktop",
+    key: VariantKey,
   ) => {
     const current = overrides ?? {};
     const next = { ...current, [key]: !(current[key] ?? true) };
-    // If everything is back to default (all true), clear the column.
     const allDefault = next.mobile !== false && next.tablet !== false && next.desktop !== false;
     try {
       await supabase
@@ -192,39 +238,43 @@ export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
             </span>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 gap-4">
             {staging.map((row) => {
               const sizes = (row.sizes as Record<string, number>) ?? {};
               const total = (sizes.mobile ?? 0) + (sizes.tablet ?? 0) + (sizes.desktop ?? 0);
+              const slots: VariantSlot[] = (["mobile", "tablet", "desktop"] as VariantKey[]).map((key) => ({
+                key,
+                url: variantUrlFromDesktop(row.desktop_url, key) ?? (key === "desktop" ? row.desktop_url : null),
+                width: PRESET_WIDTHS[key],
+                sizeBytes: sizes[key],
+              }));
               return (
-                <article key={row.id} className="glass-card p-3 space-y-3">
-                  <div className="aspect-square bg-secondary/30 rounded-md overflow-hidden">
-                    <img src={row.desktop_url} alt={row.original_filename} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs truncate font-display" title={row.original_filename}>{row.original_filename}</p>
-                    <p className="text-[10px] font-accent tracking-[0.25em] uppercase text-muted-foreground">
-                      3 variantes · {formatBytes(total)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => setAssociateTarget(row)}
-                      className="flex-1 rounded-none font-accent tracking-[0.2em] uppercase text-[10px] bg-gradient-purple-wine"
-                    >
-                      <Link2 className="h-3 w-3 mr-1" /> Associar
-                    </Button>
+                <article key={row.id} className="glass-card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-display truncate" title={row.original_filename}>{row.original_filename}</p>
+                      <p className="text-[10px] font-accent tracking-[0.25em] uppercase text-muted-foreground mt-0.5">
+                        3 variantes · {formatBytes(total)}
+                      </p>
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"
                       onClick={() => handleDiscardStaging(row)}
-                      className="h-8 w-8 hover:bg-destructive/15 hover:text-destructive"
+                      className="h-8 w-8 hover:bg-destructive/15 hover:text-destructive shrink-0"
                       title="Descartar"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+                  <VariantGrid slots={slots} size="compact" />
+                  <Button
+                    size="sm"
+                    onClick={() => setAssociateTarget(row)}
+                    className="w-full rounded-none font-accent tracking-[0.25em] uppercase text-[10px] bg-gradient-purple-wine"
+                  >
+                    <Link2 className="h-3 w-3 mr-1" /> Associar a uma obra
+                  </Button>
                 </article>
               );
             })}
@@ -249,7 +299,7 @@ export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="h-10 w-10 rounded bg-secondary/30 overflow-hidden shrink-0">
                       {piece.cover_url ? (
-                        <img src={piece.cover_url} alt="" className="w-full h-full object-cover" />
+                        <img src={piece.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center"><ImageIcon className="h-4 w-4 text-muted-foreground/40" /></div>
                       )}
@@ -262,60 +312,119 @@ export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4">
+                <AccordionContent className="px-4 pb-4 space-y-4">
+                  {/* Cover summary per device */}
+                  <div className="rounded-md bg-card/30 border border-border/30 p-3">
+                    <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground mb-2">
+                      Capas atuais por dispositivo
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 text-[10px]">
+                      {(["mobile", "tablet", "desktop"] as VariantKey[]).map((key) => {
+                        const url =
+                          key === "mobile" ? (piece.cover_url_mobile ?? piece.cover_url) :
+                          key === "tablet" ? (piece.cover_url_tablet ?? piece.cover_url) :
+                          piece.cover_url;
+                        const usingFallback =
+                          (key === "mobile" && !piece.cover_url_mobile) ||
+                          (key === "tablet" && !piece.cover_url_tablet);
+                        return (
+                          <div key={key} className="flex flex-col items-center gap-1">
+                            <span className="font-accent tracking-[0.2em] uppercase text-primary-glow text-[9px]">
+                              {key === "mobile" ? "📱 Mobile" : key === "tablet" ? "💻 Tablet" : "🖥 Desktop"}
+                            </span>
+                            <div className="w-full aspect-square bg-secondary/30 rounded overflow-hidden flex items-center justify-center">
+                              {url ? (
+                                <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                              ) : (
+                                <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                              )}
+                            </div>
+                            {usingFallback && url && (
+                              <span className="text-[8px] font-accent tracking-[0.2em] uppercase text-muted-foreground/70">
+                                ↳ usando desktop
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {piece.gallery_piece_images.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">Sem imagens na galeria.</p>
                   ) : (
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {piece.gallery_piece_images.map((img) => {
+                    <div className="space-y-4">
+                      {piece.gallery_piece_images.map((img, idx) => {
                         const overrides = (img.variant_overrides ?? {}) as Record<string, boolean>;
-                        const variants = img.url ? deriveGalleryVariants(img.url) : null;
+                        const desktopVariants = img.url ? deriveGalleryVariants(img.url) : null;
+                        const slots: VariantSlot[] = (["mobile", "tablet", "desktop"] as VariantKey[]).map((key) => {
+                          const url =
+                            key === "desktop"
+                              ? img.url
+                              : variantUrlFromDesktop(img.url, key);
+                          const isCover =
+                            key === "mobile"
+                              ? piece.cover_url_mobile === url
+                              : key === "tablet"
+                              ? piece.cover_url_tablet === url
+                              : piece.cover_url === url;
+                          return {
+                            key,
+                            url,
+                            width: PRESET_WIDTHS[key],
+                            active: overrides[key] ?? true,
+                            isCover,
+                            onToggleActive: () => handleToggleVariant(img.id, img.variant_overrides, key),
+                            actions: (
+                              <Button
+                                size="sm"
+                                variant={isCover ? "default" : "outline"}
+                                onClick={() => handleSetCoverPerDevice(piece, img, key)}
+                                disabled={isCover || !url}
+                                className={`rounded-none font-accent tracking-[0.2em] uppercase text-[9px] h-7 ${
+                                  isCover ? "bg-gradient-purple-wine" : ""
+                                }`}
+                                title={isCover ? "Já é a capa" : `Definir como capa ${key}`}
+                              >
+                                <Star className="h-3 w-3 mr-1" />
+                                {isCover ? "★ Capa" : "Capa"}
+                              </Button>
+                            ),
+                          };
+                        });
                         return (
-                          <div key={img.id} className="bg-card/40 border border-border/40 rounded-md p-3 space-y-2">
-                            <div className="aspect-square rounded overflow-hidden bg-secondary/30">
-                              <img src={img.url} alt="" className="w-full h-full object-cover" />
+                          <div key={img.id} className="bg-card/40 border border-border/40 rounded-md p-3 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
+                                Imagem #{idx + 1}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setMoveTarget({ pieceId: piece.id, imageId: img.id, url: img.url, path: img.storage_path })}
+                                  className="rounded-none font-accent tracking-[0.2em] uppercase text-[9px] h-7"
+                                  title="Mover este registro inteiro para outra obra"
+                                >
+                                  <MoveRight className="h-3 w-3 mr-1" /> Mover
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteImage(img.id, img.storage_path)}
+                                  className="rounded-none font-accent tracking-[0.2em] uppercase text-[9px] h-7 hover:bg-destructive/15 hover:text-destructive"
+                                  title="Excluir o registro completo (3 arquivos)"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {VARIANT_LABELS.map((v) => {
-                                const enabled = overrides[v.key] ?? true;
-                                const exists = variants?.some((x) => x.device_label === v.key);
-                                return (
-                                  <button
-                                    key={v.key}
-                                    type="button"
-                                    onClick={() => handleToggleVariant(img.id, img.variant_overrides, v.key)}
-                                    title={`${v.label} (${v.px}px) — ${enabled ? "ativa" : "inativa"}`}
-                                    className={`px-2 py-1 rounded text-[9px] font-accent tracking-[0.2em] uppercase transition-colors ${
-                                      enabled
-                                        ? "bg-primary/15 text-primary-glow hover:bg-primary/25"
-                                        : "bg-muted/30 text-muted-foreground line-through"
-                                    } ${!exists ? "opacity-50" : ""}`}
-                                  >
-                                    {v.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <div className="flex gap-1.5">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handlePromoteCover(piece, img.id, img.url, img.storage_path)}
-                                className="flex-1 rounded-none font-accent tracking-[0.2em] uppercase text-[9px] h-7"
-                                title="Definir como capa"
-                              >
-                                <Star className="h-3 w-3 mr-1" /> Capa
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteImage(img.id, img.storage_path)}
-                                className="rounded-none font-accent tracking-[0.2em] uppercase text-[9px] h-7 hover:bg-destructive/15 hover:text-destructive"
-                                title="Remover"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
+                            <VariantGrid slots={slots} />
+                            {!desktopVariants && (
+                              <p className="text-[9px] font-accent tracking-[0.2em] uppercase text-muted-foreground/70 italic">
+                                Imagem legada — sem variantes responsivas detectadas.
+                              </p>
+                            )}
                           </div>
                         );
                       })}
@@ -333,6 +442,13 @@ export const GalleryTab = ({ refreshKey }: GalleryTabProps) => {
         onOpenChange={(o) => !o && setAssociateTarget(null)}
         onConfirm={handleAttach}
         title={associateTarget ? `Associar "${associateTarget.original_filename}"` : "Associar"}
+      />
+
+      <AssociatePieceDialog
+        open={!!moveTarget}
+        onOpenChange={(o) => !o && setMoveTarget(null)}
+        onConfirm={(pid) => handleMoveImage(pid)}
+        title="Mover imagem para outra obra"
       />
     </div>
   );

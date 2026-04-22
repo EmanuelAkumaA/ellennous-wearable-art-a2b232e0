@@ -21,6 +21,8 @@ export const ImageConverter = () => {
   const [historyKey, setHistoryKey] = useState(0);
   const [stagingKey, setStagingKey] = useState(0);
   const [tab, setTab] = useState<"convert" | "history" | "gallery" | "logs">("convert");
+  const [itemProgress, setItemProgress] = useState<Record<string, number>>({});
+  const [completionTimes, setCompletionTimes] = useState<number[]>([]);
 
   useEffect(() => {
     document.title = "Conversor de Imagens · Atelier";
@@ -35,10 +37,21 @@ export const ImageConverter = () => {
 
   const removeItem = (id: string) => {
     setQueue((prev) => prev.filter((q) => q.id !== id));
+    setItemProgress((prev) => {
+      const { [id]: _, ...rest } = prev;
+      return rest;
+    });
   };
 
   const handleStatusChange = (id: string, status: QueueStatus) => {
     setQueue((prev) => prev.map((q) => (q.id === id ? { ...q, status } : q)));
+    if (status === "done" || status === "error") {
+      setCompletionTimes((prev) => [...prev, Date.now()]);
+    }
+  };
+
+  const handleProgressChange = (id: string, percent: number) => {
+    setItemProgress((prev) => (prev[id] === percent ? prev : { ...prev, [id]: percent }));
   };
 
   const counts = useMemo(() => {
@@ -65,10 +78,20 @@ export const ImageConverter = () => {
   }, [queue, counts.inProgress]);
 
   const clearDone = () => {
+    const doneIds = new Set(queue.filter((q) => q.status === "done").map((q) => q.id));
     setQueue((prev) => prev.filter((q) => q.status !== "done"));
+    setItemProgress((prev) => {
+      const next: Record<string, number> = {};
+      for (const [k, v] of Object.entries(prev)) if (!doneIds.has(k)) next[k] = v;
+      return next;
+    });
   };
 
-  const clearAll = () => setQueue([]);
+  const clearAll = () => {
+    setQueue([]);
+    setItemProgress({});
+    setCompletionTimes([]);
+  };
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">
@@ -107,6 +130,8 @@ export const ImageConverter = () => {
           done={counts.done}
           failed={counts.failed}
           inProgress={counts.inProgress}
+          itemProgress={itemProgress}
+          completionTimes={completionTimes}
           hasDone={counts.done > 0}
           onClearDone={clearDone}
         />
@@ -137,6 +162,7 @@ export const ImageConverter = () => {
               onSavedToHistory={() => setHistoryKey((k) => k + 1)}
               onStatusChange={handleStatusChange}
               onStagingSaved={() => setStagingKey((k) => k + 1)}
+              onProgressChange={handleProgressChange}
             />
           ))}
         </div>

@@ -19,6 +19,7 @@ import { validateFileDeep } from "@/lib/converterValidation";
 import { logConversion } from "@/lib/conversionLogs";
 import { uploadStaging } from "@/lib/galleryStaging";
 import { ComparePanel } from "./ComparePanel";
+import { VariantGrid, type VariantSlot, type VariantKey } from "./VariantGrid";
 
 export type QueueStatus = "queued" | "validating" | "converting" | "done" | "error";
 
@@ -37,6 +38,8 @@ interface QueueItemProps {
   onSavedToHistory: () => void;
   onStatusChange: (id: string, status: QueueStatus) => void;
   onStagingSaved?: () => void;
+  /** Reports per-item progress (0–100) so the parent can compute weighted ETA. */
+  onProgressChange?: (id: string, percent: number) => void;
 }
 
 interface ConvertedState {
@@ -73,19 +76,26 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
   onSavedToHistory,
   onStatusChange,
   onStagingSaved,
+  onProgressChange,
 }, ref) => {
   const [meta, setMeta] = useState<{ width: number; height: number; size: number } | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [quality, setQuality] = useState(82);
   const [responsive, setResponsive] = useState(true);
   const [status, setStatus] = useState<QueueStatus>("queued");
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgressState] = useState(0);
   const [converted, setConverted] = useState<ConvertedState | null>(null);
+  const [variantUrls, setVariantUrls] = useState<Partial<Record<VariantKey, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [stagingUploading, setStagingUploading] = useState(false);
   const [stagingDone, setStagingDone] = useState(false);
   const debounceRef = useRef<number | null>(null);
   const startedRef = useRef(false);
+
+  const setProgress = (p: number) => {
+    setProgressState(p);
+    onProgressChange?.(id, p);
+  };
 
   // Build a stable preview URL for the original (works for HEIC too via blob:).
   useEffect(() => {
@@ -161,9 +171,21 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
       }
       setProgress(95);
       const mainUrl = URL.createObjectURL(mainBlob);
+      // Build per-variant blob URLs for the "variantes geradas" grid.
+      const newVariantUrls: Partial<Record<VariantKey, string>> = preset
+        ? {
+            mobile: URL.createObjectURL(preset.mobile.blob),
+            tablet: URL.createObjectURL(preset.tablet.blob),
+            desktop: URL.createObjectURL(preset.desktop.blob),
+          }
+        : {};
       setConverted((prev) => {
         if (prev) URL.revokeObjectURL(prev.mainUrl);
         return { mainBlob, mainUrl, preset, totalSize };
+      });
+      setVariantUrls((prev) => {
+        (Object.values(prev) as string[]).forEach((u) => u && URL.revokeObjectURL(u));
+        return newVariantUrls;
       });
       setProgress(100);
       updateStatus("done");
@@ -219,6 +241,7 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
   useEffect(() => {
     return () => {
       if (converted?.mainUrl) URL.revokeObjectURL(converted.mainUrl);
+      (Object.values(variantUrls) as string[]).forEach((u) => u && URL.revokeObjectURL(u));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -240,6 +263,17 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
     a.href = converted.mainUrl;
     a.download = `${safeName}.webp`;
     a.click();
+  };
+
+  const downloadVariant = (key: VariantKey) => {
+    if (!converted?.preset) return;
+    const blob = converted.preset[key].blob;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName}-${key}.webp`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const downloadAllZip = async () => {
@@ -460,6 +494,37 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
           </div>
         )}
       </div>
+
+      {converted?.preset && status === "done" && (
+        <section className="space-y-2">
+          <h4 className="font-accent text-[10px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+            <span className="h-px w-6 bg-primary-glow" />
+            Variantes geradas
+          </h4>
+          <VariantGrid
+            slots={(["mobile", "tablet", "desktop"] as VariantKey[]).map((key) => {
+              const v = converted.preset![key];
+              return {
+                key,
+                url: variantUrls[key] ?? null,
+                width: v.width,
+                height: v.height,
+                sizeBytes: v.blob.size,
+                actions: (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => downloadVariant(key)}
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[9px] h-7"
+                  >
+                    <Download className="h-3 w-3 mr-1" /> Baixar
+                  </Button>
+                ),
+              };
+            })}
+          />
+        </section>
+      )}
     </article>
   );
 });

@@ -1,12 +1,17 @@
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { QueueSpeedometer } from "./QueueSpeedometer";
 
 interface QueueProgressBarProps {
   total: number;
   done: number;
   failed: number;
   inProgress: number;
+  /** Per-item progress (0–100). Allows weighted % across the queue. */
+  itemProgress?: Record<string, number>;
+  /** Timestamps of completed items (done OR error), used for speed/ETA. */
+  completionTimes?: number[];
   onClearDone?: () => void;
   hasDone: boolean;
 }
@@ -16,11 +21,32 @@ export const QueueProgressBar = ({
   done,
   failed,
   inProgress,
+  itemProgress,
+  completionTimes = [],
   onClearDone,
   hasDone,
 }: QueueProgressBarProps) => {
   if (total === 0) return null;
-  const pct = Math.round(((done + failed) / total) * 100);
+
+  // Weighted percent: every item is 1 unit. Done/failed = 100%, queued = 0%,
+  // in-progress contributes its real progress. Falls back to coarse %.
+  let weightedPct: number;
+  if (itemProgress) {
+    const sum = Object.values(itemProgress).reduce((acc, v) => acc + Math.max(0, Math.min(100, v)), 0);
+    // Items that are not in itemProgress (likely queued) contribute 0; done/failed should be 100.
+    const accountedIds = Object.keys(itemProgress).length;
+    const finished = done + failed;
+    const finishedNotTracked = Math.max(0, finished - 0); // finished items reach 100 via setProgress(100); they remain in itemProgress
+    // Defensive: if a finished item somehow isn't tracked, count it as 100.
+    const missingFinished = Math.max(0, finished - accountedIds);
+    weightedPct = Math.round((sum + missingFinished * 100 + finishedNotTracked * 0) / total);
+    weightedPct = Math.max(0, Math.min(100, weightedPct));
+  } else {
+    weightedPct = Math.round(((done + failed) / total) * 100);
+  }
+
+  const remaining = total - done - failed;
+
   return (
     <div className="glass-card p-4 space-y-3">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -31,6 +57,7 @@ export const QueueProgressBar = ({
           <span className="font-display text-base text-gradient-light">
             {done + failed} <span className="text-muted-foreground">de {total}</span>
           </span>
+          <span className="font-display text-sm text-primary-glow tabular-nums">{weightedPct}%</span>
           {inProgress > 0 && (
             <span className="text-[10px] font-accent tracking-[0.25em] uppercase text-primary-glow">
               · {inProgress} em andamento
@@ -53,7 +80,8 @@ export const QueueProgressBar = ({
           </Button>
         )}
       </div>
-      <Progress value={pct} className="h-1.5" />
+      <Progress value={weightedPct} className="h-1.5" />
+      <QueueSpeedometer completionTimes={completionTimes} remaining={remaining} />
     </div>
   );
 };
