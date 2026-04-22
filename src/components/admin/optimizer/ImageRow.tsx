@@ -164,14 +164,12 @@ const ImageRowImpl = ({
       savedBytes = original - variant.size_bytes;
       savedPct = Math.round((savedBytes / original) * 100);
     }
-    const tone =
-      savedPct === null
-        ? "bg-secondary/20 text-muted-foreground/50"
-        : savedPct >= 50
-          ? "bg-emerald-500/15 text-emerald-300"
-          : savedPct >= 0
-            ? "bg-amber-500/15 text-amber-300"
-            : "bg-destructive/15 text-destructive";
+    const ready = !!variant;
+    const tone = ready
+      ? "bg-emerald-500/20 text-emerald-300"
+      : isProcessing
+        ? "bg-secondary/30 text-muted-foreground/70"
+        : "bg-secondary/20 text-muted-foreground/50";
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
@@ -181,21 +179,32 @@ const ImageRowImpl = ({
             >
               <Icon className="h-3 w-3" />
               <span className="font-accent text-[8px] tracking-[0.2em] uppercase opacity-60">{label}</span>
-              <span>{variant ? formatBytes(variant.size_bytes) : "—"}</span>
-              {savedPct !== null && (
-                <span className="font-accent text-[9px] tracking-wide opacity-90">
-                  {savedPct >= 0 ? "−" : "+"}
-                  {Math.abs(savedPct)}%
-                </span>
+              {ready ? (
+                <>
+                  <span>{formatBytes(variant!.size_bytes)}</span>
+                  {savedPct !== null && (
+                    <span className="font-accent text-[9px] tracking-wide opacity-90">
+                      {savedPct >= 0 ? "−" : "+"}
+                      {Math.abs(savedPct)}%
+                    </span>
+                  )}
+                  <CheckCircle2 className="h-2.5 w-2.5 ml-0.5" />
+                </>
+              ) : isProcessing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <span>—</span>
               )}
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            {variant
-              ? `${variant.width}px · ${variant.format.toUpperCase()} (${deviceLabel})${
+            {ready
+              ? `Variante ${deviceLabel} pronta · ${variant!.width}px · ${formatBytes(variant!.size_bytes)}${
                   savedBytes > 0 ? ` · ${formatBytes(savedBytes)} economizados` : ""
                 }`
-              : "Variante não disponível"}
+              : isProcessing
+                ? `Variante ${deviceLabel} ainda gerando…`
+                : `Variante ${deviceLabel} não disponível`}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
