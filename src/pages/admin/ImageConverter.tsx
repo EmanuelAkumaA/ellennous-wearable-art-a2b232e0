@@ -21,6 +21,8 @@ export const ImageConverter = () => {
   const [historyKey, setHistoryKey] = useState(0);
   const [stagingKey, setStagingKey] = useState(0);
   const [tab, setTab] = useState<"convert" | "history" | "gallery" | "logs">("convert");
+  const [itemProgress, setItemProgress] = useState<Record<string, number>>({});
+  const [completionTimes, setCompletionTimes] = useState<number[]>([]);
 
   useEffect(() => {
     document.title = "Conversor de Imagens · Atelier";
@@ -35,10 +37,21 @@ export const ImageConverter = () => {
 
   const removeItem = (id: string) => {
     setQueue((prev) => prev.filter((q) => q.id !== id));
+    setItemProgress((prev) => {
+      const { [id]: _, ...rest } = prev;
+      return rest;
+    });
   };
 
   const handleStatusChange = (id: string, status: QueueStatus) => {
     setQueue((prev) => prev.map((q) => (q.id === id ? { ...q, status } : q)));
+    if (status === "done" || status === "error") {
+      setCompletionTimes((prev) => [...prev, Date.now()]);
+    }
+  };
+
+  const handleProgressChange = (id: string, percent: number) => {
+    setItemProgress((prev) => (prev[id] === percent ? prev : { ...prev, [id]: percent }));
   };
 
   const counts = useMemo(() => {
