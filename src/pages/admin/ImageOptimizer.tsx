@@ -146,6 +146,16 @@ export const ImageOptimizer = () => {
   );
   const legacyCount = legacyIds.length;
 
+  /** Conjunto ampliado: legacy + órfãs (ready sem variants) + erros. */
+  const atRiskIds = useMemo(
+    () =>
+      items
+        .filter((i) => isAtRiskOfFallback(i.status, i.variants))
+        .map((i) => i.id),
+    [items],
+  );
+  const atRiskCount = atRiskIds.length;
+
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
     const totalOriginal = ready.reduce((s, i) => s + (i.original_size_bytes ?? 0), 0);
