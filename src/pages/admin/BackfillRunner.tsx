@@ -270,6 +270,75 @@ export const BackfillRunner = () => {
     return { total, done: doneCount, error: errorCount, pending: pendingCount, avgProgress };
   }, [items]);
 
+  // Group items by piece (obra) for the new grouped UI.
+  const groups = useMemo(() => {
+    const map = new Map<string, { pieceId: string; pieceName: string; items: BackfillProgressItem[] }>();
+    for (const it of items) {
+      const g = map.get(it.pieceId);
+      if (g) g.items.push(it);
+      else map.set(it.pieceId, { pieceId: it.pieceId, pieceName: it.pieceName, items: [it] });
+    }
+    return Array.from(map.values()).sort((a, b) => a.pieceName.localeCompare(b.pieceName));
+  }, [items]);
+
+  // Auto-collapse groups whose items are all done (only on first load / fresh detect).
+  useEffect(() => {
+    if (loading) return;
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      for (const g of groups) {
+        const allDone = g.items.length > 0 && g.items.every((i) => i.status === "done");
+        if (allDone && !next.has(g.pieceId)) next.add(g.pieceId);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, items.length]);
+
+  const toggleGroup = (pieceId: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(pieceId)) next.delete(pieceId);
+      else next.add(pieceId);
+      return next;
+    });
+  };
+
+  const isPickable = (it: BackfillProgressItem) =>
+    it.status === "pending" || it.status === "error";
+
+  const toggleItem = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePieceSelection = (pieceId: string) => {
+    const group = groups.find((g) => g.pieceId === pieceId);
+    if (!group) return;
+    const eligibleIds = group.items.filter(isPickable).map((i) => i.id);
+    if (eligibleIds.length === 0) return;
+    const allSelected = eligibleIds.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) eligibleIds.forEach((id) => next.delete(id));
+      else eligibleIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const selectAllPending = () => {
+    const ids = items.filter(isPickable).map((i) => i.id);
+    setSelected(new Set(ids));
+  };
+  const clearSelection = () => setSelected(new Set());
+
+  const totalPending = items.filter(isPickable).length;
+  const selectionEligibleCount = items.filter((i) => selected.has(i.id) && isPickable(i)).length;
+
   return (
     <div className="space-y-6">
       {showSuccess ? (
