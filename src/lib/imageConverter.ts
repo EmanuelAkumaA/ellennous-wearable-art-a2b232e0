@@ -97,7 +97,6 @@ const encodeWebpFromBitmap = async (
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(bmp, 0, 0, targetW, targetH);
-      // @ts-expect-error - convertToBlob is on OffscreenCanvas in modern browsers
       const blob: Blob = await off.convertToBlob({
         type: "image/webp",
         quality: Math.max(0, Math.min(1, quality / 100)),
@@ -126,9 +125,14 @@ const encodeWebpFromBitmap = async (
 
 const heicToBlob = async (file: File): Promise<Blob> => {
   const mod = await import("heic2any");
-  const heic2any = (mod as unknown as { default: typeof import("heic2any") }).default;
+  type Heic2Any = (opts: {
+    blob: Blob;
+    toType?: string;
+    quality?: number;
+  }) => Promise<Blob | Blob[]>;
+  const heic2any = (mod as unknown as { default: Heic2Any }).default;
   const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
-  return Array.isArray(out) ? out[0] : (out as Blob);
+  return Array.isArray(out) ? out[0] : out;
 };
 
 /**
