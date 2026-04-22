@@ -9,7 +9,7 @@ import { ImageCard, type OptimizedImage } from "@/components/admin/optimizer/Ima
 import { ImageRow, type PieceLink } from "@/components/admin/optimizer/ImageRow";
 import { CodeSnippetDialog } from "@/components/admin/optimizer/CodeSnippetDialog";
 import { ImageDetailSheet } from "@/components/admin/optimizer/ImageDetailSheet";
-import { formatBytes, isLegacyFormat, type OptimizedVariant } from "@/lib/imageSnippet";
+import { formatBytes, isLegacyFormat, isAtRiskOfFallback, type OptimizedVariant } from "@/lib/imageSnippet";
 
 const PAGE_SIZE = 100;
 const BUCKET = "optimized-images";
@@ -52,7 +52,7 @@ export const ImageOptimizer = () => {
   const [snippetTarget, setSnippetTarget] = useState<OptimizedImage | null>(null);
   const [detailTarget, setDetailTarget] = useState<OptimizedImage | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete" | "modernize">(null);
+  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete" | "modernize" | "atrisk">(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
