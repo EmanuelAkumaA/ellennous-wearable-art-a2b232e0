@@ -549,6 +549,32 @@ export const ImageOptimizer = () => {
         </div>
       </div>
 
+      {/* Running banner — visible during atrisk/modernize when there is no selection bar */}
+      {bulkBusy && !selectionCount && (
+        <div className="sticky top-0 z-20 -mx-2 px-2">
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 backdrop-blur px-4 py-3 flex items-center gap-3">
+            <Loader2 className="h-4 w-4 animate-spin text-amber-400 shrink-0" />
+            <div className="text-xs text-amber-200/90 flex-1">
+              <span className="font-medium">
+                {bulkBusy === "atrisk"
+                  ? "Auto-otimização em andamento"
+                  : bulkBusy === "modernize"
+                    ? "Modernização em andamento"
+                    : "Operação em massa em andamento"}
+              </span>
+              {bulkProgress && (
+                <span className="text-muted-foreground ml-2">
+                  {bulkProgress.done}/{bulkProgress.total}…
+                </span>
+              )}
+              <span className="text-muted-foreground ml-2 hidden sm:inline">
+                — aguarde, demais botões estão temporariamente desativados.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bulk action bar */}
       {selectionCount > 0 && (
         <div className="sticky top-0 z-20 -mx-2 px-2">
