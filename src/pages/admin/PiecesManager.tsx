@@ -375,11 +375,9 @@ export const PiecesManager = () => {
 
   // Working piece id (a draft uuid for "create" mode, the real id for "edit").
   const [workingPieceId, setWorkingPieceId] = useState<string | null>(null);
-  // Optimizer-backed images uploaded in this modal session (rendered alongside saved ones).
+  // Just-uploaded images that are queued to be persisted on save.
   const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
   const [draftCover, setDraftCover] = useState<DraftCover | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<"gallery" | "cover">("gallery");
 
   const flashMoved = (id: string) => {
     setRecentlyMovedId(null);
