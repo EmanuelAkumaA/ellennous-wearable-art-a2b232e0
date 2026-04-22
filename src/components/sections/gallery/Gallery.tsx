@@ -10,13 +10,25 @@ import { ResponsivePicture } from "@/components/ui/responsive-picture";
 import { ZoomOverlay } from "./ZoomOverlay";
 import { useGalleryData, type PieceData } from "./useGalleryData";
 import { trackPieceEvent } from "@/lib/analytics";
-import { useDominantColor } from "@/hooks/use-dominant-color";
+import { useDominantColor, warmDominantColor } from "@/hooks/use-dominant-color";
+import { trackClientEvent } from "@/lib/clientTelemetry";
+import { logConversion } from "@/lib/conversionLogs";
+import { prefetchImage } from "@/lib/imagePrefetch";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
+
+/** Telemetry thresholds (ms) — surface slow gallery loads in client_telemetry. */
+export const IMG_SLOW_MS = 2500;
+export const COLOR_SLOW_MS = 1500;
+
+/** Per-session dedup so we don't spam telemetry with the same piece. */
+const loggedSlowImg = new Set<string>();
+const loggedSlowColor = new Set<string>();
+const loggedImgError = new Set<string>();
 
 const MOBILE_STEP = 5;
 const DESKTOP_STEP = 6;
