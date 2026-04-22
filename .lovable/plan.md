@@ -1,135 +1,135 @@
 
 
-## Plano: Barra de progresso com ETA/velocidade + visualização e gestão por dispositivo
+## Plano: CTA enriquecido + microinterações + bordas com cor da capa + menu mobile inferior + correções no Conversor
 
-### 1. Barra agregada da fila — `QueueProgressBar`
+### 1. Modal de peça — CTA do WhatsApp enriquecido
 
-Adicionar telemetria em tempo real:
+A peça já tem botão "Quero algo nesse nível" no modal. Vamos só refinar a mensagem para incluir **categoria** explicitamente:
 
-- **Percentual estimado**: média ponderada do progresso de cada item (não só "concluídos / total"). Itens em andamento contribuem com seu `progress` parcial.
-- **Velocidade**: itens/min calculados a partir do timestamp do primeiro `done`/`error` até agora. Atualiza a cada segundo via `useEffect` + `setInterval`.
-- **ETA**: `(restantes / velocidade) * 60s` → exibido como `~ 2 min 30 s`. Esconde quando < 2 amostras (precisa de pelo menos 1 conclusão para estimar).
-- Layout (uma linha extra):
-  ```text
-  Progresso da fila    3 de 7   · 1 em andamento · 1 falha
-  ████████░░░░░░░  47%
-  ⚡ 8 img/min   ⏱ ~ 30 s restantes
+```
+Olá! Vi a obra "{nome}" ({categoria}) na galeria e quero algo nesse nível.
+Pode me contar como começamos um projeto exclusivo?
+```
+
+Edita só a string em `src/components/sections/gallery/Gallery.tsx` (linha do `buildWhatsAppLink`).
+
+### 2. Microinterações na galeria e seções de conteúdo
+
+**Card de obra** (Gallery.tsx, item da grid):
+- `hover:scale-[1.02]` no card + `group-hover:scale-110` na imagem (já existe; vamos suavizar a curva).
+- Brilho sutil no hover: pseudo-overlay com `bg-gradient-to-tr from-primary/0 via-primary/10 to-primary/0` que aparece em `group-hover:opacity-100`.
+- Botão de filtro de categoria: `hover:-translate-y-0.5 active:scale-95` para feedback tátil.
+
+**Seções de conteúdo** (Manifesto, Hero, ScarType, Process, ForWhom, Positioning, Testimonials, FinalCTA, Footer):
+- O sistema `useReveal` já existe. Vamos adicionar uma classe utilitária `reveal-slide` em `index.css` que combina **fade + slide-up** (transform `translateY(40px)` → 0 + opacity 0→1 com `var(--ease-smooth)` de 0.9s).
+- Adicionar `reveal` em mais elementos-chave dentro de cada seção (cards do Manifesto, etapas do Process, etc.) com pequenos delays escalonados via `style={{ transitionDelay: `${i * 80}ms` }}`.
+
+### 3. Borda animada com cor da capa (referência da imagem 03)
+
+**Extrator de cor dominante** — novo hook `src/hooks/use-dominant-color.ts`:
+- Recebe a URL da capa, baixa via `<img crossOrigin="anonymous">` (bucket `gallery` é público), pinta num canvas 32×32, varre os pixels, ignora muito escuros (lum < 0.18) ou dessaturados (sat < 0.25), retorna a cor mais frequente em HSL.
+- Cache em `Map<url, string>` no módulo para não recalcular ao re-renderizar.
+- Fallback: `--primary-glow` quando o cálculo falhar.
+
+**Card da obra** (Gallery.tsx item):
+- Recebe `dominantColor` do hook.
+- Substituir a borda estática `border-border/40` por uma camada wrapper que renderiza um `::after` cônico animado:
+  ```tsx
+  <div style={{ '--ring-color': dominantColor }} className="card-glow-ring">
+    <button …>…</button>
+  </div>
   ```
+- Em `index.css`, novo utilitário:
+  ```css
+  .card-glow-ring { position: relative; padding: 2px; border-radius: 4px; }
+  .card-glow-ring::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px;
+    background: conic-gradient(from 0deg,
+      var(--ring-color) 0%, transparent 35%, transparent 65%, var(--ring-color) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude; -webkit-mask-composite: xor;
+    animation: ring-rotate 6s linear infinite;
+    opacity: 0.0; transition: opacity 0.5s var(--ease-smooth);
+  }
+  .card-glow-ring:hover::before { opacity: 0.9; }
+  .card-glow-ring::after {
+    content: ""; position: absolute; inset: -8px; border-radius: 8px; pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, var(--ring-color), transparent 60%);
+    opacity: 0; transition: opacity 0.5s var(--ease-smooth); filter: blur(20px);
+  }
+  .card-glow-ring:hover::after { opacity: 0.35; }
+  @keyframes ring-rotate { to { transform: rotate(360deg); } }
+  ```
+- A borda fica visível **suave em estado normal** (`opacity: 0.4`) e **acende no hover** com a cor da imagem girando.
 
-Para isso, `ImageConverter` passa também `itemProgress: Record<id, percent>` e `completionTimes: number[]` ao `QueueProgressBar`. `QueueItem` chama `onProgressChange(id, percent)` em cada `setProgress`.
+### 4. Menu mobile no admin — bottom navigation estética
 
-### 2. Cartão do `QueueItem` — variantes por dispositivo (lista visual)
+Hoje o `AdminShell` usa `<Sheet>` lateral com botão hambúrguer. Substituir por **bottom bar fixa** no mobile (mantém Sheet só para desktop responsivo se quiser, mas o padrão móvel vira bottom):
 
-Após `done`, exibir uma seção nova "Variantes geradas" abaixo do `ComparePanel`:
-
-```text
-┌──────────┬──────────┬──────────┐
-│ 📱 MOBILE│ 💻 TABLET│ 🖥 DESKTOP│
-│ thumb    │ thumb    │ thumb    │
-│ 480×360  │ 768×576  │ 1200×900 │
-│  18 KB   │  42 KB   │  96 KB   │
-│ [baixar] │ [baixar] │ [baixar] │
-└──────────┴──────────┴──────────┘
-```
-
-Cada thumb usa `URL.createObjectURL(preset[key].blob)`, com cleanup no unmount. Botão "baixar" individual por variante. Quando `responsive=false`, mostra apenas o card "original".
-
-### 3. Aba Galeria — visualização explícita das 3 variantes por imagem
-
-Hoje cada `gallery_piece_images` mostra **uma** thumb (a desktop) e três **badges** de toggle. Vamos transformar em **3 cards lado a lado por dispositivo** dentro do mesmo registro de imagem:
-
-```text
-Imagem #2 (registro lógico)
-┌─ 📱 Mobile ─────┐ ┌─ 💻 Tablet ────┐ ┌─ 🖥 Desktop ───┐
-│ [thumb 480]    │ │ [thumb 768]    │ │ [thumb 1200]   │
-│ ✓ Ativa        │ │ ✓ Ativa        │ │ ✓ Ativa        │
-│ ⭐ Capa Mobile │ │ ⭐ Capa Tablet │ │ ⭐ Capa Desktop│
-│ [↗ mover]  [🗑]│ │ [↗ mover] [🗑] │ │ [↗ mover] [🗑] │
-└────────────────┘ └────────────────┘ └────────────────┘
-                  Remover registro completo: [🗑 Excluir tudo]
-```
-
-Recursos:
-- **Toggle "Ativa"** (mantém comportamento atual de `variant_overrides`).
-- **Botão ⭐ Capa por dispositivo**: troca apenas a variante daquele device como capa da obra (ver §4).
-- **Botão ↗ "Mover para outra obra"**: abre `AssociatePieceDialog` reutilizado, mas opera só sobre o registro lógico (move o trio inteiro).
-- **Fallback de imagem quebrada**: `<img onError>` mostra um placeholder com mensagem "arquivo não encontrado no bucket" (evita o ícone quebrado visto no print).
-- Loading skeleton no `<img>` enquanto carrega (usa `loading="lazy"`).
-
-### 4. Capa por dispositivo
-
-Hoje `gallery_pieces` só tem `cover_url` + `cover_storage_path` (uma capa única — usa desktop). Vamos adicionar capa específica por dispositivo:
-
-**Migration** `add_cover_per_device.sql`:
-```sql
-alter table public.gallery_pieces
-  add column cover_url_mobile text,
-  add column cover_path_mobile text,
-  add column cover_url_tablet text,
-  add column cover_path_tablet text;
--- desktop continua usando cover_url / cover_storage_path (compat)
-```
-
-**Lógica**:
-- Se `cover_url_mobile` for null, o site faz fallback para `cover_url` (desktop). Sem breaking changes.
-- No `useGalleryData`/`PieceCarousel`: ao montar `<picture>` da capa, usa `cover_url_mobile` para `(max-width: 480px)`, `cover_url_tablet` para `(max-width: 768px)`, `cover_url` (desktop) como default.
-- Botão "⭐ Capa Mobile" no GalleryTab grava em `cover_url_mobile`/`cover_path_mobile` apontando para a variante correta daquele registro (`{folder}/mobile.webp`). Mesma lógica para tablet e desktop.
-
-### 5. Galeria — Staging também por dispositivo
-
-No card de cada item de staging, substituir a única thumb por mini-grid 3×1 igual ao do §3 (sem botões de capa, mas com label `📱 Mobile · 18 KB` por baixo). Mantém os botões "Associar" e "Descartar" globais por registro.
-
-### Diagrama: fluxo de capa por dispositivo
+- Novo componente `src/components/admin/AdminBottomNav.tsx`:
+  - Visível só `lg:hidden` + `fixed bottom-0 inset-x-0 z-50`.
+  - 5 ícones principais (Obras, Categorias, Conversor, Avaliações, Conta) — Estatísticas vai para "+ Mais" via Sheet residual.
+  - Visual: `backdrop-blur-xl bg-card/80 border-t border-primary/20`, glow sutil ao redor, ícone ativo com pílula de fundo `bg-gradient-purple-wine` + label em CAPS pequenas, animação de "lift" `-translate-y-1` no item ativo.
+  - Safe-area iOS: `pb-[env(safe-area-inset-bottom)]`.
+- Em `AdminShell`:
+  - Remover o botão hambúrguer no header mobile e remover o `<Sheet>` do header (mover para fallback "Mais").
+  - Adicionar `pb-24` no `<main>` quando mobile para não cobrir conteúdo.
+  - Renderizar `<AdminBottomNav active={active} onSelect={handleSelect}/>`.
 
 ```text
-Galeria por obra → registro de imagem (3 variantes no bucket)
-                                │
-            ┌───────────────────┼────────────────────┐
-            ▼                   ▼                    ▼
-       ⭐ Capa Mobile      ⭐ Capa Tablet       ⭐ Capa Desktop
-            │                   │                    │
-            ▼                   ▼                    ▼
-   gallery_pieces.       gallery_pieces.      gallery_pieces.
-   cover_url_mobile      cover_url_tablet     cover_url
-                                │
-                                ▼
-                  Site público (<picture>)
-                  - <source media="(max-width:480px)" → mobile
-                  - <source media="(max-width:768px)" → tablet
-                  - <img src=desktop> fallback
+┌─────────────────────────────┐
+│        conteúdo             │
+│                             │
+│                             │
+├─────────────────────────────┤
+│  📷    🏷    ✨    ⭐    👤 │  ← bottom nav, item ativo elevado + glow
+│ Obras  Cat  Conv  Aval Conta│
+└─────────────────────────────┘
 ```
 
-### Detalhes técnicos
+### 5. Conversor — Galeria: botões "Ativa" e "Capa" funcionais
 
-**Arquivos novos**
-- `src/components/admin/converter/VariantGrid.tsx` — grid 3×1 reutilizável (recebe URLs/sizes/widths e botões opcionais por slot).
-- `src/components/admin/converter/QueueSpeedometer.tsx` — exibe ⚡ velocidade e ⏱ ETA usando `completionTimes[]`.
+Os handlers `handleToggleVariant` e `handleSetCoverPerDevice` **já existem** e estão ligados via `onToggleActive` / `actions` no `VariantGrid`. O problema visto no print é que **o card mostra `Inativa` mesmo sem clique** porque, quando a URL da variante é `null` (imagem legada sem mobile/tablet), o thumb cai no estado "arquivo ausente" mas o botão fica ativável e o `Star` botão fica desabilitado.
 
-**Arquivos editados**
-- `src/components/admin/converter/QueueProgressBar.tsx` — recebe `itemProgress` e `completionTimes`; renderiza `QueueSpeedometer`.
-- `src/components/admin/converter/QueueItem.tsx` — emite `onProgressChange`; renderiza `VariantGrid` quando `done`.
-- `src/pages/admin/ImageConverter.tsx` — mantém `itemProgress` em state; calcula `completionTimes` quando status vira `done|error`.
-- `src/components/admin/converter/GalleryTab.tsx`:
-  - Substitui o card único por `VariantGrid` com botões "Capa Mobile/Tablet/Desktop".
-  - Adiciona `<img onError>` com placeholder quando o arquivo não existe.
-  - Renomeia "Definir como capa" para "Capa Desktop" (consistência).
-  - Atualiza staging cards para usar `VariantGrid` (somente leitura + sizes).
-- `src/components/sections/gallery/PieceCarousel.tsx` (ou onde a capa é renderizada): trocar `<img src=cover_url>` por `<picture>` com sources mobile/tablet/desktop, com fallback para `cover_url` quando colunas novas estão null.
-- `src/integrations/supabase/types.ts` — regenerado automaticamente após a migration.
+Correções:
+1. **`VariantGrid`** — quando `slot.url` é `null`, **desabilitar visualmente** o botão "Ativa" (não tem o que ativar). Adicionar `disabled` ao botão e tooltip explicando.
+2. **`GalleryTab`** — para imagens legadas (`!desktopVariants` para mobile/tablet) mostrar overlay no card com botão "Reconverter para gerar variantes" que abre fluxo: baixa o desktop, roda `convertResponsivePreset`, sobe os 2 ausentes, mantém o desktop. Isso resolve o caso do print onde só desktop existe.
+3. **Confirmação visual no clique**: hoje ambos os botões já chamam `await load()`, mas vamos adicionar `loading` state local para mostrar `<Loader2 className="animate-spin"/>` enquanto a chamada Supabase não retorna (evita o usuário pensar que "não funcionou").
 
-**Migration**
-- `add_cover_per_device.sql`: 4 colunas novas em `gallery_pieces` (todas nullable, sem default — fallback para cover_url).
+### 6. Logs do conversor — registrar carregamento de imagens
 
-**Cálculo de ETA (pseudo)**
-```ts
-const completed = completionTimes.length;
-const elapsedMs = Date.now() - completionTimes[0];
-const itemsPerMin = (completed / elapsedMs) * 60_000;
-const remaining = total - completed - failed;
-const etaSec = remaining / itemsPerMin * 60;
-```
+Hoje `conversion_logs` registra **conversões** (browser → bucket). O usuário quer também registrar **carregamento bem-sucedido/falha** das imagens já no bucket.
 
-**Performance**: thumbs do grid usam `loading="lazy"` + `decoding="async"`; URLs de blob no Conversor são revogados quando o `QueueItem` desmonta.
+- Novo `source` aceito: `'image_load'` (a tabela aceita texto livre — sem mudança de schema).
+- Em `VariantGrid` → componente `Thumb`: quando `<img onError>` dispara, chamar `logConversion({ source: 'image_load', filename: url, status: 'error', errorMessage: 'Falha ao carregar do bucket', ... })`.
+- Quando `<img onLoad>` dispara pela primeira vez, opcional: `status: 'success'` com `originalSize: 0`. Vamos **só logar erros** por padrão para não inundar a tabela, e adicionar um toggle no LogsTable "Incluir cargas de imagem" (filtro client-side).
+- O `LogsTable.tsx` já filtra por `source` — adicionar opção "Carregamento" no select.
 
-**Sem mudanças** em `imageConverter.ts`, `galleryUploader.ts`, `client.ts`, ou na lógica de upload do PiecesManager — só adicionamos colunas e refinamos a UI.
+### 7. Teste de ponta a ponta
+
+Após implementar, executar verificações automáticas via build (`npm run build`) e revisar manualmente o checklist:
+
+- Login admin → Conversor → arrastar 2 imagens → confirmar progresso/ETA → "Enviar p/ galeria" → aba Galeria mostra staging → associar a uma obra → ver capas atualizando.
+- Em galeria, clicar "Ativa" e "Capa" em cada device → confirmar mensagens toast e atualização.
+- Ver logs (filtrar sucesso/falha/imagem-load).
+- Site público (`/`) → Galeria → modal abre → CTA WhatsApp tem nome+categoria → Microinterações funcionando.
+- Mobile: admin tem bottom nav; galeria tem bordas coloridas extraídas das capas.
+
+### Arquivos
+
+**Novos**
+- `src/hooks/use-dominant-color.ts` — extrator HSL com cache.
+- `src/components/admin/AdminBottomNav.tsx`.
+
+**Editados**
+- `src/index.css` — utilitários `.card-glow-ring`, `.reveal-slide`, keyframes `ring-rotate`.
+- `src/components/sections/gallery/Gallery.tsx` — wrapper `card-glow-ring` no item, mensagem WhatsApp enriquecida, classes `reveal-slide`.
+- `src/components/sections/{Hero,Manifesto,Process,ScarType,ForWhom,Positioning,Testimonials,FinalCTA,Footer}.tsx` — adicionar `reveal-slide` + delays nos sub-elementos.
+- `src/components/admin/AdminShell.tsx` — montar `AdminBottomNav`, padding inferior no main, esconder hambúrguer no mobile.
+- `src/components/admin/converter/VariantGrid.tsx` — `disabled` quando url null + onError logging + estado loading.
+- `src/components/admin/converter/GalleryTab.tsx` — botão "Reconverter variantes ausentes" para imagens legadas, loading states locais nos botões Ativa/Capa.
+- `src/components/admin/converter/LogsTable.tsx` — opção "Carregamento" no filtro de origem.
+- `src/lib/conversionLogs.ts` — ampliar tipo `ConversionSource` para incluir `'image_load'`.
+
+**Sem migration** — `conversion_logs.source` é `text` livre.
 
