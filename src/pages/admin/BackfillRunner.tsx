@@ -475,23 +475,43 @@ export const BackfillRunner = () => {
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={start}
-          disabled={running || loading || items.length === 0}
+          disabled={running || loading || totalPending === 0}
           className="rounded-none font-accent tracking-[0.2em] uppercase text-xs bg-gradient-purple-wine hover:opacity-90 shadow-glow"
         >
           {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-          Otimizar todas ({stats.pending + stats.error})
+          {selected.size > 0
+            ? `Otimizar selecionadas (${selectionEligibleCount})`
+            : `Otimizar todas (${totalPending})`}
         </Button>
+        <Button
+          variant="outline"
+          onClick={selectAllPending}
+          disabled={running || loading || totalPending === 0}
+          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+        >
+          Selecionar todas pendentes
+        </Button>
+        {selected.size > 0 && (
+          <Button
+            variant="ghost"
+            onClick={clearSelection}
+            disabled={running}
+            className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+          >
+            <X className="h-3.5 w-3.5 mr-1.5" /> Limpar seleção ({selected.size})
+          </Button>
+        )}
         <Button
           variant="outline"
           onClick={detect}
           disabled={running || loading}
-          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs ml-auto"
         >
           <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? "animate-spin" : ""}`} /> Re-detectar
         </Button>
       </div>
 
-      {/* List */}
+      {/* Grouped list by piece */}
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -507,10 +527,112 @@ export const BackfillRunner = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {items.map((item) => (
-            <BackfillRow key={item.id} item={item} />
-          ))}
+        <div className="space-y-3">
+          {groups.map((g) => {
+            const total = g.items.length;
+            const doneN = g.items.filter((i) => i.status === "done").length;
+            const errN = g.items.filter((i) => i.status === "error").length;
+            const pendingN = g.items.filter((i) => isPickable(i)).length;
+            const groupPct = total > 0 ? Math.round((doneN / total) * 100) : 0;
+            const open = !collapsedGroups.has(g.pieceId);
+            const eligibleIds = g.items.filter(isPickable).map((i) => i.id);
+            const allSelected =
+              eligibleIds.length > 0 && eligibleIds.every((id) => selected.has(id));
+            const someSelected =
+              !allSelected && eligibleIds.some((id) => selected.has(id));
+
+            return (
+              <Collapsible
+                key={g.pieceId}
+                open={open}
+                onOpenChange={() => toggleGroup(g.pieceId)}
+                className="rounded-lg border border-border/40 bg-card/30 overflow-hidden"
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/20 transition-colors text-left"
+                  >
+                    {open ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-display text-sm truncate">{g.pieceName}</p>
+                      <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                        {total} imagem(ns) ·{" "}
+                        <span className="text-emerald-400">{doneN} otimizada(s)</span>
+                        {pendingN > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-foreground">{pendingN} pendente(s)</span>
+                          </>
+                        )}
+                        {errN > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-destructive">{errN} erro(s)</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-2 shrink-0">
+                      <div className="h-1 w-24 rounded-full bg-secondary/40 overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-400 transition-all duration-300"
+                          style={{ width: `${groupPct}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] tabular-nums text-muted-foreground w-9 text-right">
+                        {doneN}/{total}
+                      </span>
+                    </div>
+                    {eligibleIds.length > 0 && (
+                      <span
+                        role="checkbox"
+                        aria-checked={allSelected ? "true" : someSelected ? "mixed" : "false"}
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePieceSelection(g.pieceId);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === " " || e.key === "Enter") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            togglePieceSelection(g.pieceId);
+                          }
+                        }}
+                        title="Selecionar todas pendentes desta obra"
+                        className="ml-2 shrink-0"
+                      >
+                        <Checkbox
+                          checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                          aria-label="Selecionar todas pendentes desta obra"
+                          tabIndex={-1}
+                          className="pointer-events-none"
+                        />
+                      </span>
+                    )}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="border-t border-border/30 divide-y divide-border/30">
+                    {g.items.map((it) => (
+                      <BackfillRow
+                        key={it.id}
+                        item={it}
+                        selected={selected.has(it.id)}
+                        onToggle={() => toggleItem(it.id)}
+                        selectable={isPickable(it)}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
     </div>
