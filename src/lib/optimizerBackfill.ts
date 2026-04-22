@@ -184,13 +184,15 @@ const logErrorToDb = async (params: {
 }) => {
   try {
     if (!params.optimizedImageId) return;
-    await supabase.from("optimization_error_log").insert({
-      optimized_image_id: params.optimizedImageId,
-      piece_id: params.pieceId,
-      stage: params.stage,
-      error_message: params.message.slice(0, 500),
-      meta: params.meta,
-    });
+    await supabase.from("optimization_error_log").insert([
+      {
+        optimized_image_id: params.optimizedImageId,
+        piece_id: params.pieceId ?? undefined,
+        stage: params.stage,
+        error_message: params.message.slice(0, 500),
+        meta: params.meta as never,
+      },
+    ]);
   } catch (e) {
     console.warn("Falha ao gravar log de erro:", e);
   }
