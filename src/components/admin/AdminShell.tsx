@@ -4,7 +4,7 @@ import { useAdminProfile } from "@/hooks/useAdminProfile";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star, Wifi, WifiOff, Wand2, Recycle } from "lucide-react";
+import { ImageIcon, Tags, BarChart3, UserCog, LogOut, ExternalLink, Menu, Sparkles, Star, Wifi, WifiOff, Wand2 } from "lucide-react";
 import { PalettePhoto } from "@/components/admin/PalettePhoto";
 import { InstallPrompt } from "@/components/admin/InstallPrompt";
 import brandIcon from "@/assets/brand-icon.png";
@@ -84,7 +84,7 @@ const registerAdminPWA = () => {
     .catch(() => undefined);
 };
 
-export type AdminTab = "pieces" | "categories" | "reviews" | "stats" | "optimizer" | "backfill" | "user";
+export type AdminTab = "pieces" | "categories" | "reviews" | "stats" | "converter" | "user";
 
 interface NavItem {
   key: AdminTab;
@@ -98,8 +98,7 @@ const NAV: NavItem[] = [
   { key: "categories", label: "Categorias", icon: Tags, desc: "Organização e ordem das coleções" },
   { key: "reviews", label: "Avaliações", icon: Star, desc: "Convites de avaliação e moderação dos depoimentos" },
   { key: "stats", label: "Estatísticas", icon: BarChart3, desc: "Aberturas, conversão e tempo de visita" },
-  { key: "optimizer", label: "Otimizador", icon: Wand2, desc: "Upload e geração automática de variantes responsivas (AVIF/WebP/JPG)" },
-  { key: "backfill", label: "Backfill", icon: Recycle, desc: "Reprocessa imagens antigas da galeria pelo pipeline do Otimizador" },
+  { key: "converter", label: "Conversor", icon: Wand2, desc: "Conversor de imagens para WebP — gera variantes responsivas no navegador" },
   { key: "user", label: "Conta", icon: UserCog, desc: "Acesso e segurança do administrador" },
 ];
 
