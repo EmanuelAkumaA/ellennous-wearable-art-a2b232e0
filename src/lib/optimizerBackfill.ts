@@ -147,7 +147,7 @@ const downloadWithProgress = async (
 
 const waitForOptimization = async (
   optimizedImageId: string,
-  onPoll: (elapsedMs: number) => void,
+  onPoll: (elapsedMs: number, readyDevices: DeviceLabel[]) => void,
   timeoutMs = 30000,
 ): Promise<{ variants: OptimizedVariant[] | null; status: string }> => {
   const start = Date.now();
@@ -157,13 +157,19 @@ const waitForOptimization = async (
       .select("status, variants")
       .eq("id", optimizedImageId)
       .maybeSingle();
-    if (data && (data.status === "ready" || data.status === "error")) {
-      return {
-        status: data.status,
-        variants: (data.variants as unknown as OptimizedVariant[]) ?? null,
-      };
+    if (data) {
+      const variants = (data.variants as unknown as OptimizedVariant[]) ?? [];
+      const ready: DeviceLabel[] = [];
+      for (const dev of ["mobile", "tablet", "desktop"] as DeviceLabel[]) {
+        if (variants.some((v) => v.format === "webp" && v.device_label === dev)) ready.push(dev);
+      }
+      if (data.status === "ready" || data.status === "error") {
+        return { status: data.status, variants };
+      }
+      onPoll(Date.now() - start, ready);
+    } else {
+      onPoll(Date.now() - start, []);
     }
-    onPoll(Date.now() - start);
     await new Promise((r) => setTimeout(r, 800));
   }
   return { variants: null, status: "timeout" };
