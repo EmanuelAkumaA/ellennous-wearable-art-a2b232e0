@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -9,10 +9,18 @@ import {
   RefreshCw,
   ExternalLink,
   X,
+  Timer,
+  Gauge,
+  TrendingDown,
+  Activity,
+  Hourglass,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
 import {
   detectLegacyImages,
   runBackfill,
@@ -48,6 +56,24 @@ export const BackfillRunner = () => {
   const [running, setRunning] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // Live stats
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [runEndedAt, setRunEndedAt] = useState<number | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
+  const [bytesOriginal, setBytesOriginal] = useState(0);
+  const [bytesOptimized, setBytesOptimized] = useState(0);
+  const timingsRef = useRef<Map<string, { start: number; end?: number }>>(new Map());
+  const completedTimingsRef = useRef<number[]>([]);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
+
+  // Tick every second while running so the elapsed timer stays live.
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [running]);
+
   const detect = async () => {
     setLoading(true);
     try {
@@ -73,6 +99,46 @@ export const BackfillRunner = () => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   };
 
+  /** Wraps updateItem to capture per-image start/end timings + bytes saved. */
+  const trackedUpdate = (id: string, patch: Partial<BackfillProgressItem>) => {
+    const m = timingsRef.current;
+    if (patch.status === "downloading" && !m.has(id)) {
+      m.set(id, { start: Date.now() });
+    }
+    if (patch.status === "done" || patch.status === "error") {
+      const t = m.get(id);
+      if (t && t.end == null) {
+        t.end = Date.now();
+        completedTimingsRef.current.push(t.end - t.start);
+      }
+      if (patch.status === "done") {
+        setCompletedCount((c) => c + 1);
+        // Fire-and-forget: read original/optimized sizes for byte savings.
+        const optId = patch.optimizedImageId;
+        if (optId) {
+          supabase
+            .from("optimized_images")
+            .select("original_size_bytes, variants")
+            .eq("id", optId)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (!data) return;
+              const variants = (data.variants as unknown as OptimizedVariant[]) ?? [];
+              const tablet =
+                variants.find((v) => v.format === "webp" && v.device_label === "tablet") ??
+                variants.find((v) => v.format === "webp") ??
+                variants[0];
+              setBytesOriginal((b) => b + (data.original_size_bytes ?? 0));
+              setBytesOptimized((b) => b + (tablet?.size_bytes ?? 0));
+            });
+        }
+      } else {
+        setFailedCount((c) => c + 1);
+      }
+    }
+    updateItem(id, patch);
+  };
+
   const start = async () => {
     if (running) return;
     const pending = items.filter((i) => i.status === "pending" || i.status === "error");
@@ -80,6 +146,17 @@ export const BackfillRunner = () => {
       toast({ title: "Nada a fazer", description: "Todas as imagens já estão otimizadas." });
       return;
     }
+    // Reset live stats for this run
+    timingsRef.current = new Map();
+    completedTimingsRef.current = [];
+    setCompletedCount(0);
+    setFailedCount(0);
+    setBytesOriginal(0);
+    setBytesOptimized(0);
+    setRunStartedAt(Date.now());
+    setRunEndedAt(null);
+    setNow(Date.now());
+
     setRunning(true);
     setShowSuccess(false);
     pending.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
@@ -96,13 +173,14 @@ export const BackfillRunner = () => {
       }),
     );
 
-    const { done, failed } = await runBackfill(legacy, updateItem, 2);
+    const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
     setRunning(false);
+    setRunEndedAt(Date.now());
 
     if (failed === 0 && done > 0) {
       setShowSuccess(true);
       sonnerToast.success("Tudo otimizado!", {
-        description: `${done} imagem(ns) migrada(s) para o pipeline AVIF/WebP.`,
+        description: `${done} imagem(ns) migrada(s) para o pipeline WebP.`,
         duration: 6000,
       });
     } else {
@@ -113,6 +191,48 @@ export const BackfillRunner = () => {
       });
     }
   };
+
+  const clearStats = () => {
+    timingsRef.current = new Map();
+    completedTimingsRef.current = [];
+    setCompletedCount(0);
+    setFailedCount(0);
+    setBytesOriginal(0);
+    setBytesOptimized(0);
+    setRunStartedAt(null);
+    setRunEndedAt(null);
+  };
+
+  const liveStats = useMemo(() => {
+    const elapsedMs = runStartedAt ? (runEndedAt ?? now) - runStartedAt : 0;
+    const timings = completedTimingsRef.current;
+    const avgMs = timings.length ? timings.reduce((a, b) => a + b, 0) / timings.length : 0;
+    const totalResolved = completedCount + failedCount;
+    const successRate = totalResolved > 0 ? Math.round((completedCount / totalResolved) * 100) : 100;
+    const elapsedMin = elapsedMs / 60000;
+    const imgsPerMin = elapsedMin > 0 ? completedCount / elapsedMin : 0;
+    const pendingItems = items.filter((i) => i.status !== "done" && i.status !== "error" && i.status !== "skipped").length;
+    const etaMs = avgMs > 0 ? Math.max(0, pendingItems * avgMs) : 0;
+    const bytesSaved = Math.max(0, bytesOriginal - bytesOptimized);
+    return {
+      elapsedMs,
+      avgMs,
+      successRate,
+      imgsPerMin,
+      etaMs,
+      bytesSaved,
+      hasData: runStartedAt !== null,
+    };
+  }, [runStartedAt, runEndedAt, now, completedCount, failedCount, items, bytesOriginal, bytesOptimized]);
+
+  const formatDuration = (ms: number): string => {
+    if (!ms || ms < 0) return "00:00";
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60).toString().padStart(2, "0");
+    const s = (totalSec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -169,6 +289,73 @@ export const BackfillRunner = () => {
             Esta tela detecta imagens já existentes no site que <strong className="text-foreground">não foram processadas pelo Otimizador</strong>.
             Ao rodar, cada imagem é baixada, reenviada pelo pipeline (AVIF / WebP / JPG em 4 larguras) e o link da galeria
             é atualizado para servir a versão otimizada. Os arquivos originais permanecem intocados como fallback.
+          </div>
+        </div>
+      )}
+
+      {/* Live stats panel — visible during and after a run */}
+      {liveStats.hasData && (
+        <div className="rounded-lg border border-border/40 bg-card/40 backdrop-blur p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="h-3.5 w-3.5 text-primary-glow" />
+              <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
+                {running ? "Estatísticas em tempo real" : "Estatísticas do último run"}
+              </p>
+            </div>
+            {!running && (
+              <button
+                type="button"
+                onClick={clearStats}
+                className="inline-flex items-center gap-1 text-[10px] font-accent tracking-[0.2em] uppercase text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Eraser className="h-3 w-3" /> Limpar
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <LiveStat
+              icon={Timer}
+              label="Decorrido"
+              value={formatDuration(liveStats.elapsedMs)}
+              tone="primary"
+            />
+            <LiveStat
+              icon={Gauge}
+              label="Tempo médio"
+              value={liveStats.avgMs > 0 ? `${(liveStats.avgMs / 1000).toFixed(1)}s` : "—"}
+              tone="primary"
+            />
+            <LiveStat
+              icon={CheckCircle2}
+              label="Sucesso"
+              value={`${liveStats.successRate}%`}
+              tone={
+                liveStats.successRate >= 95
+                  ? "success"
+                  : liveStats.successRate >= 80
+                    ? "warning"
+                    : "destructive"
+              }
+            />
+            <LiveStat
+              icon={Activity}
+              label="Img/min"
+              value={liveStats.imgsPerMin > 0 ? liveStats.imgsPerMin.toFixed(1) : "—"}
+              tone="primary"
+            />
+            <LiveStat
+              icon={Hourglass}
+              label="ETA"
+              value={running && liveStats.etaMs > 0 ? formatDuration(liveStats.etaMs) : "—"}
+              tone="default"
+            />
+            <LiveStat
+              icon={TrendingDown}
+              label="Economizado"
+              value={liveStats.bytesSaved > 0 ? formatBytes(liveStats.bytesSaved) : "—"}
+              tone="success"
+            />
           </div>
         </div>
       )}
@@ -351,5 +538,65 @@ const Stat = ({
     </p>
   </div>
 );
+
+type LiveStatTone = "default" | "primary" | "success" | "warning" | "destructive";
+
+const TONE_CLASSES: Record<LiveStatTone, { border: string; bg: string; icon: string; value: string }> = {
+  default: {
+    border: "border-border/40",
+    bg: "bg-card/30",
+    icon: "text-muted-foreground",
+    value: "text-foreground",
+  },
+  primary: {
+    border: "border-primary/30",
+    bg: "bg-primary/5",
+    icon: "text-primary-glow",
+    value: "text-primary-glow",
+  },
+  success: {
+    border: "border-emerald-500/30",
+    bg: "bg-emerald-500/10",
+    icon: "text-emerald-400",
+    value: "text-emerald-400",
+  },
+  warning: {
+    border: "border-amber-500/30",
+    bg: "bg-amber-500/10",
+    icon: "text-amber-400",
+    value: "text-amber-400",
+  },
+  destructive: {
+    border: "border-destructive/40",
+    bg: "bg-destructive/10",
+    icon: "text-destructive",
+    value: "text-destructive",
+  },
+};
+
+const LiveStat = ({
+  icon: Icon,
+  label,
+  value,
+  tone = "default",
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  tone?: LiveStatTone;
+}) => {
+  const t = TONE_CLASSES[tone];
+  return (
+    <div className={`rounded-md border ${t.border} ${t.bg} px-3 py-2.5`}>
+      <div className="flex items-center gap-1.5">
+        <Icon className={`h-3 w-3 ${t.icon}`} />
+        <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground truncate">
+          {label}
+        </p>
+      </div>
+      <p className={`font-display text-base mt-0.5 tabular-nums ${t.value}`}>{value}</p>
+    </div>
+  );
+};
 
 export default BackfillRunner;

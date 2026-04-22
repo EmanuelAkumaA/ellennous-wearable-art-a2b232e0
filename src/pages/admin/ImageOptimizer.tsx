@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare, LayoutGrid, List, ImageIcon } from "lucide-react";
+import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare, LayoutGrid, List, ImageIcon, Wand2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
 import { ImageCard, type OptimizedImage } from "@/components/admin/optimizer/ImageCard";
 import { ImageRow, type PieceLink } from "@/components/admin/optimizer/ImageRow";
 import { CodeSnippetDialog } from "@/components/admin/optimizer/CodeSnippetDialog";
 import { ImageDetailSheet } from "@/components/admin/optimizer/ImageDetailSheet";
-import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
+import { formatBytes, isLegacyFormat, type OptimizedVariant } from "@/lib/imageSnippet";
 
 const PAGE_SIZE = 100;
 const BUCKET = "optimized-images";
@@ -51,7 +52,7 @@ export const ImageOptimizer = () => {
   const [snippetTarget, setSnippetTarget] = useState<OptimizedImage | null>(null);
   const [detailTarget, setDetailTarget] = useState<OptimizedImage | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete">(null);
+  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete" | "modernize">(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
@@ -135,6 +136,16 @@ export const ImageOptimizer = () => {
   );
   const activeCount = items.length - orphanCount;
 
+  /** Imagens "ready" sem o triple device-tagged WebP do novo pipeline. */
+  const legacyIds = useMemo(
+    () =>
+      items
+        .filter((i) => i.status === "ready" && isLegacyFormat(i.variants))
+        .map((i) => i.id),
+    [items],
+  );
+  const legacyCount = legacyIds.length;
+
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
     const totalOriginal = ready.reduce((s, i) => s + (i.original_size_bytes ?? 0), 0);
@@ -200,6 +211,48 @@ export const ImageOptimizer = () => {
       toast({ title: `${ids.length} imagens reprocessando…` });
     }
     clearSelection();
+    load();
+  };
+
+  const handleModernizeLegacy = async () => {
+    const ids = [...legacyIds];
+    if (!ids.length) return;
+    setBulkBusy("modernize");
+    setBulkProgress({ done: 0, total: ids.length });
+
+    setItems((prev) =>
+      prev.map((it) =>
+        ids.includes(it.id) ? { ...it, status: "processing", error_message: null } : it,
+      ),
+    );
+    await supabase
+      .from("optimized_images")
+      .update({ status: "processing", error_message: null })
+      .in("id", ids);
+
+    let done = 0;
+    let failed = 0;
+    await runWithConcurrency(ids, BULK_CONCURRENCY, async (id) => {
+      const { error } = await supabase.functions.invoke("optimize-image", { body: { imageId: id } });
+      if (error) failed++;
+      done++;
+      setBulkProgress({ done, total: ids.length });
+    });
+
+    setBulkBusy(null);
+    setBulkProgress(null);
+    if (failed > 0) {
+      toast({
+        title: `Modernização concluída com ${failed} erro(s)`,
+        description: `${ids.length - failed}/${ids.length} reprocessadas no novo pipeline WebP.`,
+        variant: failed === ids.length ? "destructive" : "default",
+      });
+    } else {
+      toast({
+        title: `${ids.length} imagem(ns) modernizadas`,
+        description: "Variantes mobile/tablet/desktop geradas no novo pipeline.",
+      });
+    }
     load();
   };
 
@@ -312,26 +365,56 @@ export const ImageOptimizer = () => {
         </div>
       </div>
 
-      {/* Status filter pills */}
-      <div className="inline-flex rounded-md border border-border/60 overflow-hidden text-xs">
-        <FilterPill
-          active={statusFilter === "all"}
-          onClick={() => setStatusFilter("all")}
-          label="Todas"
-          count={items.length}
-        />
-        <FilterPill
-          active={statusFilter === "active"}
-          onClick={() => setStatusFilter("active")}
-          label="Na galeria"
-          count={activeCount}
-        />
-        <FilterPill
-          active={statusFilter === "orphan"}
-          onClick={() => setStatusFilter("orphan")}
-          label="Órfãs"
-          count={orphanCount}
-        />
+      {/* Status filter pills + legacy modernization */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-md border border-border/60 overflow-hidden text-xs">
+          <FilterPill
+            active={statusFilter === "all"}
+            onClick={() => setStatusFilter("all")}
+            label="Todas"
+            count={items.length}
+          />
+          <FilterPill
+            active={statusFilter === "active"}
+            onClick={() => setStatusFilter("active")}
+            label="Na galeria"
+            count={activeCount}
+          />
+          <FilterPill
+            active={statusFilter === "orphan"}
+            onClick={() => setStatusFilter("orphan")}
+            label="Órfãs"
+            count={orphanCount}
+          />
+        </div>
+
+        {legacyCount > 0 && (
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleModernizeLegacy}
+                  disabled={!!bulkBusy}
+                  className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary-glow transition-colors disabled:opacity-40"
+                >
+                  {bulkBusy === "modernize" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5" />
+                  )}
+                  {bulkBusy === "modernize" && bulkProgress
+                    ? `Modernizando ${bulkProgress.done}/${bulkProgress.total}`
+                    : `Modernizar antigas (${legacyCount})`}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+                Reprocessa imagens que ainda não têm variantes mobile/tablet/desktop
+                no novo pipeline WebP.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
 
       {/* Bulk action bar */}
