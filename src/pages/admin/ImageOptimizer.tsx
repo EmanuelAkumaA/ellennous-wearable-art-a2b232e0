@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare, LayoutGrid, List, ImageIcon } from "lucide-react";
+import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare, LayoutGrid, List, ImageIcon, Wand2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "@/hooks/use-toast";
 import { ImageCard, type OptimizedImage } from "@/components/admin/optimizer/ImageCard";
 import { ImageRow, type PieceLink } from "@/components/admin/optimizer/ImageRow";
 import { CodeSnippetDialog } from "@/components/admin/optimizer/CodeSnippetDialog";
 import { ImageDetailSheet } from "@/components/admin/optimizer/ImageDetailSheet";
-import { formatBytes, type OptimizedVariant } from "@/lib/imageSnippet";
+import { formatBytes, isLegacyFormat, type OptimizedVariant } from "@/lib/imageSnippet";
 
 const PAGE_SIZE = 100;
 const BUCKET = "optimized-images";
@@ -51,7 +52,7 @@ export const ImageOptimizer = () => {
   const [snippetTarget, setSnippetTarget] = useState<OptimizedImage | null>(null);
   const [detailTarget, setDetailTarget] = useState<OptimizedImage | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete">(null);
+  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete" | "modernize">(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
