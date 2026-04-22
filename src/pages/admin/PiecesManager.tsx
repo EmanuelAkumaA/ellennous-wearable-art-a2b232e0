@@ -500,51 +500,6 @@ export const PiecesManager = () => {
     return false;
   };
 
-  // Realtime: when an optimized_image used in this modal becomes ready, refresh its preview/variants.
-  useEffect(() => {
-    if (!workingPieceId) return;
-    const ids = new Set<string>();
-    draftImages.forEach((d) => ids.add(d.optimizedImageId));
-    if (draftCover) ids.add(draftCover.optimizedImageId);
-    if (ids.size === 0) return;
-
-    const channel = supabase
-      .channel(`opt_modal_${workingPieceId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "optimized_images" },
-        (payload) => {
-          const row = payload.new as {
-            id: string;
-            status: string;
-            variants: OptimizedVariant[] | null;
-          };
-          if (!ids.has(row.id)) return;
-          const variants = (row.variants ?? []) as OptimizedVariant[];
-          const status = (row.status as DraftImage["status"]) ?? "processing";
-          const bestPreview =
-            variants.find((v) => v.format === "webp" && v.width === 800)?.url ??
-            variants.find((v) => v.format === "jpeg" && v.width === 800)?.url;
-          setDraftImages((prev) =>
-            prev.map((d) =>
-              d.optimizedImageId === row.id
-                ? { ...d, status, variants, previewUrl: bestPreview ?? d.previewUrl }
-                : d,
-            ),
-          );
-          setDraftCover((prev) =>
-            prev && prev.optimizedImageId === row.id
-              ? { ...prev, status, variants, previewUrl: bestPreview ?? prev.previewUrl }
-              : prev,
-          );
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [workingPieceId, draftImages, draftCover]);
-
   const handleSave = async () => {
     if (guardOffline()) return;
     if (!form.nome.trim()) return toast({ title: "Nome obrigatório", variant: "destructive" });
