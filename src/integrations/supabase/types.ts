@@ -211,9 +211,13 @@ export type Database = {
           conceito: string
           cover_fit: string
           cover_image_id: string | null
+          cover_path_mobile: string | null
+          cover_path_tablet: string | null
           cover_position: string
           cover_storage_path: string | null
           cover_url: string | null
+          cover_url_mobile: string | null
+          cover_url_tablet: string | null
           created_at: string
           descricao: string
           destaque: boolean
@@ -230,9 +234,13 @@ export type Database = {
           conceito?: string
           cover_fit?: string
           cover_image_id?: string | null
+          cover_path_mobile?: string | null
+          cover_path_tablet?: string | null
           cover_position?: string
           cover_storage_path?: string | null
           cover_url?: string | null
+          cover_url_mobile?: string | null
+          cover_url_tablet?: string | null
           created_at?: string
           descricao?: string
           destaque?: boolean
@@ -249,9 +257,13 @@ export type Database = {
           conceito?: string
           cover_fit?: string
           cover_image_id?: string | null
+          cover_path_mobile?: string | null
+          cover_path_tablet?: string | null
           cover_position?: string
           cover_storage_path?: string | null
           cover_url?: string | null
+          cover_url_mobile?: string | null
+          cover_url_tablet?: string | null
           created_at?: string
           descricao?: string
           destaque?: boolean
