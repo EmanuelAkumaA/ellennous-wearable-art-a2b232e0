@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare, LayoutGrid, List, ImageIcon, Wand2 } from "lucide-react";
+import { Search, Sparkles, Info, RefreshCw, Trash2, X, Loader2, CheckSquare, LayoutGrid, List, ImageIcon, Wand2, Activity, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -307,6 +307,8 @@ export const ImageOptimizer = () => {
         </div>
       </div>
 
+      <WebpTelemetryCard />
+
       <div className="rounded-lg border border-primary/10 bg-primary/[0.03] px-4 py-3 flex items-start gap-3">
         <Sparkles className="h-4 w-4 mt-0.5 text-primary-glow shrink-0" />
         <div className="text-xs text-muted-foreground leading-relaxed flex-1">
@@ -568,5 +570,202 @@ const FilterPill = ({
     </span>
   </button>
 );
+
+type WebpTelemetryRow = {
+  event_type: string;
+  session_id: string;
+  user_agent: string | null;
+  created_at: string;
+};
+
+type WebpTelemetryStats = {
+  unsupportedSessions7d: number;
+  unsupportedSessions30d: number;
+  fallbackSessions7d: number;
+  fallbackSessions30d: number;
+  topUserAgents: { ua: string; count: number }[];
+  totalSessions30d: number;
+  fallbackPct30d: number;
+};
+
+const WebpTelemetryCard = () => {
+  const [stats, setStats] = useState<WebpTelemetryStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async () => {
+    setRefreshing(true);
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from("client_telemetry")
+      .select("event_type, session_id, user_agent, created_at")
+      .in("event_type", ["webp_unsupported", "webp_fallback_used"])
+      .gte("created_at", since30)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+
+    if (error || !data) {
+      setStats({
+        unsupportedSessions7d: 0,
+        unsupportedSessions30d: 0,
+        fallbackSessions7d: 0,
+        fallbackSessions30d: 0,
+        topUserAgents: [],
+        totalSessions30d: 0,
+        fallbackPct30d: 0,
+      });
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    const rows = data as WebpTelemetryRow[];
+    const uniq = (preds: (r: WebpTelemetryRow) => boolean) =>
+      new Set(rows.filter(preds).map((r) => r.session_id)).size;
+
+    const isFb = (r: WebpTelemetryRow) => r.event_type === "webp_fallback_used";
+    const isUn = (r: WebpTelemetryRow) => r.event_type === "webp_unsupported";
+    const after7 = (r: WebpTelemetryRow) => r.created_at >= since7;
+
+    const allSessions30d = new Set(rows.map((r) => r.session_id)).size;
+    const fb30 = uniq(isFb);
+    const fallbackPct30d = allSessions30d > 0 ? Math.round((fb30 / allSessions30d) * 100) : 0;
+
+    // Top user agents (truncated for readability)
+    const uaCounts = new Map<string, number>();
+    for (const r of rows) {
+      if (!r.user_agent) continue;
+      const key = r.user_agent.slice(0, 80);
+      uaCounts.set(key, (uaCounts.get(key) ?? 0) + 1);
+    }
+    const topUserAgents = Array.from(uaCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([ua, count]) => ({ ua, count }));
+
+    setStats({
+      unsupportedSessions7d: uniq((r) => isUn(r) && after7(r)),
+      unsupportedSessions30d: uniq(isUn),
+      fallbackSessions7d: uniq((r) => isFb(r) && after7(r)),
+      fallbackSessions30d: fb30,
+      topUserAgents,
+      totalSessions30d: allSessions30d,
+      fallbackPct30d,
+    });
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="rounded-lg border border-border/40 bg-card/40 backdrop-blur p-4 h-24 animate-pulse" />
+    );
+  }
+  if (!stats) return null;
+
+  const noData =
+    stats.unsupportedSessions30d === 0 && stats.fallbackSessions30d === 0;
+
+  return (
+    <div className="rounded-lg border border-border/40 bg-card/40 backdrop-blur p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="h-3.5 w-3.5 text-primary-glow" />
+          <p className="font-accent text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
+            Telemetria do navegador (WebP)
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={load}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1 text-[10px] font-accent tracking-[0.2em] uppercase text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+        >
+          <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
+        </button>
+      </div>
+
+      {noData ? (
+        <p className="text-xs text-muted-foreground">
+          Nenhum evento de fallback registrado nos últimos 30 dias. 🎉 Todos os visitantes têm suporte a WebP.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <MiniStat label="Sem WebP · 7d" value={String(stats.unsupportedSessions7d)} />
+            <MiniStat label="Sem WebP · 30d" value={String(stats.unsupportedSessions30d)} />
+            <MiniStat label="Fallback · 7d" value={String(stats.fallbackSessions7d)} />
+            <MiniStat
+              label="% sessões 30d"
+              value={`${stats.fallbackPct30d}%`}
+              tone={stats.fallbackPct30d >= 5 ? "warning" : "success"}
+            />
+          </div>
+          {stats.fallbackPct30d >= 5 && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                Mais de 5% das sessões caíram no fallback original. Considere manter os JPEGs originais bem dimensionados — a otimização WebP não está alcançando essa parcela do público.
+              </p>
+            </div>
+          )}
+          {stats.topUserAgents.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground/70">
+                Top user agents
+              </p>
+              <ul className="space-y-1">
+                {stats.topUserAgents.map((row) => (
+                  <li
+                    key={row.ua}
+                    className="text-[11px] text-muted-foreground flex items-center gap-2"
+                  >
+                    <span className="font-mono text-[10px] text-primary-glow tabular-nums shrink-0">
+                      {row.count}×
+                    </span>
+                    <span className="truncate" title={row.ua}>
+                      {row.ua}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+const MiniStat = ({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "warning" | "success";
+}) => {
+  const toneClass =
+    tone === "warning"
+      ? "text-amber-400"
+      : tone === "success"
+        ? "text-emerald-400"
+        : "text-foreground";
+  return (
+    <div className="rounded-md border border-border/40 bg-card/30 px-3 py-2">
+      <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground truncate">
+        {label}
+      </p>
+      <p className={`font-display text-base mt-0.5 tabular-nums ${toneClass}`}>{value}</p>
+    </div>
+  );
+};
 
 export default ImageOptimizer;

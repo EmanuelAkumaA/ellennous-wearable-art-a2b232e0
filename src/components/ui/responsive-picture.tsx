@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
 import { supportsWebP, supportsWebPSync } from "@/lib/webpSupport";
+import { trackClientEvent } from "@/lib/clientTelemetry";
 
 interface ResponsivePictureProps {
   src: string;
@@ -76,6 +77,11 @@ export const ResponsivePicture = ({
 
   // Browser doesn't support WebP — serve the original JPEG/PNG.
   if (!webpOk) {
+    // If we had optimized variants but can't use them, log it once per session
+    // so admins can quantify the lost optimization opportunity.
+    if (variants && variants.length > 0) {
+      void trackClientEvent("webp_fallback_used", { variantCount: variants.length });
+    }
     return (
       <img
         src={src}

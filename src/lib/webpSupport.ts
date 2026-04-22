@@ -39,6 +39,17 @@ export const supportsWebP = async (): Promise<boolean> => {
         warned = true;
         // Single, low-noise warning to ease debugging on legacy browsers.
         console.warn("[webpSupport] WebP unsupported, using original fallback");
+        // Fire-and-forget telemetry so admins can correlate fallback rate
+        // with optimizer impact. Lazy import avoids a circular dep risk.
+        import("./clientTelemetry")
+          .then(({ trackClientEvent }) =>
+            trackClientEvent("webp_unsupported", {
+              ua: typeof navigator !== "undefined" ? navigator.userAgent : null,
+            }),
+          )
+          .catch(() => {
+            /* ignore */
+          });
       }
       return ok;
     });

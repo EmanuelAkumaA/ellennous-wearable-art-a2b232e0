@@ -41,6 +41,33 @@ export type Database = {
         }
         Relationships: []
       }
+      client_telemetry: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          meta: Json
+          session_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          meta?: Json
+          session_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          meta?: Json
+          session_id?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       gallery_categories: {
         Row: {
           created_at: string

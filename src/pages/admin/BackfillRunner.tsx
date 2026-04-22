@@ -15,7 +15,13 @@ import {
   Activity,
   Hourglass,
   Eraser,
+  ChevronDown,
+  ChevronRight,
+  Circle,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
@@ -55,6 +61,8 @@ export const BackfillRunner = () => {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   // Live stats
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
@@ -141,9 +149,18 @@ export const BackfillRunner = () => {
 
   const start = async () => {
     if (running) return;
-    const pending = items.filter((i) => i.status === "pending" || i.status === "error");
-    if (pending.length === 0) {
-      toast({ title: "Nada a fazer", description: "Todas as imagens já estão otimizadas." });
+    // Eligible = pending OR error AND (selection is non-empty ? in selection : all)
+    const eligible = items.filter((i) => i.status === "pending" || i.status === "error");
+    const target = selected.size > 0
+      ? eligible.filter((i) => selected.has(i.id))
+      : eligible;
+    if (target.length === 0) {
+      toast({
+        title: "Nada a fazer",
+        description: selected.size > 0
+          ? "Nenhuma das imagens selecionadas está pendente."
+          : "Todas as imagens já estão otimizadas.",
+      });
       return;
     }
     // Reset live stats for this run
@@ -159,9 +176,9 @@ export const BackfillRunner = () => {
 
     setRunning(true);
     setShowSuccess(false);
-    pending.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
+    target.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
 
-    const legacy: LegacyImageItem[] = pending.map(
+    const legacy: LegacyImageItem[] = target.map(
       ({ id, kind, pieceId, pieceName, url, storagePath, filename }) => ({
         id,
         kind,
@@ -176,6 +193,7 @@ export const BackfillRunner = () => {
     const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
     setRunning(false);
     setRunEndedAt(Date.now());
+    setSelected(new Set());
 
     if (failed === 0 && done > 0) {
       setShowSuccess(true);
@@ -251,6 +269,75 @@ export const BackfillRunner = () => {
         : 0;
     return { total, done: doneCount, error: errorCount, pending: pendingCount, avgProgress };
   }, [items]);
+
+  // Group items by piece (obra) for the new grouped UI.
+  const groups = useMemo(() => {
+    const map = new Map<string, { pieceId: string; pieceName: string; items: BackfillProgressItem[] }>();
+    for (const it of items) {
+      const g = map.get(it.pieceId);
+      if (g) g.items.push(it);
+      else map.set(it.pieceId, { pieceId: it.pieceId, pieceName: it.pieceName, items: [it] });
+    }
+    return Array.from(map.values()).sort((a, b) => a.pieceName.localeCompare(b.pieceName));
+  }, [items]);
+
+  // Auto-collapse groups whose items are all done (only on first load / fresh detect).
+  useEffect(() => {
+    if (loading) return;
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      for (const g of groups) {
+        const allDone = g.items.length > 0 && g.items.every((i) => i.status === "done");
+        if (allDone && !next.has(g.pieceId)) next.add(g.pieceId);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, items.length]);
+
+  const toggleGroup = (pieceId: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(pieceId)) next.delete(pieceId);
+      else next.add(pieceId);
+      return next;
+    });
+  };
+
+  const isPickable = (it: BackfillProgressItem) =>
+    it.status === "pending" || it.status === "error";
+
+  const toggleItem = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePieceSelection = (pieceId: string) => {
+    const group = groups.find((g) => g.pieceId === pieceId);
+    if (!group) return;
+    const eligibleIds = group.items.filter(isPickable).map((i) => i.id);
+    if (eligibleIds.length === 0) return;
+    const allSelected = eligibleIds.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) eligibleIds.forEach((id) => next.delete(id));
+      else eligibleIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const selectAllPending = () => {
+    const ids = items.filter(isPickable).map((i) => i.id);
+    setSelected(new Set(ids));
+  };
+  const clearSelection = () => setSelected(new Set());
+
+  const totalPending = items.filter(isPickable).length;
+  const selectionEligibleCount = items.filter((i) => selected.has(i.id) && isPickable(i)).length;
 
   return (
     <div className="space-y-6">
@@ -388,23 +475,43 @@ export const BackfillRunner = () => {
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={start}
-          disabled={running || loading || items.length === 0}
+          disabled={running || loading || totalPending === 0}
           className="rounded-none font-accent tracking-[0.2em] uppercase text-xs bg-gradient-purple-wine hover:opacity-90 shadow-glow"
         >
           {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-          Otimizar todas ({stats.pending + stats.error})
+          {selected.size > 0
+            ? `Otimizar selecionadas (${selectionEligibleCount})`
+            : `Otimizar todas (${totalPending})`}
         </Button>
+        <Button
+          variant="outline"
+          onClick={selectAllPending}
+          disabled={running || loading || totalPending === 0}
+          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+        >
+          Selecionar todas pendentes
+        </Button>
+        {selected.size > 0 && (
+          <Button
+            variant="ghost"
+            onClick={clearSelection}
+            disabled={running}
+            className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+          >
+            <X className="h-3.5 w-3.5 mr-1.5" /> Limpar seleção ({selected.size})
+          </Button>
+        )}
         <Button
           variant="outline"
           onClick={detect}
           disabled={running || loading}
-          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
+          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs ml-auto"
         >
           <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? "animate-spin" : ""}`} /> Re-detectar
         </Button>
       </div>
 
-      {/* List */}
+      {/* Grouped list by piece */}
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -420,25 +527,167 @@ export const BackfillRunner = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {items.map((item) => (
-            <BackfillRow key={item.id} item={item} />
-          ))}
+        <div className="space-y-3">
+          {groups.map((g) => {
+            const total = g.items.length;
+            const doneN = g.items.filter((i) => i.status === "done").length;
+            const errN = g.items.filter((i) => i.status === "error").length;
+            const pendingN = g.items.filter((i) => isPickable(i)).length;
+            const groupPct = total > 0 ? Math.round((doneN / total) * 100) : 0;
+            const open = !collapsedGroups.has(g.pieceId);
+            const eligibleIds = g.items.filter(isPickable).map((i) => i.id);
+            const allSelected =
+              eligibleIds.length > 0 && eligibleIds.every((id) => selected.has(id));
+            const someSelected =
+              !allSelected && eligibleIds.some((id) => selected.has(id));
+
+            return (
+              <Collapsible
+                key={g.pieceId}
+                open={open}
+                onOpenChange={() => toggleGroup(g.pieceId)}
+                className="rounded-lg border border-border/40 bg-card/30 overflow-hidden"
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/20 transition-colors text-left"
+                  >
+                    {open ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-display text-sm truncate">{g.pieceName}</p>
+                      <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                        {total} imagem(ns) ·{" "}
+                        <span className="text-emerald-400">{doneN} otimizada(s)</span>
+                        {pendingN > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-foreground">{pendingN} pendente(s)</span>
+                          </>
+                        )}
+                        {errN > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-destructive">{errN} erro(s)</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-2 shrink-0">
+                      <div className="h-1 w-24 rounded-full bg-secondary/40 overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-400 transition-all duration-300"
+                          style={{ width: `${groupPct}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] tabular-nums text-muted-foreground w-9 text-right">
+                        {doneN}/{total}
+                      </span>
+                    </div>
+                    {eligibleIds.length > 0 && (
+                      <span
+                        role="checkbox"
+                        aria-checked={allSelected ? "true" : someSelected ? "mixed" : "false"}
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePieceSelection(g.pieceId);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === " " || e.key === "Enter") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            togglePieceSelection(g.pieceId);
+                          }
+                        }}
+                        title="Selecionar todas pendentes desta obra"
+                        className="ml-2 shrink-0"
+                      >
+                        <Checkbox
+                          checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                          aria-label="Selecionar todas pendentes desta obra"
+                          tabIndex={-1}
+                          className="pointer-events-none"
+                        />
+                      </span>
+                    )}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="border-t border-border/30 divide-y divide-border/30">
+                    {g.items.map((it) => (
+                      <BackfillRow
+                        key={it.id}
+                        item={it}
+                        selected={selected.has(it.id)}
+                        onToggle={() => toggleItem(it.id)}
+                        selectable={isPickable(it)}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
     </div>
   );
 };
 
-const BackfillRow = ({ item }: { item: BackfillProgressItem }) => {
-  const Icon =
-    item.status === "done"
-      ? CheckCircle2
-      : item.status === "error"
-        ? AlertCircle
-        : item.status === "pending"
-          ? ImageIcon
-          : Loader2;
+type BackfillRowProps = {
+  item: BackfillProgressItem;
+  selected?: boolean;
+  selectable?: boolean;
+  onToggle?: () => void;
+};
+
+const StatusBadge = ({ item }: { item: BackfillProgressItem }) => {
+  // 4 visual states: optimized / optimizing / pending / error
+  if (item.status === "done" || item.status === "skipped") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-accent tracking-[0.25em] uppercase">
+        <CheckCircle2 className="h-3 w-3" /> Otimizada
+      </span>
+    );
+  }
+  if (item.status === "error") {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-destructive/15 text-destructive text-[10px] font-accent tracking-[0.25em] uppercase cursor-help">
+              <AlertCircle className="h-3 w-3" /> Erro
+            </span>
+          </TooltipTrigger>
+          {item.error && (
+            <TooltipContent side="left" className="max-w-xs text-xs">
+              {item.error}
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  if (ACTIVE_STATUSES.includes(item.status)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 text-[10px] font-accent tracking-[0.25em] uppercase animate-pulse">
+        <Loader2 className="h-3 w-3 animate-spin" /> Otimizando
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary/40 text-muted-foreground text-[10px] font-accent tracking-[0.25em] uppercase">
+      <Circle className="h-3 w-3" /> Não otimizada
+    </span>
+  );
+};
+
+const BackfillRow = ({ item, selected = false, selectable = false, onToggle }: BackfillRowProps) => {
   const animate = ACTIVE_STATUSES.includes(item.status);
   const showBar = animate || item.status === "done";
   const barPct = item.status === "done" ? 100 : item.progress || 0;
@@ -447,10 +696,26 @@ const BackfillRow = ({ item }: { item: BackfillProgressItem }) => {
       ? "bg-emerald-400"
       : item.status === "error"
         ? "bg-destructive"
-        : "bg-primary-glow";
+        : "bg-amber-400";
+  const stageLabel = animate
+    ? `${STATUS_LABEL[item.status]} ${barPct}%`
+    : item.status === "done"
+      ? "100% · concluída"
+      : null;
 
   return (
-    <div className="rounded-lg border border-border/40 bg-card/40 backdrop-blur p-3 flex items-center gap-3">
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/10 transition-colors">
+      <div className="shrink-0">
+        {selectable ? (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={onToggle}
+            aria-label={`Selecionar ${item.filename}`}
+          />
+        ) : (
+          <div className="h-4 w-4" aria-hidden />
+        )}
+      </div>
       <div className="relative h-12 w-12 shrink-0 rounded-md overflow-hidden bg-secondary/30">
         <img
           src={item.url}
@@ -468,41 +733,30 @@ const BackfillRow = ({ item }: { item: BackfillProgressItem }) => {
           <span className="font-accent tracking-[0.2em] uppercase">
             {item.kind === "cover" ? "Capa" : "Galeria"}
           </span>
-          {" · "}
-          {item.pieceName}
         </p>
 
         {showBar && (
           <div className="mt-1.5 flex items-center gap-2">
-            <div className="h-1 flex-1 rounded-full bg-secondary/40 overflow-hidden">
+            <div className="h-1.5 flex-1 rounded-full bg-secondary/40 overflow-hidden">
               <div
                 className={`h-full ${barColor} transition-all duration-300`}
                 style={{ width: `${barPct}%` }}
               />
             </div>
-            <span
-              className={`text-[9px] font-accent tracking-[0.2em] uppercase shrink-0 ${
-                item.status === "done" ? "text-emerald-400" : "text-muted-foreground"
-              }`}
-            >
-              {item.status === "done"
-                ? "100% · concluída"
-                : `${STATUS_LABEL[item.status]} ${barPct}%`}
-            </span>
+            {stageLabel && (
+              <span
+                className={`text-[9px] font-accent tracking-[0.2em] uppercase shrink-0 ${
+                  item.status === "done" ? "text-emerald-400" : "text-amber-400"
+                }`}
+              >
+                {stageLabel}
+              </span>
+            )}
           </div>
         )}
-
-        {item.error && (
-          <p className="text-[10px] text-destructive truncate mt-0.5" title={item.error}>
-            {item.error}
-          </p>
-        )}
       </div>
-      <div
-        className={`inline-flex items-center gap-1.5 text-[10px] font-accent tracking-[0.25em] uppercase shrink-0 ${STATUS_TONE[item.status]}`}
-      >
-        <Icon className={`h-3.5 w-3.5 ${animate ? "animate-spin" : ""}`} />
-        {STATUS_LABEL[item.status]}
+      <div className="shrink-0">
+        <StatusBadge item={item} />
       </div>
     </div>
   );
