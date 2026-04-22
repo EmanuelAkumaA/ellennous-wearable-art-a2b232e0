@@ -61,6 +61,8 @@ export const BackfillRunner = () => {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   // Live stats
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
