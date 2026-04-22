@@ -157,12 +157,16 @@ export const BackfillRunner = () => {
 
   const start = async () => {
     if (running) return;
+    if (startingRef.current) return;
+    startingRef.current = true;
+
     // Eligible = pending OR error AND (selection is non-empty ? in selection : all)
     const eligible = items.filter((i) => i.status === "pending" || i.status === "error");
     const target = selected.size > 0
       ? eligible.filter((i) => selected.has(i.id))
       : eligible;
     if (target.length === 0) {
+      startingRef.current = false;
       toast({
         title: "Nada a fazer",
         description: selected.size > 0
@@ -171,49 +175,66 @@ export const BackfillRunner = () => {
       });
       return;
     }
-    // Reset live stats for this run
-    timingsRef.current = new Map();
-    completedTimingsRef.current = [];
-    setCompletedCount(0);
-    setFailedCount(0);
-    setBytesOriginal(0);
-    setBytesOptimized(0);
-    setRunStartedAt(Date.now());
-    setRunEndedAt(null);
-    setNow(Date.now());
 
-    setRunning(true);
-    setShowSuccess(false);
-    target.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
+    const lockResult = await runWithLock("optimizer:backfill", async () => {
+      // Reset live stats for this run
+      timingsRef.current = new Map();
+      completedTimingsRef.current = [];
+      setCompletedCount(0);
+      setFailedCount(0);
+      setBytesOriginal(0);
+      setBytesOptimized(0);
+      setRunStartedAt(Date.now());
+      setRunEndedAt(null);
+      setNow(Date.now());
 
-    const legacy: LegacyImageItem[] = target.map(
-      ({ id, kind, pieceId, pieceName, url, storagePath, filename }) => ({
-        id,
-        kind,
-        pieceId,
-        pieceName,
-        url,
-        storagePath,
-        filename,
-      }),
-    );
+      setRunning(true);
+      setShowSuccess(false);
+      target.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
 
-    const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
-    setRunning(false);
-    setRunEndedAt(Date.now());
-    setSelected(new Set());
+      const legacy: LegacyImageItem[] = target.map(
+        ({ id, kind, pieceId, pieceName, url, storagePath, filename }) => ({
+          id,
+          kind,
+          pieceId,
+          pieceName,
+          url,
+          storagePath,
+          filename,
+        }),
+      );
 
-    if (failed === 0 && done > 0) {
-      setShowSuccess(true);
-      sonnerToast.success("Tudo otimizado!", {
-        description: `${done} imagem(ns) migrada(s) para o pipeline WebP.`,
-        duration: 6000,
-      });
-    } else {
-      toast({
-        title: `Backfill concluído`,
-        description: `${done} otimizada(s)${failed ? `, ${failed} falha(s)` : ""}.`,
-        variant: failed > 0 && done === 0 ? "destructive" : "default",
+      try {
+        const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
+        setRunEndedAt(Date.now());
+        setSelected(new Set());
+
+        if (failed === 0 && done > 0) {
+          setShowSuccess(true);
+          sonnerToast.success("Tudo otimizado!", {
+            description: `${done} imagem(ns) migrada(s) para o pipeline WebP.`,
+            duration: 6000,
+          });
+        } else {
+          toast({
+            title: `Backfill concluído`,
+            description: `${done} otimizada(s)${failed ? `, ${failed} falha(s)` : ""}.`,
+            variant: failed > 0 && done === 0 ? "destructive" : "default",
+          });
+        }
+      } finally {
+        setRunning(false);
+      }
+    });
+
+    startingRef.current = false;
+
+    if (!lockResult.acquired) {
+      sonnerToast.warning("Outro backfill já está em andamento.", {
+        description: lockResult.fallback
+          ? "Aguarde o término da execução em andamento nesta aba."
+          : "Aguarde o término — pode estar em outra aba.",
+        duration: 4000,
       });
     }
   };
