@@ -68,6 +68,54 @@ export type Database = {
         }
         Relationships: []
       }
+      conversion_logs: {
+        Row: {
+          created_at: string
+          desktop_path: string | null
+          duration_ms: number
+          error_message: string | null
+          filename: string
+          id: string
+          optimized_size: number
+          original_format: string | null
+          original_size: number
+          piece_id: string | null
+          source: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          desktop_path?: string | null
+          duration_ms?: number
+          error_message?: string | null
+          filename: string
+          id?: string
+          optimized_size?: number
+          original_format?: string | null
+          original_size?: number
+          piece_id?: string | null
+          source: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          desktop_path?: string | null
+          duration_ms?: number
+          error_message?: string | null
+          filename?: string
+          id?: string
+          optimized_size?: number
+          original_format?: string | null
+          original_size?: number
+          piece_id?: string | null
+          source?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       gallery_categories: {
         Row: {
           created_at: string
@@ -127,6 +175,7 @@ export type Database = {
           piece_id: string
           storage_path: string | null
           url: string
+          variant_overrides: Json | null
         }
         Insert: {
           created_at?: string
@@ -135,6 +184,7 @@ export type Database = {
           piece_id: string
           storage_path?: string | null
           url: string
+          variant_overrides?: Json | null
         }
         Update: {
           created_at?: string
@@ -143,6 +193,7 @@ export type Database = {
           piece_id?: string
           storage_path?: string | null
           url?: string
+          variant_overrides?: Json | null
         }
         Relationships: [
           {
@@ -221,6 +272,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gallery_staging_images: {
+        Row: {
+          created_at: string
+          desktop_path: string
+          desktop_url: string
+          id: string
+          mobile_path: string
+          original_filename: string
+          sizes: Json
+          tablet_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          desktop_path: string
+          desktop_url: string
+          id?: string
+          mobile_path: string
+          original_filename: string
+          sizes?: Json
+          tablet_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          desktop_path?: string
+          desktop_url?: string
+          id?: string
+          mobile_path?: string
+          original_filename?: string
+          sizes?: Json
+          tablet_path?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       review_invites: {
         Row: {
