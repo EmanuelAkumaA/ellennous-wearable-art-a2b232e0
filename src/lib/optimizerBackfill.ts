@@ -18,7 +18,7 @@ export interface LegacyImageItem {
 export type DeviceLabel = "mobile" | "tablet" | "desktop";
 
 export interface BackfillProgressItem extends LegacyImageItem {
-  status: "pending" | "downloading" | "uploading" | "optimizing" | "done" | "skipped" | "error";
+  status: "pending" | "downloading" | "converting" | "uploading" | "optimizing" | "done" | "skipped" | "error";
   /** 0–100 progress within the current run */
   progress: number;
   error?: string;
@@ -27,6 +27,8 @@ export interface BackfillProgressItem extends LegacyImageItem {
   optimizedImageId?: string;
   /** Devices whose WebP variant is already available (incremental) */
   readyDevices?: DeviceLabel[];
+  /** Time spent on client-side WebP conversion (ms) for this image. */
+  conversionMs?: number;
 }
 
 const isLegacyPath = (path: string | null | undefined): boolean => {
@@ -222,9 +224,16 @@ export const migrateLegacyImage = async (
 
     const file = new File([blob], item.filename, { type: blob.type || guessMime(item.filename) });
 
-    onStatus("uploading", { progress: 50 });
+    onStatus("converting", { progress: 45 });
     const role: ImageRole = item.kind === "cover" ? "cover" : "gallery";
-    const uploaded = await uploadToOptimizer({ file, pieceId: item.pieceId, role }).catch((e) => {
+    const uploaded = await uploadToOptimizer({
+      file,
+      pieceId: item.pieceId,
+      role,
+      onConversionDone: (ms) => {
+        onStatus("uploading", { progress: 50, conversionMs: ms });
+      },
+    }).catch((e) => {
       throw new StagedError("upload", e instanceof Error ? e.message : String(e));
     });
     optimizedImageId = uploaded.optimizedImageId;

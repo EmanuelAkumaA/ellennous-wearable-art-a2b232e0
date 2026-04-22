@@ -19,6 +19,8 @@ interface UploadParams {
   file: File;
   pieceId: string;
   role: ImageRole;
+  /** Called as soon as client-side WebP conversion finishes (skipped for native WebP). */
+  onConversionDone?: (ms: number) => void;
 }
 
 const CONVERT_TOAST_ID = (id: string) => `optimizer-convert-${id}`;
@@ -39,6 +41,7 @@ export const uploadToOptimizer = async ({
   file,
   pieceId,
   role,
+  onConversionDone,
 }: UploadParams): Promise<OptimizerUploadResult> => {
   if (!OPTIMIZER_ACCEPTED.includes(file.type)) {
     throw new Error(`Formato não suportado: ${file.type}`);
@@ -64,6 +67,7 @@ export const uploadToOptimizer = async ({
         uploadType = "image/webp";
         uploadExt = "webp";
         convertedToWebp = true;
+        onConversionDone?.(conv.ms);
         sonnerToast.success(
           `Convertido para WebP em ${(conv.ms / 1000).toFixed(1)}s, otimizando…`,
           { id: CONVERT_TOAST_ID(id), duration: 2500 },

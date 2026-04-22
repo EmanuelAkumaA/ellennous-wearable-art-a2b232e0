@@ -42,6 +42,7 @@ import {
 const STATUS_LABEL: Record<BackfillProgressItem["status"], string> = {
   pending: "Pendente",
   downloading: "Baixando",
+  converting: "Convertendo WebP",
   uploading: "Enviando",
   optimizing: "Otimizando",
   done: "Pronta",
@@ -52,6 +53,7 @@ const STATUS_LABEL: Record<BackfillProgressItem["status"], string> = {
 const STATUS_TONE: Record<BackfillProgressItem["status"], string> = {
   pending: "text-muted-foreground",
   downloading: "text-primary-glow",
+  converting: "text-blue-400",
   uploading: "text-primary-glow",
   optimizing: "text-primary-glow",
   done: "text-emerald-400",
@@ -59,7 +61,7 @@ const STATUS_TONE: Record<BackfillProgressItem["status"], string> = {
   error: "text-destructive",
 };
 
-const ACTIVE_STATUSES: BackfillProgressItem["status"][] = ["downloading", "uploading", "optimizing"];
+const ACTIVE_STATUSES: BackfillProgressItem["status"][] = ["downloading", "converting", "uploading", "optimizing"];
 
 export const BackfillRunner = () => {
   const [items, setItems] = useState<BackfillProgressItem[]>([]);
@@ -159,21 +161,22 @@ export const BackfillRunner = () => {
     updateItem(id, patch);
   };
 
-  const start = async () => {
+  const start = async (overrideIds?: Set<string>) => {
     if (running) return;
     if (startingRef.current) return;
     startingRef.current = true;
 
     // Eligible = pending OR error AND (selection is non-empty ? in selection : all)
     const eligible = items.filter((i) => i.status === "pending" || i.status === "error");
-    const target = selected.size > 0
-      ? eligible.filter((i) => selected.has(i.id))
+    const effectiveSelection = overrideIds ?? selected;
+    const target = effectiveSelection.size > 0
+      ? eligible.filter((i) => effectiveSelection.has(i.id))
       : eligible;
     if (target.length === 0) {
       startingRef.current = false;
       toast({
         title: "Nada a fazer",
-        description: selected.size > 0
+        description: effectiveSelection.size > 0
           ? "Nenhuma das imagens selecionadas está pendente."
           : "Todas as imagens já estão otimizadas.",
       });
@@ -512,10 +515,34 @@ export const BackfillRunner = () => {
 
       {/* Action bar */}
       <div className="flex flex-wrap items-center gap-3">
+        {atRiskCount > 0 && (
+          <Button
+            onClick={() => {
+              if (running || loading) return;
+              const ids = items
+                .filter((i) => i.status === "pending" || i.status === "error")
+                .map((i) => i.id);
+              const idSet = new Set(ids);
+              setSelected(idSet);
+              sonnerToast.info(
+                `Iniciando conversão WebP + otimização de ${ids.length} imagem(ns)…`,
+                { duration: 3500 },
+              );
+              void start(idSet);
+            }}
+            disabled={running || loading}
+            className="rounded-none font-accent tracking-[0.2em] uppercase text-xs bg-gradient-to-r from-blue-500 to-primary hover:opacity-90 shadow-glow"
+            title="Converte todas para WebP no navegador e dispara a otimização em lote."
+          >
+            {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+            Converter tudo para WebP e otimizar ({atRiskCount})
+          </Button>
+        )}
         <Button
-          onClick={start}
+          onClick={() => start()}
           disabled={running || loading || totalPending === 0}
-          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs bg-gradient-purple-wine hover:opacity-90 shadow-glow"
+          variant={atRiskCount > 0 ? "outline" : "default"}
+          className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
         >
           {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
           {selected.size > 0
@@ -530,17 +557,6 @@ export const BackfillRunner = () => {
         >
           Selecionar todas pendentes
         </Button>
-        {atRiskCount > 0 && (
-          <Button
-            variant="outline"
-            onClick={selectAtRisk}
-            disabled={running || loading}
-            className="rounded-none font-accent tracking-[0.2em] uppercase text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
-            title="Marca apenas imagens pendentes ou com erro (em risco de fallback)."
-          >
-            Selecionar em risco ({atRiskCount})
-          </Button>
-        )}
         {selected.size > 0 && (
           <Button
             variant="ghost"
@@ -816,6 +832,11 @@ const BackfillRowImpl = ({ item, selected = false, selectable = false, onToggle 
       <div className="min-w-0 flex-1">
         <p className="text-sm truncate font-medium" title={item.filename}>
           {item.filename}
+          {item.conversionMs != null && (
+            <span className="ml-2 text-[10px] font-accent tracking-[0.2em] uppercase text-blue-400/90">
+              WebP em {(item.conversionMs / 1000).toFixed(1)}s
+            </span>
+          )}
         </p>
         <p className="text-[10px] text-muted-foreground/80 truncate">
           <span className="font-accent tracking-[0.2em] uppercase">
@@ -877,6 +898,7 @@ const BackfillRow = memo(
     prev.item.progress === next.item.progress &&
     prev.item.error === next.item.error &&
     (prev.item.readyDevices?.length ?? 0) === (next.item.readyDevices?.length ?? 0) &&
+    prev.item.conversionMs === next.item.conversionMs &&
     prev.selected === next.selected &&
     prev.selectable === next.selectable &&
     prev.onToggle === next.onToggle,
