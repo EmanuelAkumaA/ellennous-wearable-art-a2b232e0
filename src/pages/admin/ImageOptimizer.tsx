@@ -307,6 +307,8 @@ export const ImageOptimizer = () => {
     }
     load();
   };
+
+  const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
     if (!confirm(`Excluir ${ids.length} imagem(ns) selecionada(s)? Esta ação não pode ser desfeita.`)) return;
