@@ -175,46 +175,110 @@ const waitForOptimization = async (
   return { variants: null, status: "timeout" };
 };
 
+const logErrorToDb = async (params: {
+  optimizedImageId?: string | null;
+  pieceId: string | null;
+  stage: string;
+  message: string;
+  meta: Record<string, unknown>;
+}) => {
+  try {
+    if (!params.optimizedImageId) return;
+    await supabase.from("optimization_error_log").insert({
+      optimized_image_id: params.optimizedImageId,
+      piece_id: params.pieceId,
+      stage: params.stage,
+      error_message: params.message.slice(0, 500),
+      meta: params.meta,
+    });
+  } catch (e) {
+    console.warn("Falha ao gravar log de erro:", e);
+  }
+};
+
+class StagedError extends Error {
+  stage: string;
+  constructor(stage: string, message: string) {
+    super(message);
+    this.stage = stage;
+  }
+}
+
 export const migrateLegacyImage = async (
   item: LegacyImageItem,
   onStatus: StatusEmitter,
 ): Promise<void> => {
-  onStatus("downloading", { progress: 0 });
-  const blob = await downloadWithProgress(item.url, guessMime(item.filename), (pct) => {
-    onStatus("downloading", { progress: pct });
-  });
-  onStatus("downloading", { progress: 40 });
+  let optimizedImageId: string | undefined;
+  try {
+    onStatus("downloading", { progress: 0, readyDevices: [] });
+    const blob = await downloadWithProgress(item.url, guessMime(item.filename), (pct) => {
+      onStatus("downloading", { progress: pct });
+    }).catch((e) => {
+      throw new StagedError("download", e instanceof Error ? e.message : String(e));
+    });
+    onStatus("downloading", { progress: 40 });
 
-  const file = new File([blob], item.filename, { type: blob.type || guessMime(item.filename) });
+    const file = new File([blob], item.filename, { type: blob.type || guessMime(item.filename) });
 
-  onStatus("uploading", { progress: 50 });
-  const role: ImageRole = item.kind === "cover" ? "cover" : "gallery";
-  const uploaded = await uploadToOptimizer({ file, pieceId: item.pieceId, role });
-  onStatus("optimizing", { progress: 60, optimizedImageId: uploaded.optimizedImageId });
+    onStatus("uploading", { progress: 50 });
+    const role: ImageRole = item.kind === "cover" ? "cover" : "gallery";
+    const uploaded = await uploadToOptimizer({ file, pieceId: item.pieceId, role }).catch((e) => {
+      throw new StagedError("upload", e instanceof Error ? e.message : String(e));
+    });
+    optimizedImageId = uploaded.optimizedImageId;
+    onStatus("optimizing", {
+      progress: 60,
+      optimizedImageId: uploaded.optimizedImageId,
+      readyDevices: [],
+    });
 
-  const opt = await waitForOptimization(uploaded.optimizedImageId, (elapsed) => {
-    // New pipeline ~3-5s per image: ramp to 98% in ~10s
-    const pct = 60 + Math.min(38, Math.round(elapsed / 260));
-    onStatus("optimizing", { progress: pct });
-  });
-  if (opt.status === "error") throw new Error("Falha na otimização");
-  const newUrl = getBestUrlForPiece(opt.variants ?? [], uploaded.originalUrl);
+    const opt = await waitForOptimization(uploaded.optimizedImageId, (elapsed, ready) => {
+      const pct = 60 + Math.min(38, Math.round(elapsed / 260));
+      onStatus("optimizing", { progress: pct, readyDevices: ready });
+    });
+    if (opt.status === "error") throw new StagedError("optimize", "Falha na otimização (servidor)");
+    if (opt.status === "timeout") throw new StagedError("optimize", "Tempo esgotado aguardando otimização");
 
-  if (item.kind === "cover") {
-    const { error } = await supabase
-      .from("gallery_pieces")
-      .update({ cover_url: newUrl, cover_storage_path: uploaded.originalPath })
-      .eq("id", item.pieceId);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase
-      .from("gallery_piece_images")
-      .update({ url: newUrl, storage_path: uploaded.originalPath })
-      .eq("id", item.id);
-    if (error) throw error;
+    const finalReady: DeviceLabel[] = [];
+    for (const dev of ["mobile", "tablet", "desktop"] as DeviceLabel[]) {
+      if ((opt.variants ?? []).some((v) => v.format === "webp" && v.device_label === dev)) {
+        finalReady.push(dev);
+      }
+    }
+
+    const newUrl = getBestUrlForPiece(opt.variants ?? [], "");
+
+    try {
+      if (item.kind === "cover") {
+        const { error } = await supabase
+          .from("gallery_pieces")
+          .update({ cover_url: newUrl, cover_storage_path: uploaded.originalPath })
+          .eq("id", item.pieceId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("gallery_piece_images")
+          .update({ url: newUrl, storage_path: uploaded.originalPath })
+          .eq("id", item.id);
+        if (error) throw error;
+      }
+    } catch (e) {
+      throw new StagedError("persist", e instanceof Error ? e.message : String(e));
+    }
+
+    onStatus("done", { progress: 100, readyDevices: finalReady });
+  } catch (e) {
+    const stage = e instanceof StagedError ? e.stage : "optimize";
+    const message = e instanceof Error ? e.message : String(e);
+    await logErrorToDb({
+      optimizedImageId,
+      pieceId: item.pieceId,
+      stage,
+      message,
+      meta: { url: item.url, kind: item.kind, filename: item.filename },
+    });
+    throw e;
   }
-
-  onStatus("done", { progress: 100 });
 };
 
 export const runBackfill = async (
