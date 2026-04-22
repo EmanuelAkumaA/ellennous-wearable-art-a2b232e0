@@ -9,7 +9,7 @@ import { ImageCard, type OptimizedImage } from "@/components/admin/optimizer/Ima
 import { ImageRow, type PieceLink } from "@/components/admin/optimizer/ImageRow";
 import { CodeSnippetDialog } from "@/components/admin/optimizer/CodeSnippetDialog";
 import { ImageDetailSheet } from "@/components/admin/optimizer/ImageDetailSheet";
-import { formatBytes, isLegacyFormat, type OptimizedVariant } from "@/lib/imageSnippet";
+import { formatBytes, isLegacyFormat, isAtRiskOfFallback, type OptimizedVariant } from "@/lib/imageSnippet";
 
 const PAGE_SIZE = 100;
 const BUCKET = "optimized-images";
@@ -52,7 +52,7 @@ export const ImageOptimizer = () => {
   const [snippetTarget, setSnippetTarget] = useState<OptimizedImage | null>(null);
   const [detailTarget, setDetailTarget] = useState<OptimizedImage | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete" | "modernize">(null);
+  const [bulkBusy, setBulkBusy] = useState<null | "reprocess" | "delete" | "modernize" | "atrisk">(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
@@ -145,6 +145,16 @@ export const ImageOptimizer = () => {
     [items],
   );
   const legacyCount = legacyIds.length;
+
+  /** Conjunto ampliado: legacy + órfãs (ready sem variants) + erros. */
+  const atRiskIds = useMemo(
+    () =>
+      items
+        .filter((i) => isAtRiskOfFallback(i.status, i.variants))
+        .map((i) => i.id),
+    [items],
+  );
+  const atRiskCount = atRiskIds.length;
 
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
@@ -251,6 +261,48 @@ export const ImageOptimizer = () => {
       toast({
         title: `${ids.length} imagem(ns) modernizadas`,
         description: "Variantes mobile/tablet/desktop geradas no novo pipeline.",
+      });
+    }
+    load();
+  };
+
+  const handleAutoOptimizeAtRisk = async () => {
+    const ids = [...atRiskIds];
+    if (!ids.length) return;
+    setBulkBusy("atrisk");
+    setBulkProgress({ done: 0, total: ids.length });
+
+    setItems((prev) =>
+      prev.map((it) =>
+        ids.includes(it.id) ? { ...it, status: "processing", error_message: null } : it,
+      ),
+    );
+    await supabase
+      .from("optimized_images")
+      .update({ status: "processing", error_message: null })
+      .in("id", ids);
+
+    let done = 0;
+    let failed = 0;
+    await runWithConcurrency(ids, BULK_CONCURRENCY, async (id) => {
+      const { error } = await supabase.functions.invoke("optimize-image", { body: { imageId: id } });
+      if (error) failed++;
+      done++;
+      setBulkProgress({ done, total: ids.length });
+    });
+
+    setBulkBusy(null);
+    setBulkProgress(null);
+    if (failed > 0) {
+      toast({
+        title: `Auto-otimização concluída com ${failed} erro(s)`,
+        description: `${ids.length - failed}/${ids.length} reprocessadas.`,
+        variant: failed === ids.length ? "destructive" : "default",
+      });
+    } else {
+      toast({
+        title: `${ids.length} imagem(ns) em risco reprocessadas`,
+        description: "Variantes WebP do novo pipeline foram regeneradas.",
       });
     }
     load();
@@ -390,6 +442,34 @@ export const ImageOptimizer = () => {
           />
         </div>
 
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {atRiskCount > 0 && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleAutoOptimizeAtRisk}
+                    disabled={!!bulkBusy}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-colors disabled:opacity-40"
+                  >
+                    {bulkBusy === "atrisk" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    )}
+                    {bulkBusy === "atrisk" && bulkProgress
+                      ? `Auto ${bulkProgress.done}/${bulkProgress.total}`
+                      : `Auto-otimizar em risco (${atRiskCount})`}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+                  Reprocessa automaticamente as imagens com maior risco de cair no fallback original — sem WebP, com erro ou no formato antigo.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
         {legacyCount > 0 && (
           <TooltipProvider delayDuration={150}>
             <Tooltip>
@@ -416,7 +496,8 @@ export const ImageOptimizer = () => {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Bulk action bar */}
@@ -576,6 +657,13 @@ type WebpTelemetryRow = {
   session_id: string;
   user_agent: string | null;
   created_at: string;
+  meta: { loadMs?: number; originalBytes?: number; webpBytesEstimate?: number } | null;
+};
+
+type ImpactBucket = {
+  sessions: number;
+  avgLoadMs: number;
+  avgBytes: number;
 };
 
 type WebpTelemetryStats = {
@@ -586,6 +674,8 @@ type WebpTelemetryStats = {
   topUserAgents: { ua: string; count: number }[];
   totalSessions30d: number;
   fallbackPct30d: number;
+  impactWebp: ImpactBucket;
+  impactFallback: ImpactBucket;
 };
 
 const WebpTelemetryCard = () => {
@@ -599,11 +689,13 @@ const WebpTelemetryCard = () => {
     const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("client_telemetry")
-      .select("event_type, session_id, user_agent, created_at")
-      .in("event_type", ["webp_unsupported", "webp_fallback_used"])
+      .select("event_type, session_id, user_agent, created_at, meta")
+      .in("event_type", ["webp_unsupported", "webp_fallback_used", "webp_served"])
       .gte("created_at", since30)
       .order("created_at", { ascending: false })
       .limit(5000);
+
+    const emptyImpact: ImpactBucket = { sessions: 0, avgLoadMs: 0, avgBytes: 0 };
 
     if (error || !data) {
       setStats({
@@ -614,6 +706,8 @@ const WebpTelemetryCard = () => {
         topUserAgents: [],
         totalSessions30d: 0,
         fallbackPct30d: 0,
+        impactWebp: emptyImpact,
+        impactFallback: emptyImpact,
       });
       setLoading(false);
       setRefreshing(false);
@@ -644,6 +738,35 @@ const WebpTelemetryCard = () => {
       .slice(0, 3)
       .map(([ua, count]) => ({ ua, count }));
 
+    // --- Impact buckets: aggregate per-session averages of meta.loadMs / originalBytes
+    //     to compare WebP-served sessions vs fallback sessions.
+    const aggregate = (predicate: (r: WebpTelemetryRow) => boolean): ImpactBucket => {
+      const byS = new Map<string, { l: number[]; b: number[] }>();
+      for (const r of rows.filter(predicate)) {
+        const m = r.meta ?? {};
+        const slot = byS.get(r.session_id) ?? { l: [], b: [] };
+        if (typeof m.loadMs === "number" && m.loadMs > 0) slot.l.push(m.loadMs);
+        if (typeof m.originalBytes === "number" && m.originalBytes > 0) slot.b.push(m.originalBytes);
+        byS.set(r.session_id, slot);
+      }
+      const sessLoad: number[] = [];
+      const sessBytes: number[] = [];
+      for (const slot of byS.values()) {
+        if (slot.l.length) sessLoad.push(slot.l.reduce((a, b) => a + b, 0) / slot.l.length);
+        if (slot.b.length) sessBytes.push(slot.b.reduce((a, b) => a + b, 0) / slot.b.length);
+      }
+      const mean = (arr: number[]) =>
+        arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+      return {
+        sessions: byS.size,
+        avgLoadMs: mean(sessLoad),
+        avgBytes: mean(sessBytes),
+      };
+    };
+
+    const impactWebp = aggregate((r) => r.event_type === "webp_served");
+    const impactFallback = aggregate(isFb);
+
     setStats({
       unsupportedSessions7d: uniq((r) => isUn(r) && after7(r)),
       unsupportedSessions30d: uniq(isUn),
@@ -652,6 +775,8 @@ const WebpTelemetryCard = () => {
       topUserAgents,
       totalSessions30d: allSessions30d,
       fallbackPct30d,
+      impactWebp,
+      impactFallback,
     });
     setLoading(false);
     setRefreshing(false);
@@ -707,6 +832,8 @@ const WebpTelemetryCard = () => {
               tone={stats.fallbackPct30d >= 5 ? "warning" : "success"}
             />
           </div>
+
+          <ImpactSection webp={stats.impactWebp} fallback={stats.impactFallback} />
           {stats.fallbackPct30d >= 5 && (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 flex items-start gap-2">
               <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
@@ -764,6 +891,100 @@ const MiniStat = ({
         {label}
       </p>
       <p className={`font-display text-base mt-0.5 tabular-nums ${toneClass}`}>{value}</p>
+    </div>
+  );
+};
+
+const ImpactSection = ({
+  webp,
+  fallback,
+}: {
+  webp: ImpactBucket;
+  fallback: ImpactBucket;
+}) => {
+  const MIN_SAMPLES = 3;
+  const enough = webp.sessions >= MIN_SAMPLES && fallback.sessions >= MIN_SAMPLES;
+
+  if (webp.sessions === 0 && fallback.sessions === 0) return null;
+
+  if (!enough) {
+    return (
+      <div className="rounded-md border border-border/40 bg-card/30 px-3 py-2">
+        <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground/70 mb-1">
+          Impacto por sessão (30d)
+        </p>
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          Aguardando mais dados para correlação confiável ({webp.sessions} c/ WebP · {fallback.sessions} em fallback).
+        </p>
+      </div>
+    );
+  }
+
+  const dLoad = fallback.avgLoadMs - webp.avgLoadMs;
+  const dBytes = fallback.avgBytes - webp.avgBytes;
+  const severity = dLoad < 100 ? "success" : dLoad < 300 ? "warning" : "destructive";
+  const severityCls =
+    severity === "success"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      : severity === "warning"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+        : "border-destructive/40 bg-destructive/10 text-destructive";
+  const severityLabel =
+    severity === "success"
+      ? "Impacto mínimo"
+      : severity === "warning"
+        ? "Impacto moderado"
+        : "Impacto significativo — considere otimizar JPEGs originais";
+
+  return (
+    <div className="space-y-2">
+      <p className="font-accent text-[9px] tracking-[0.3em] uppercase text-muted-foreground/70">
+        Impacto por sessão (30d)
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <ImpactBucketCard label="Sessões com WebP" tone="success" bucket={webp} />
+        <ImpactBucketCard label="Sessões em fallback" tone="warning" bucket={fallback} />
+      </div>
+      <div className={`rounded-md border px-3 py-2 text-[11px] flex items-center gap-2 ${severityCls}`}>
+        <Activity className="h-3 w-3 shrink-0" />
+        <span className="font-medium">{severityLabel}</span>
+        <span className="text-muted-foreground ml-auto tabular-nums">
+          Δ {dLoad >= 0 ? "+" : ""}{Math.round(dLoad)} ms · Δ {dBytes >= 0 ? "+" : ""}{formatBytes(Math.abs(dBytes))} por imagem
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const ImpactBucketCard = ({
+  label,
+  tone,
+  bucket,
+}: {
+  label: string;
+  tone: "success" | "warning";
+  bucket: ImpactBucket;
+}) => {
+  const toneCls = tone === "success" ? "text-emerald-400" : "text-amber-400";
+  return (
+    <div className="rounded-md border border-border/40 bg-card/30 px-3 py-2 space-y-1">
+      <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground truncate">
+        {label} <span className="text-muted-foreground/60 normal-case tracking-normal">· {bucket.sessions} sessões</span>
+      </p>
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground/70">Tempo</p>
+          <p className={`font-display text-sm tabular-nums ${toneCls}`}>
+            {bucket.avgLoadMs > 0 ? `${bucket.avgLoadMs} ms` : "—"}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="font-accent text-[8px] tracking-[0.25em] uppercase text-muted-foreground/70">Tamanho</p>
+          <p className={`font-display text-sm tabular-nums ${toneCls}`}>
+            {bucket.avgBytes > 0 ? formatBytes(bucket.avgBytes) : "—"}
+          </p>
+        </div>
+      </div>
     </div>
   );
 };

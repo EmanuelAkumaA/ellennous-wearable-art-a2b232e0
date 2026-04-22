@@ -334,9 +334,15 @@ export const BackfillRunner = () => {
     const ids = items.filter(isPickable).map((i) => i.id);
     setSelected(new Set(ids));
   };
+  const selectAtRisk = () => {
+    // No backfill, "em risco" = pending + error (mesmo conceito que isPickable hoje).
+    const ids = items.filter((i) => i.status === "pending" || i.status === "error").map((i) => i.id);
+    setSelected(new Set(ids));
+  };
   const clearSelection = () => setSelected(new Set());
 
   const totalPending = items.filter(isPickable).length;
+  const atRiskCount = items.filter((i) => i.status === "pending" || i.status === "error").length;
   const selectionEligibleCount = items.filter((i) => selected.has(i.id) && isPickable(i)).length;
 
   return (
@@ -491,6 +497,17 @@ export const BackfillRunner = () => {
         >
           Selecionar todas pendentes
         </Button>
+        {atRiskCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={selectAtRisk}
+            disabled={running || loading}
+            className="rounded-none font-accent tracking-[0.2em] uppercase text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+            title="Marca apenas imagens pendentes ou com erro (em risco de fallback)."
+          >
+            Selecionar em risco ({atRiskCount})
+          </Button>
+        )}
         {selected.size > 0 && (
           <Button
             variant="ghost"

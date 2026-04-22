@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
 import { supportsWebP, supportsWebPSync } from "@/lib/webpSupport";
 import { trackClientEvent } from "@/lib/clientTelemetry";
@@ -55,6 +55,54 @@ const pickWebps = (variants: OptimizedVariant[]) => {
   return variants.filter((v) => v.format === "webp").sort((a, b) => a.width - b.width);
 };
 
+/** Looks up resource timing for the URL the browser actually loaded. */
+const lookupResourceTiming = (
+  url: string,
+): { loadMs?: number; originalBytes?: number } => {
+  if (typeof performance === "undefined" || !performance.getEntriesByName) return {};
+  try {
+    const entries = performance.getEntriesByName(url);
+    const last = entries[entries.length - 1] as PerformanceResourceTiming | undefined;
+    if (!last) return {};
+    const loadMs = Number.isFinite(last.duration) && last.duration > 0
+      ? Math.round(last.duration)
+      : undefined;
+    const originalBytes = (last.encodedBodySize && last.encodedBodySize > 0)
+      ? last.encodedBodySize
+      : (last.transferSize && last.transferSize > 0 ? last.transferSize : undefined);
+    return { loadMs, originalBytes };
+  } catch {
+    return {};
+  }
+};
+
+/** Hook that fires the appropriate telemetry event on the first successful image load. */
+const useOnLoadTelemetry = (
+  isFallback: boolean,
+  hasVariants: boolean,
+  webpBytesEstimate: number,
+) => {
+  const sentRef = useRef(false);
+  return (e: SyntheticEvent<HTMLImageElement>) => {
+    if (sentRef.current) return;
+    sentRef.current = true;
+    const img = e.currentTarget;
+    const url = img.currentSrc || img.src;
+    const timing = lookupResourceTiming(url);
+    if (isFallback && hasVariants) {
+      void trackClientEvent("webp_fallback_used", {
+        variantCount: hasVariants ? 1 : 0,
+        webpBytesEstimate,
+        ...timing,
+      });
+    } else if (!isFallback && hasVariants) {
+      void trackClientEvent("webp_served", {
+        ...timing,
+      });
+    }
+  };
+};
+
 /**
  * Renders an <img> with a WebP srcset when variants are available, falling
  * back to a plain <img> when the image hasn't been optimized.
@@ -74,14 +122,17 @@ export const ResponsivePicture = ({
   onClick,
 }: ResponsivePictureProps) => {
   const webpOk = useWebpSupport();
+  const hasVariants = !!(variants && variants.length > 0);
+  const webpBytesEstimate = hasVariants
+    ? variants!
+        .filter((v) => v.format === "webp")
+        .reduce((sum, v) => sum + (v.size_bytes ?? 0), 0)
+    : 0;
+
+  const handleLoad = useOnLoadTelemetry(!webpOk, hasVariants, webpBytesEstimate);
 
   // Browser doesn't support WebP — serve the original JPEG/PNG.
   if (!webpOk) {
-    // If we had optimized variants but can't use them, log it once per session
-    // so admins can quantify the lost optimization opportunity.
-    if (variants && variants.length > 0) {
-      void trackClientEvent("webp_fallback_used", { variantCount: variants.length });
-    }
     return (
       <img
         src={src}
@@ -94,6 +145,7 @@ export const ResponsivePicture = ({
         className={className}
         style={style}
         onClick={onClick}
+        onLoad={handleLoad}
       />
     );
   }
@@ -154,6 +206,7 @@ export const ResponsivePicture = ({
       className={className}
       style={style}
       onClick={onClick}
+      onLoad={handleLoad}
     />
   );
 };

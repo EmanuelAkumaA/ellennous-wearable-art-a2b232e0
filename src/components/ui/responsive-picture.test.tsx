@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+
+vi.mock("@/lib/clientTelemetry", () => ({
+  trackClientEvent: vi.fn(() => Promise.resolve()),
+}));
+
 import { ResponsivePicture } from "./responsive-picture";
 import { __setWebpSupportForTests } from "@/lib/webpSupport";
+import { trackClientEvent } from "@/lib/clientTelemetry";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
 
 const SIZES = "(max-width:640px) 480px, (max-width:1024px) 1024px, 1600px";
@@ -18,6 +24,7 @@ const makeVariant = (
 beforeEach(() => {
   // Default: assume WebP is supported so most assertions reflect the modern path.
   __setWebpSupportForTests(true);
+  (trackClientEvent as unknown as ReturnType<typeof vi.fn>).mockClear();
 });
 
 describe("ResponsivePicture", () => {
@@ -166,5 +173,83 @@ describe("ResponsivePicture", () => {
     const img = screen.getByAltText("nowebp") as HTMLImageElement;
     expect(img.getAttribute("srcset")).toBeNull();
     expect(img.getAttribute("src")).toBe("https://cdn/original.jpg");
+  });
+});
+
+describe("ResponsivePicture · telemetry integration", () => {
+  it("fires webp_fallback_used exactly once when WebP is unsupported and variants exist", () => {
+    __setWebpSupportForTests(false);
+    const variants: OptimizedVariant[] = [
+      makeVariant({ width: 480, url: "https://cdn/m.webp", device_label: "mobile" }),
+      makeVariant({ width: 1600, url: "https://cdn/d.webp", device_label: "desktop" }),
+    ];
+    const { rerender } = render(
+      <ResponsivePicture
+        src="https://cdn/orig.jpg"
+        variants={variants}
+        alt="t1"
+        sizes={SIZES}
+      />,
+    );
+    const img = screen.getByAltText("t1") as HTMLImageElement;
+    fireEvent.load(img);
+    rerender(
+      <ResponsivePicture
+        src="https://cdn/orig.jpg"
+        variants={variants}
+        alt="t1"
+        sizes={SIZES}
+      />,
+    );
+    fireEvent.load(img);
+    const calls = (trackClientEvent as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const fallbackCalls = calls.filter((c) => c[0] === "webp_fallback_used");
+    expect(fallbackCalls.length).toBe(1);
+  });
+
+  it("does not fire webp_fallback_used when WebP IS supported", () => {
+    __setWebpSupportForTests(true);
+    const variants: OptimizedVariant[] = [
+      makeVariant({ width: 1600, url: "https://cdn/d.webp", device_label: "desktop" }),
+    ];
+    render(
+      <ResponsivePicture
+        src="https://cdn/orig.jpg"
+        variants={variants}
+        alt="t2"
+        sizes={SIZES}
+      />,
+    );
+    fireEvent.load(screen.getByAltText("t2"));
+    const calls = (trackClientEvent as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((c) => c[0] === "webp_fallback_used")).toBe(false);
+  });
+
+  it("fires webp_served when WebP supported and variants exist (baseline)", () => {
+    __setWebpSupportForTests(true);
+    const variants: OptimizedVariant[] = [
+      makeVariant({ width: 1600, url: "https://cdn/d.webp", device_label: "desktop" }),
+    ];
+    render(
+      <ResponsivePicture
+        src="https://cdn/orig.jpg"
+        variants={variants}
+        alt="t3"
+        sizes={SIZES}
+      />,
+    );
+    fireEvent.load(screen.getByAltText("t3"));
+    const calls = (trackClientEvent as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((c) => c[0] === "webp_served")).toBe(true);
+  });
+
+  it("does not fire any event when there are no variants (unprocessed image)", () => {
+    __setWebpSupportForTests(true);
+    render(
+      <ResponsivePicture src="https://cdn/raw.jpg" variants={null} alt="t4" sizes={SIZES} />,
+    );
+    fireEvent.load(screen.getByAltText("t4"));
+    const calls = (trackClientEvent as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBe(0);
   });
 });

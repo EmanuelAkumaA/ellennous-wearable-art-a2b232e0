@@ -84,3 +84,23 @@ export const isLegacyFormat = (
   if (!variants?.length) return false;
   return !variants.some((v) => v.format === "webp" && v.device_label === "desktop");
 };
+
+/**
+ * Broader "at-risk of fallback" check used by auto-optimize flows.
+ * Flags any "ready" image that the frontend would have to fall back from
+ * (no usable WebP-by-device), plus any image that previously errored.
+ *
+ * - status === "error" → always at risk
+ * - status === "ready" + no variants → orphan, at risk
+ * - status === "ready" + variants but no webp+desktop → legacy, at risk
+ * - status === "processing" or other → not at risk yet (in flight)
+ */
+export const isAtRiskOfFallback = (
+  status: string,
+  variants: OptimizedVariant[] | null | undefined,
+): boolean => {
+  if (status === "error") return true;
+  if (status !== "ready") return false;
+  if (!variants?.length) return true;
+  return !variants.some((v) => v.format === "webp" && v.device_label === "desktop");
+};
