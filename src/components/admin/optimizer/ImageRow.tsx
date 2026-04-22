@@ -49,6 +49,9 @@ const findLegacyFor = (variants: OptimizedVariant[], targetWidth: number): Optim
   return sorted[0];
 };
 
+const AVG_PROCESS_MS = 6000;
+const STALE_PROCESS_MS = AVG_PROCESS_MS * 3;
+
 const ImageRowImpl = ({
   image,
   pieceLink,
@@ -60,6 +63,18 @@ const ImageRowImpl = ({
   selectionMode = false,
 }: ImageRowProps) => {
   const [busy, setBusy] = useState<null | "delete" | "reprocess" | "use">(null);
+  const [errorOpen, setErrorOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const isProcessing = image.status === "processing";
+  useEffect(() => {
+    if (!isProcessing) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [isProcessing]);
+  const updatedAt = (image as { updated_at?: string }).updated_at;
+  const elapsedMs = isProcessing && updatedAt ? Math.max(0, now - new Date(updatedAt).getTime()) : 0;
+  const etaMs = Math.max(0, AVG_PROCESS_MS - elapsedMs);
+  const stale = elapsedMs > STALE_PROCESS_MS;
 
   const mobile = findByDevice(image.variants, "mobile") ?? findLegacyFor(image.variants, 480);
   const tablet = findByDevice(image.variants, "tablet") ?? findLegacyFor(image.variants, 1024);
