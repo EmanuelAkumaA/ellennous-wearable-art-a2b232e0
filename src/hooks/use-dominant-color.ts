@@ -9,15 +9,69 @@ import { useEffect, useState } from "react";
  * - Renders a 32×32 thumbnail to a canvas, then quantizes pixels to a
  *   coarse HSL bucket (12 hues × 4 sat × 4 lum), ignoring near-black,
  *   near-white, and dull pixels.
- * - Caches the resulting color per URL in a module-level Map so re-renders
- *   never recompute.
+ * - Caches per URL in two layers:
+ *     1. Module-level `Map` (instant hits across re-renders).
+ *     2. `localStorage` (persists across reloads, TTL 30 days, cap 200).
+ * - Debounces the canvas computation by 150 ms — if the component unmounts
+ *   (filter change, fast scroll) before the timeout fires, no canvas is
+ *   ever created.
  *
  * Returns `null` while loading, then the color string. Falls back silently
  * to `null` on CORS/decoding failure (caller can use a default).
  */
 
-const CACHE = new Map<string, string | null>();
+const CACHE = new Map<string, { color: string | null; ts: number }>();
 const PENDING = new Map<string, Promise<string | null>>();
+
+const STORAGE_KEY = "ellennous:dominantColor:v1";
+const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_ENTRIES = 200;
+const TRIM_TO = 150;
+const COMPUTE_DEBOUNCE_MS = 150;
+const PERSIST_DEBOUNCE_MS = 400;
+
+let hydrated = false;
+const hydrate = () => {
+  if (hydrated || typeof window === "undefined") return;
+  hydrated = true;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw) as Record<string, { color: string | null; ts: number }>;
+    const now = Date.now();
+    for (const [url, v] of Object.entries(obj)) {
+      if (v && typeof v.ts === "number" && now - v.ts < TTL_MS) {
+        CACHE.set(url, { color: v.color, ts: v.ts });
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+};
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+const flushPersist = () => {
+  persistTimer = null;
+  if (typeof window === "undefined") return;
+  try {
+    // Trim if over capacity, dropping the oldest entries first.
+    if (CACHE.size > MAX_ENTRIES) {
+      const sorted = [...CACHE.entries()].sort((a, b) => a[1].ts - b[1].ts);
+      const drop = sorted.slice(0, sorted.length - TRIM_TO);
+      for (const [k] of drop) CACHE.delete(k);
+    }
+    const obj: Record<string, { color: string | null; ts: number }> = {};
+    for (const [k, v] of CACHE.entries()) obj[k] = v;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+  } catch {
+    /* quota or serialization failure — drop silently */
+  }
+};
+const schedulePersist = () => {
+  if (typeof window === "undefined") return;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(flushPersist, PERSIST_DEBOUNCE_MS);
+};
 
 const computeColor = (url: string): Promise<string | null> =>
   new Promise((resolve) => {
@@ -95,32 +149,42 @@ const computeColor = (url: string): Promise<string | null> =>
   });
 
 export const useDominantColor = (url: string | null | undefined): string | null => {
-  const [color, setColor] = useState<string | null>(() => (url ? CACHE.get(url) ?? null : null));
+  const [color, setColor] = useState<string | null>(() => {
+    if (!url) return null;
+    hydrate();
+    return CACHE.get(url)?.color ?? null;
+  });
 
   useEffect(() => {
     if (!url) {
       setColor(null);
       return;
     }
-    if (CACHE.has(url)) {
-      setColor(CACHE.get(url) ?? null);
+    hydrate();
+    const cached = CACHE.get(url);
+    if (cached) {
+      setColor(cached.color);
       return;
     }
     let cancelled = false;
-    let promise = PENDING.get(url);
-    if (!promise) {
-      promise = computeColor(url).then((c) => {
-        CACHE.set(url, c);
-        PENDING.delete(url);
-        return c;
+    const handle = setTimeout(() => {
+      let promise = PENDING.get(url);
+      if (!promise) {
+        promise = computeColor(url).then((c) => {
+          CACHE.set(url, { color: c, ts: Date.now() });
+          PENDING.delete(url);
+          schedulePersist();
+          return c;
+        });
+        PENDING.set(url, promise);
+      }
+      promise.then((c) => {
+        if (!cancelled) setColor(c);
       });
-      PENDING.set(url, promise);
-    }
-    promise.then((c) => {
-      if (!cancelled) setColor(c);
-    });
+    }, COMPUTE_DEBOUNCE_MS);
     return () => {
       cancelled = true;
+      clearTimeout(handle);
     };
   }, [url]);
 

@@ -250,6 +250,41 @@
   @keyframes ring-rotate {
     to { transform: rotate(360deg); }
   }
+  /* Suppress the conic ring while the dominant color is still resolving,
+     so the card never flashes from grey to color on first hover. */
+  .card-glow-ring[data-loading="true"]::before {
+    opacity: 0 !important;
+  }
+
+  /* ===== Artistic skeleton overlay for gallery cards ===== */
+  .gallery-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow: hidden;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--card)) 0%,
+      hsl(var(--secondary) / 0.55) 50%,
+      hsl(var(--card)) 100%
+    );
+  }
+  .gallery-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--primary-glow) / 0.18) 50%,
+      transparent 100%
+    );
+    transform: translateX(-100%);
+    animation: gallery-shimmer 1.6s linear infinite;
+  }
+  @keyframes gallery-shimmer {
+    to { transform: translateX(100%); }
+  }
 
   .grain::before {
     content: '';

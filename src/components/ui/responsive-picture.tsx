@@ -17,6 +17,7 @@ interface ResponsivePictureProps {
   className?: string;
   style?: CSSProperties;
   onClick?: () => void;
+  onLoad?: (e: SyntheticEvent<HTMLImageElement>) => void;
 }
 
 /**
@@ -120,6 +121,7 @@ export const ResponsivePicture = ({
   className,
   style,
   onClick,
+  onLoad,
 }: ResponsivePictureProps) => {
   const webpOk = useWebpSupport();
   const hasVariants = !!(variants && variants.length > 0);
@@ -129,7 +131,11 @@ export const ResponsivePicture = ({
         .reduce((sum, v) => sum + (v.size_bytes ?? 0), 0)
     : 0;
 
-  const handleLoad = useOnLoadTelemetry(!webpOk, hasVariants, webpBytesEstimate);
+  const telemetryLoad = useOnLoadTelemetry(!webpOk, hasVariants, webpBytesEstimate);
+  const handleLoad = (e: SyntheticEvent<HTMLImageElement>) => {
+    telemetryLoad(e);
+    onLoad?.(e);
+  };
 
   // Browser doesn't support WebP — serve the original JPEG/PNG.
   if (!webpOk) {
@@ -163,6 +169,7 @@ export const ResponsivePicture = ({
         className={className}
         style={style}
         onClick={onClick}
+        onLoad={onLoad}
       />
     );
   }
@@ -185,6 +192,7 @@ export const ResponsivePicture = ({
         className={className}
         style={style}
         onClick={onClick}
+        onLoad={onLoad}
       />
     );
   }
