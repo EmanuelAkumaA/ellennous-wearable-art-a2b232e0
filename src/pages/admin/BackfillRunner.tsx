@@ -639,15 +639,55 @@ export const BackfillRunner = () => {
   );
 };
 
-const BackfillRow = ({ item }: { item: BackfillProgressItem }) => {
-  const Icon =
-    item.status === "done"
-      ? CheckCircle2
-      : item.status === "error"
-        ? AlertCircle
-        : item.status === "pending"
-          ? ImageIcon
-          : Loader2;
+type BackfillRowProps = {
+  item: BackfillProgressItem;
+  selected?: boolean;
+  selectable?: boolean;
+  onToggle?: () => void;
+};
+
+const StatusBadge = ({ item }: { item: BackfillProgressItem }) => {
+  // 4 visual states: optimized / optimizing / pending / error
+  if (item.status === "done" || item.status === "skipped") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-accent tracking-[0.25em] uppercase">
+        <CheckCircle2 className="h-3 w-3" /> Otimizada
+      </span>
+    );
+  }
+  if (item.status === "error") {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-destructive/15 text-destructive text-[10px] font-accent tracking-[0.25em] uppercase cursor-help">
+              <AlertCircle className="h-3 w-3" /> Erro
+            </span>
+          </TooltipTrigger>
+          {item.error && (
+            <TooltipContent side="left" className="max-w-xs text-xs">
+              {item.error}
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  if (ACTIVE_STATUSES.includes(item.status)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 text-[10px] font-accent tracking-[0.25em] uppercase animate-pulse">
+        <Loader2 className="h-3 w-3 animate-spin" /> Otimizando
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary/40 text-muted-foreground text-[10px] font-accent tracking-[0.25em] uppercase">
+      <Circle className="h-3 w-3" /> Não otimizada
+    </span>
+  );
+};
+
+const BackfillRow = ({ item, selected = false, selectable = false, onToggle }: BackfillRowProps) => {
   const animate = ACTIVE_STATUSES.includes(item.status);
   const showBar = animate || item.status === "done";
   const barPct = item.status === "done" ? 100 : item.progress || 0;
@@ -656,10 +696,26 @@ const BackfillRow = ({ item }: { item: BackfillProgressItem }) => {
       ? "bg-emerald-400"
       : item.status === "error"
         ? "bg-destructive"
-        : "bg-primary-glow";
+        : "bg-amber-400";
+  const stageLabel = animate
+    ? `${STATUS_LABEL[item.status]} ${barPct}%`
+    : item.status === "done"
+      ? "100% · concluída"
+      : null;
 
   return (
-    <div className="rounded-lg border border-border/40 bg-card/40 backdrop-blur p-3 flex items-center gap-3">
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/10 transition-colors">
+      <div className="shrink-0">
+        {selectable ? (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={onToggle}
+            aria-label={`Selecionar ${item.filename}`}
+          />
+        ) : (
+          <div className="h-4 w-4" aria-hidden />
+        )}
+      </div>
       <div className="relative h-12 w-12 shrink-0 rounded-md overflow-hidden bg-secondary/30">
         <img
           src={item.url}
@@ -677,41 +733,30 @@ const BackfillRow = ({ item }: { item: BackfillProgressItem }) => {
           <span className="font-accent tracking-[0.2em] uppercase">
             {item.kind === "cover" ? "Capa" : "Galeria"}
           </span>
-          {" · "}
-          {item.pieceName}
         </p>
 
         {showBar && (
           <div className="mt-1.5 flex items-center gap-2">
-            <div className="h-1 flex-1 rounded-full bg-secondary/40 overflow-hidden">
+            <div className="h-1.5 flex-1 rounded-full bg-secondary/40 overflow-hidden">
               <div
                 className={`h-full ${barColor} transition-all duration-300`}
                 style={{ width: `${barPct}%` }}
               />
             </div>
-            <span
-              className={`text-[9px] font-accent tracking-[0.2em] uppercase shrink-0 ${
-                item.status === "done" ? "text-emerald-400" : "text-muted-foreground"
-              }`}
-            >
-              {item.status === "done"
-                ? "100% · concluída"
-                : `${STATUS_LABEL[item.status]} ${barPct}%`}
-            </span>
+            {stageLabel && (
+              <span
+                className={`text-[9px] font-accent tracking-[0.2em] uppercase shrink-0 ${
+                  item.status === "done" ? "text-emerald-400" : "text-amber-400"
+                }`}
+              >
+                {stageLabel}
+              </span>
+            )}
           </div>
         )}
-
-        {item.error && (
-          <p className="text-[10px] text-destructive truncate mt-0.5" title={item.error}>
-            {item.error}
-          </p>
-        )}
       </div>
-      <div
-        className={`inline-flex items-center gap-1.5 text-[10px] font-accent tracking-[0.25em] uppercase shrink-0 ${STATUS_TONE[item.status]}`}
-      >
-        <Icon className={`h-3.5 w-3.5 ${animate ? "animate-spin" : ""}`} />
-        {STATUS_LABEL[item.status]}
+      <div className="shrink-0">
+        <StatusBadge item={item} />
       </div>
     </div>
   );
