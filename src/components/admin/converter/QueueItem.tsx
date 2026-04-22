@@ -19,6 +19,7 @@ import { validateFileDeep } from "@/lib/converterValidation";
 import { logConversion } from "@/lib/conversionLogs";
 import { uploadStaging } from "@/lib/galleryStaging";
 import { ComparePanel } from "./ComparePanel";
+import { VariantGrid, type VariantSlot, type VariantKey } from "./VariantGrid";
 
 export type QueueStatus = "queued" | "validating" | "converting" | "done" | "error";
 
@@ -37,6 +38,8 @@ interface QueueItemProps {
   onSavedToHistory: () => void;
   onStatusChange: (id: string, status: QueueStatus) => void;
   onStagingSaved?: () => void;
+  /** Reports per-item progress (0–100) so the parent can compute weighted ETA. */
+  onProgressChange?: (id: string, percent: number) => void;
 }
 
 interface ConvertedState {
