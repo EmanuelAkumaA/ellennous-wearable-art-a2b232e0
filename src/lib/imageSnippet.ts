@@ -72,3 +72,15 @@ export const findByDevice = (
   if (!variants?.length) return undefined;
   return variants.find((v) => v.format === "webp" && v.device_label === label);
 };
+
+/**
+ * Returns true when the variants array does NOT contain the new pipeline output
+ * (3 device-tagged WebPs). Used to flag images that should be reprocessed.
+ * Empty/missing variants are NOT considered "legacy" — they're just unprocessed.
+ */
+export const isLegacyFormat = (
+  variants: OptimizedVariant[] | null | undefined,
+): boolean => {
+  if (!variants?.length) return false;
+  return !variants.some((v) => v.format === "webp" && v.device_label === "desktop");
+};
