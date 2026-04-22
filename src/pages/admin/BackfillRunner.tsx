@@ -517,19 +517,18 @@ export const BackfillRunner = () => {
       <div className="flex flex-wrap items-center gap-3">
         {atRiskCount > 0 && (
           <Button
-            onClick={async () => {
+            onClick={() => {
               if (running || loading) return;
               const ids = items
                 .filter((i) => i.status === "pending" || i.status === "error")
                 .map((i) => i.id);
-              setSelected(new Set(ids));
+              const idSet = new Set(ids);
+              setSelected(idSet);
               sonnerToast.info(
                 `Iniciando conversão WebP + otimização de ${ids.length} imagem(ns)…`,
                 { duration: 3500 },
               );
-              // Defer one tick so `selected` state is committed before start() reads it.
-              await new Promise((r) => setTimeout(r, 0));
-              void start();
+              void start(idSet);
             }}
             disabled={running || loading}
             className="rounded-none font-accent tracking-[0.2em] uppercase text-xs bg-gradient-to-r from-blue-500 to-primary hover:opacity-90 shadow-glow"
@@ -540,7 +539,7 @@ export const BackfillRunner = () => {
           </Button>
         )}
         <Button
-          onClick={start}
+          onClick={() => start()}
           disabled={running || loading || totalPending === 0}
           variant={atRiskCount > 0 ? "outline" : "default"}
           className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
