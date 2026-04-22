@@ -1133,15 +1133,7 @@ export const PiecesManager = () => {
               <div className="flex flex-col sm:flex-row gap-4 items-start">
                 <div className="relative w-32 h-32 bg-secondary/30 flex items-center justify-center flex-shrink-0 border border-border/40 rounded overflow-hidden">
                   {draftCover ? (
-                    <>
-                      <img src={draftCover.previewUrl} alt="Capa" className="w-full h-full object-cover" />
-                      {draftCover.status === "processing" && (
-                        <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1 text-primary-glow">
-                          <Sparkles className="h-4 w-4 animate-pulse" />
-                          <span className="font-accent text-[8px] tracking-[0.25em] uppercase">Otimizando</span>
-                        </div>
-                      )}
-                    </>
+                    <img src={draftCover.previewUrl} alt="Capa" className="w-full h-full object-cover" />
                   ) : editing?.cover_url ? (
                     <img src={editing.cover_url} alt="Capa" className="w-full h-full object-cover" />
                   ) : (
@@ -1163,13 +1155,6 @@ export const PiecesManager = () => {
                   >
                     <Upload className="h-4 w-4 mr-1" />
                     {coverUploading ? "Enviando…" : draftCover || editing?.cover_url ? "Trocar capa" : "Enviar capa"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => openPicker("cover")}
-                    className="rounded-none font-accent tracking-[0.2em] uppercase text-xs"
-                  >
-                    <Library className="h-4 w-4 mr-1" /> Reaproveitar do histórico
                   </Button>
                   {(draftCover || editing?.cover_url) && (
                     <Button
@@ -1198,24 +1183,14 @@ export const PiecesManager = () => {
                   hidden
                   onChange={(e) => handleUpload(e.target.files)}
                 />
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => openPicker("gallery")}
-                    size="sm"
-                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
-                  >
-                    <Library className="h-3.5 w-3.5 mr-1" /> Histórico
-                  </Button>
-                  <Button
-                    onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    size="sm"
-                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
-                  >
-                    <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
-                  </Button>
-                </div>
+                <Button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  size="sm"
+                  className="rounded-none font-accent tracking-[0.2em] uppercase text-[10px]"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" /> {uploading ? "Enviando…" : "Adicionar"}
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground">
                 {editing
@@ -1262,21 +1237,15 @@ export const PiecesManager = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {draftImages.map((d) => (
                     <div
-                      key={d.optimizedImageId}
+                      key={d.tempId}
                       className="relative aspect-square bg-secondary/30 group rounded-md overflow-hidden border border-primary/20"
                     >
                       <img src={d.previewUrl} alt={d.name} className="w-full h-full object-cover" />
-                      {d.status === "processing" && (
-                        <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-1 text-primary-glow">
-                          <Sparkles className="h-4 w-4 animate-pulse" />
-                          <span className="font-accent text-[8px] tracking-[0.25em] uppercase">Otimizando</span>
-                        </div>
-                      )}
                       <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => removeDraftImage(d.optimizedImageId)}
+                          onClick={() => removeDraftImage(d.tempId)}
                           title="Remover"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1314,16 +1283,6 @@ export const PiecesManager = () => {
         </SheetContent>
       </Sheet>
 
-      <ImagePicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        defaultMode={pickerMode}
-        alreadyUsedIds={new Set([
-          ...draftImages.map((d) => d.optimizedImageId),
-          ...(draftCover ? [draftCover.optimizedImageId] : []),
-        ])}
-        onConfirm={handlePickerConfirm}
-      />
     </div>
   );
 };
