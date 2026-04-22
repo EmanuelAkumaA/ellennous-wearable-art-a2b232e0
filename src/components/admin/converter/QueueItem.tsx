@@ -494,6 +494,37 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
           </div>
         )}
       </div>
+
+      {converted?.preset && status === "done" && (
+        <section className="space-y-2">
+          <h4 className="font-accent text-[10px] tracking-[0.3em] uppercase text-primary-glow flex items-center gap-2">
+            <span className="h-px w-6 bg-primary-glow" />
+            Variantes geradas
+          </h4>
+          <VariantGrid
+            slots={(["mobile", "tablet", "desktop"] as VariantKey[]).map((key) => {
+              const v = converted.preset![key];
+              return {
+                key,
+                url: variantUrls[key] ?? null,
+                width: v.width,
+                height: v.height,
+                sizeBytes: v.blob.size,
+                actions: (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => downloadVariant(key)}
+                    className="rounded-none font-accent tracking-[0.2em] uppercase text-[9px] h-7"
+                  >
+                    <Download className="h-3 w-3 mr-1" /> Baixar
+                  </Button>
+                ),
+              };
+            })}
+          />
+        </section>
+      )}
     </article>
   );
 });
