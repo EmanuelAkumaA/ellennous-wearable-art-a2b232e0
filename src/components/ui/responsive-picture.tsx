@@ -18,6 +18,7 @@ interface ResponsivePictureProps {
   style?: CSSProperties;
   onClick?: () => void;
   onLoad?: (e: SyntheticEvent<HTMLImageElement>) => void;
+  onError?: (e: SyntheticEvent<HTMLImageElement>) => void;
 }
 
 /**
