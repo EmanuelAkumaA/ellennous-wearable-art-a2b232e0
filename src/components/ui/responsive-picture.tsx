@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
 import { supportsWebP, supportsWebPSync } from "@/lib/webpSupport";
 import { trackClientEvent } from "@/lib/clientTelemetry";
