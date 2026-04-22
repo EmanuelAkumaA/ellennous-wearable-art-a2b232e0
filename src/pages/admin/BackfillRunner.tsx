@@ -99,6 +99,46 @@ export const BackfillRunner = () => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   };
 
+  /** Wraps updateItem to capture per-image start/end timings + bytes saved. */
+  const trackedUpdate = (id: string, patch: Partial<BackfillProgressItem>) => {
+    const m = timingsRef.current;
+    if (patch.status === "downloading" && !m.has(id)) {
+      m.set(id, { start: Date.now() });
+    }
+    if (patch.status === "done" || patch.status === "error") {
+      const t = m.get(id);
+      if (t && t.end == null) {
+        t.end = Date.now();
+        completedTimingsRef.current.push(t.end - t.start);
+      }
+      if (patch.status === "done") {
+        setCompletedCount((c) => c + 1);
+        // Fire-and-forget: read original/optimized sizes for byte savings.
+        const optId = patch.optimizedImageId;
+        if (optId) {
+          supabase
+            .from("optimized_images")
+            .select("original_size_bytes, variants")
+            .eq("id", optId)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (!data) return;
+              const variants = (data.variants as unknown as OptimizedVariant[]) ?? [];
+              const tablet =
+                variants.find((v) => v.format === "webp" && v.device_label === "tablet") ??
+                variants.find((v) => v.format === "webp") ??
+                variants[0];
+              setBytesOriginal((b) => b + (data.original_size_bytes ?? 0));
+              setBytesOptimized((b) => b + (tablet?.size_bytes ?? 0));
+            });
+        }
+      } else {
+        setFailedCount((c) => c + 1);
+      }
+    }
+    updateItem(id, patch);
+  };
+
   const start = async () => {
     if (running) return;
     const pending = items.filter((i) => i.status === "pending" || i.status === "error");
@@ -106,6 +146,17 @@ export const BackfillRunner = () => {
       toast({ title: "Nada a fazer", description: "Todas as imagens já estão otimizadas." });
       return;
     }
+    // Reset live stats for this run
+    timingsRef.current = new Map();
+    completedTimingsRef.current = [];
+    setCompletedCount(0);
+    setFailedCount(0);
+    setBytesOriginal(0);
+    setBytesOptimized(0);
+    setRunStartedAt(Date.now());
+    setRunEndedAt(null);
+    setNow(Date.now());
+
     setRunning(true);
     setShowSuccess(false);
     pending.forEach((p) => updateItem(p.id, { status: "pending", error: undefined, progress: 0 }));
@@ -122,13 +173,14 @@ export const BackfillRunner = () => {
       }),
     );
 
-    const { done, failed } = await runBackfill(legacy, updateItem, 2);
+    const { done, failed } = await runBackfill(legacy, trackedUpdate, 4);
     setRunning(false);
+    setRunEndedAt(Date.now());
 
     if (failed === 0 && done > 0) {
       setShowSuccess(true);
       sonnerToast.success("Tudo otimizado!", {
-        description: `${done} imagem(ns) migrada(s) para o pipeline AVIF/WebP.`,
+        description: `${done} imagem(ns) migrada(s) para o pipeline WebP.`,
         duration: 6000,
       });
     } else {
@@ -139,6 +191,48 @@ export const BackfillRunner = () => {
       });
     }
   };
+
+  const clearStats = () => {
+    timingsRef.current = new Map();
+    completedTimingsRef.current = [];
+    setCompletedCount(0);
+    setFailedCount(0);
+    setBytesOriginal(0);
+    setBytesOptimized(0);
+    setRunStartedAt(null);
+    setRunEndedAt(null);
+  };
+
+  const liveStats = useMemo(() => {
+    const elapsedMs = runStartedAt ? (runEndedAt ?? now) - runStartedAt : 0;
+    const timings = completedTimingsRef.current;
+    const avgMs = timings.length ? timings.reduce((a, b) => a + b, 0) / timings.length : 0;
+    const totalResolved = completedCount + failedCount;
+    const successRate = totalResolved > 0 ? Math.round((completedCount / totalResolved) * 100) : 100;
+    const elapsedMin = elapsedMs / 60000;
+    const imgsPerMin = elapsedMin > 0 ? completedCount / elapsedMin : 0;
+    const pendingItems = items.filter((i) => i.status !== "done" && i.status !== "error" && i.status !== "skipped").length;
+    const etaMs = avgMs > 0 ? Math.max(0, pendingItems * avgMs) : 0;
+    const bytesSaved = Math.max(0, bytesOriginal - bytesOptimized);
+    return {
+      elapsedMs,
+      avgMs,
+      successRate,
+      imgsPerMin,
+      etaMs,
+      bytesSaved,
+      hasData: runStartedAt !== null,
+    };
+  }, [runStartedAt, runEndedAt, now, completedCount, failedCount, items, bytesOriginal, bytesOptimized]);
+
+  const formatDuration = (ms: number): string => {
+    if (!ms || ms < 0) return "00:00";
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60).toString().padStart(2, "0");
+    const s = (totalSec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
 
   const stats = useMemo(() => {
     const total = items.length;
