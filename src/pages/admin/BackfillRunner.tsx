@@ -15,7 +15,13 @@ import {
   Activity,
   Hourglass,
   Eraser,
+  ChevronDown,
+  ChevronRight,
+  Circle,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
