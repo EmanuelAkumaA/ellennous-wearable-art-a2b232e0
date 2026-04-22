@@ -302,9 +302,12 @@ export const runBackfill = async (
         done++;
       } catch (e) {
         failed++;
+        const stage =
+          e && typeof e === "object" && "stage" in e ? (e as { stage: string }).stage : "optimize";
         onItemUpdate(it.id, {
           status: "error",
           error: e instanceof Error ? e.message : String(e),
+          errorStage: stage,
         });
       }
     }
