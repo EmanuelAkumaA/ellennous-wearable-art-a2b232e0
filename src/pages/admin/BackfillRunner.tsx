@@ -56,6 +56,24 @@ export const BackfillRunner = () => {
   const [running, setRunning] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // Live stats
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [runEndedAt, setRunEndedAt] = useState<number | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
+  const [bytesOriginal, setBytesOriginal] = useState(0);
+  const [bytesOptimized, setBytesOptimized] = useState(0);
+  const timingsRef = useRef<Map<string, { start: number; end?: number }>>(new Map());
+  const completedTimingsRef = useRef<number[]>([]);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
+
+  // Tick every second while running so the elapsed timer stays live.
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [running]);
+
   const detect = async () => {
     setLoading(true);
     try {
