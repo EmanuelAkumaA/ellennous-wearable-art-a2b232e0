@@ -580,7 +580,7 @@ const LiveStat = ({
   value,
   tone = "default",
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string }> | ((props: { className?: string }) => JSX.Element);
   label: string;
   value: string;
   tone?: LiveStatTone;
