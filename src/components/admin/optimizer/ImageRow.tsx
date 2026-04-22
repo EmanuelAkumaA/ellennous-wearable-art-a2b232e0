@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   Code2,
   Trash2,
@@ -46,7 +46,7 @@ const findLegacyFor = (variants: OptimizedVariant[], targetWidth: number): Optim
   return sorted[0];
 };
 
-export const ImageRow = ({
+const ImageRowImpl = ({
   image,
   pieceLink,
   onOpenSnippet,
@@ -327,3 +327,25 @@ export const ImageRow = ({
     </div>
   );
 };
+
+/**
+ * Memoized: only re-renders when the image's identity, status, variant count,
+ * selection state, or piece-link binding changes. With 100 rows in the list
+ * this saves ~99 reconciles per state update.
+ */
+export const ImageRow = memo(
+  ImageRowImpl,
+  (prev, next) =>
+    prev.image.id === next.image.id &&
+    prev.image.status === next.image.status &&
+    prev.image.variants.length === next.image.variants.length &&
+    prev.image.used_count === next.image.used_count &&
+    prev.image.error_message === next.image.error_message &&
+    prev.selected === next.selected &&
+    prev.selectionMode === next.selectionMode &&
+    prev.pieceLink?.pieceId === next.pieceLink?.pieceId &&
+    prev.onOpenSnippet === next.onOpenSnippet &&
+    prev.onOpenDetail === next.onOpenDetail &&
+    prev.onToggleSelect === next.onToggleSelect &&
+    prev.onChanged === next.onChanged,
+);
