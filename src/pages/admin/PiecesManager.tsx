@@ -48,6 +48,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { uploadGalleryImage, removeGalleryVariants } from "@/lib/galleryUploader";
+import { validateFiles } from "@/lib/converterValidation";
+import { logConversion } from "@/lib/conversionLogs";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
@@ -59,6 +61,10 @@ interface DraftImage {
   previewUrl: string;          // public URL of the desktop variant
   ordem: number;
   desktopPath: string;
+  /** transient UI status during upload */
+  status?: "uploading" | "ready" | "error";
+  progress?: number;
+  errorMessage?: string;
 }
 interface DraftCover {
   tempId: string;
