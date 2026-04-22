@@ -18,7 +18,7 @@ export interface LegacyImageItem {
 export type DeviceLabel = "mobile" | "tablet" | "desktop";
 
 export interface BackfillProgressItem extends LegacyImageItem {
-  status: "pending" | "downloading" | "uploading" | "optimizing" | "done" | "skipped" | "error";
+  status: "pending" | "downloading" | "converting" | "uploading" | "optimizing" | "done" | "skipped" | "error";
   /** 0–100 progress within the current run */
   progress: number;
   error?: string;
@@ -27,6 +27,8 @@ export interface BackfillProgressItem extends LegacyImageItem {
   optimizedImageId?: string;
   /** Devices whose WebP variant is already available (incremental) */
   readyDevices?: DeviceLabel[];
+  /** Time spent on client-side WebP conversion (ms) for this image. */
+  conversionMs?: number;
 }
 
 const isLegacyPath = (path: string | null | undefined): boolean => {
