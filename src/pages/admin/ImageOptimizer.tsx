@@ -442,6 +442,34 @@ export const ImageOptimizer = () => {
           />
         </div>
 
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {atRiskCount > 0 && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleAutoOptimizeAtRisk}
+                    disabled={!!bulkBusy}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-accent tracking-[0.2em] uppercase px-3 h-9 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-colors disabled:opacity-40"
+                  >
+                    {bulkBusy === "atrisk" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    )}
+                    {bulkBusy === "atrisk" && bulkProgress
+                      ? `Auto ${bulkProgress.done}/${bulkProgress.total}`
+                      : `Auto-otimizar em risco (${atRiskCount})`}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+                  Reprocessa automaticamente as imagens com maior risco de cair no fallback original — sem WebP, com erro ou no formato antigo.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
         {legacyCount > 0 && (
           <TooltipProvider delayDuration={150}>
             <Tooltip>
