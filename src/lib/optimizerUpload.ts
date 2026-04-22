@@ -67,6 +67,7 @@ export const uploadToOptimizer = async ({
         uploadType = "image/webp";
         uploadExt = "webp";
         convertedToWebp = true;
+        onConversionDone?.(conv.ms);
         sonnerToast.success(
           `Convertido para WebP em ${(conv.ms / 1000).toFixed(1)}s, otimizando…`,
           { id: CONVERT_TOAST_ID(id), duration: 2500 },
