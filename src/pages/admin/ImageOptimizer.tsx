@@ -814,7 +814,9 @@ const WebpTelemetryCard = () => {
         >
           <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
         </button>
-      </div>
+          </div>
+
+          <ImpactSection webp={stats.impactWebp} fallback={stats.impactFallback} />
 
       {noData ? (
         <p className="text-xs text-muted-foreground">
