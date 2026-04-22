@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { loadOptimizedMap, findVariantsForUrl, type OptimizedMap } from "@/lib/optimizedImageMap";
+import { deriveGalleryVariants } from "@/lib/galleryUploader";
 import type { OptimizedVariant } from "@/lib/imageSnippet";
-import { useCoalescedRealtime } from "@/lib/useCoalescedRealtime";
 
 export interface PieceImageData {
   url: string;
@@ -41,16 +40,16 @@ type RawPiece = {
   gallery_piece_images: Array<{ id: string; url: string; ordem: number }> | null;
 };
 
-const buildPieces = (rawPieces: RawPiece[], optimizedMap: OptimizedMap): PieceData[] =>
+const buildPieces = (rawPieces: RawPiece[]): PieceData[] =>
   rawPieces.map((p) => {
     const sortedImages = [...(p.gallery_piece_images ?? [])].sort((a, b) => a.ordem - b.ordem);
     const urls = sortedImages.map((i) => i.url);
     const capa = p.cover_url ?? urls[0] ?? "";
     const imagensData: PieceImageData[] = urls.map((url) => ({
       url,
-      variants: findVariantsForUrl(url, optimizedMap),
+      variants: deriveGalleryVariants(url),
     }));
-    const capaVariants = capa ? findVariantsForUrl(capa, optimizedMap) : null;
+    const capaVariants = capa ? deriveGalleryVariants(capa) : null;
     return {
       id: p.id,
       nome: p.nome,
@@ -72,12 +71,11 @@ const buildPieces = (rawPieces: RawPiece[], optimizedMap: OptimizedMap): PieceDa
 export const useGalleryData = () => {
   const [categories, setCategories] = useState<string[]>([]);
   const [rawPieces, setRawPieces] = useState<RawPiece[]>([]);
-  const [optimizedMap, setOptimizedMap] = useState<OptimizedMap>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      const [catsRes, piecesRes, mapRes] = await Promise.all([
+      const [catsRes, piecesRes] = await Promise.all([
         supabase.from("gallery_categories").select("nome").order("ordem", { ascending: true }),
         supabase
           .from("gallery_pieces")
@@ -85,32 +83,17 @@ export const useGalleryData = () => {
             "id, nome, descricao, conceito, historia, tempo, destaque, novo, ordem, cover_url, gallery_categories(nome), gallery_piece_images(id, url, ordem)",
           )
           .order("ordem", { ascending: true }),
-        loadOptimizedMap(),
       ]);
       if (catsRes.data) setCategories(catsRes.data.map((c) => c.nome));
       const raw = (piecesRes.data ?? []) as unknown as RawPiece[];
       setRawPieces(raw);
-      setOptimizedMap(mapRes);
       setLoading(false);
     };
     load();
   }, []);
 
-  // Coalesced realtime: refresh optimized map when new images become ready,
-  // but suspend while the tab is hidden (visitors don't need live updates).
-  useCoalescedRealtime({
-    table: "optimized_images",
-    channelKey: "gallery",
-    debounceMs: 1500,
-    pauseWhenHidden: true,
-    onChange: async () => {
-      const fresh = await loadOptimizedMap();
-      setOptimizedMap(fresh);
-    },
-  });
-
-  // Pure derivation: only recompute when raw data or the optimized map change.
-  const pieces = useMemo(() => buildPieces(rawPieces, optimizedMap), [rawPieces, optimizedMap]);
+  // Pure derivation: variants are derived from the URL by filename convention.
+  const pieces = useMemo(() => buildPieces(rawPieces), [rawPieces]);
 
   return { categories, pieces, loading };
 };
