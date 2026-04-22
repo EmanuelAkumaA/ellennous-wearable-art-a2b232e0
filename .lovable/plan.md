@@ -1,133 +1,135 @@
 
 
-## Plano: Conversor com fila + logs no Cloud + integração total com cadastro de Obra + aba Galeria
+## Plano: Barra de progresso com ETA/velocidade + visualização e gestão por dispositivo
 
-### 1. Fila de processamento com status por item (Conversor)
+### 1. Barra agregada da fila — `QueueProgressBar`
 
-Refatorar `QueueItem` + `ImageConverter` para usar uma máquina de estados explícita por item:
+Adicionar telemetria em tempo real:
 
-- Status: `enfileirado` → `validando` → `convertendo` → `concluído` | `falhou`.
-- Barra de progresso por item (0–100%) + barra agregada no topo da fila ("3 de 7 concluídos · 1 falhou").
-- Botões por item: `Tentar novamente` (quando falhou), `Pausar fila`, `Limpar concluídos`.
-- Concorrência limitada a 2 conversões simultâneas (evita travar o navegador com lotes grandes).
+- **Percentual estimado**: média ponderada do progresso de cada item (não só "concluídos / total"). Itens em andamento contribuem com seu `progress` parcial.
+- **Velocidade**: itens/min calculados a partir do timestamp do primeiro `done`/`error` até agora. Atualiza a cada segundo via `useEffect` + `setInterval`.
+- **ETA**: `(restantes / velocidade) * 60s` → exibido como `~ 2 min 30 s`. Esconde quando < 2 amostras (precisa de pelo menos 1 conclusão para estimar).
+- Layout (uma linha extra):
+  ```text
+  Progresso da fila    3 de 7   · 1 em andamento · 1 falha
+  ████████░░░░░░░  47%
+  ⚡ 8 img/min   ⏱ ~ 30 s restantes
+  ```
 
-### 2. Validações antes de converter
+Para isso, `ImageConverter` passa também `itemProgress: Record<id, percent>` e `completionTimes: number[]` ao `QueueProgressBar`. `QueueItem` chama `onProgressChange(id, percent)` em cada `setProgress`.
 
-Centralizar em `src/lib/converterValidation.ts`:
+### 2. Cartão do `QueueItem` — variantes por dispositivo (lista visual)
 
-- Tamanho máximo configurável (padrão 25 MB) → erro "Arquivo X muito grande (32 MB). Limite: 25 MB."
-- Formato (MIME + extensão) → JPG, PNG, WebP, HEIC apenas.
-- Dimensão mínima 200 px → evita ícones/thumbnails enviados por engano.
-- Validação roda no `Dropzone` (rejeita imediatamente com toast detalhado por arquivo) **e** no `QueueItem` antes do `convertResponsivePreset` (defesa em profundidade, marca status `falhou` com mensagem clara).
-
-### 3. Logs no Lovable Cloud (visíveis a todos os admins)
-
-Nova tabela `conversion_logs`:
-
-| coluna | tipo | nota |
-|---|---|---|
-| id | uuid PK | gen_random_uuid |
-| user_id | uuid | quem disparou |
-| source | text | `converter` ou `piece_upload` |
-| piece_id | uuid null | quando vier do cadastro de Obra |
-| filename | text | nome original |
-| original_size | int | bytes |
-| optimized_size | int | bytes (soma das 3 variantes) |
-| original_format | text | mime detectado |
-| status | text | `success` ou `error` |
-| error_message | text null | quando falhar |
-| duration_ms | int | tempo total |
-| desktop_path | text null | caminho gravado no bucket (quando sucesso) |
-| created_at | timestamptz | now() |
-
-RLS: SELECT/INSERT só para admins (via `has_role`). Escritor: cliente após cada conversão (sucesso ou falha).
-
-Nova aba **"Logs"** no Conversor (4ª aba: Conversor / Histórico / Galeria / Logs):
-- Tabela com filtros: status (todos/sucesso/falha), origem (conversor/obra), busca por nome de arquivo, range de data.
-- Coluna "Detalhes" abre painel lateral com mensagem completa do erro.
-- Botão "Exportar CSV" do filtro atual.
-
-### 4. Integração total Cadastro de Obra → Conversor → Logs
-
-Já temos `uploadGalleryImage` chamando `convertResponsivePreset` em `PiecesManager`. Vamos:
-
-- Adicionar barra de progresso por arquivo durante o upload no modal de Obra (hoje só tem toast no fim).
-- Mostrar status em tempo real na grade de drafts: `Convertendo (40%)` → `Subindo` → `Pronto` | `Falhou ✕ Tentar novamente`.
-- Aplicar as mesmas validações da seção 2 antes de chamar o uploader.
-- Toda conversão (sucesso ou erro) grava em `conversion_logs` com `source='piece_upload'` e `piece_id=workingPieceId`.
-- **Sem job agendado** — conforme escolhido, o upload converte na hora.
-
-### 5. Nova aba "Galeria" dentro do Conversor
-
-Vista única dividida em duas seções:
-
-**Topo — Staging (não-associadas)**
-- Imagens convertidas pelo Conversor avulso e que o admin marcou "Enviar para galeria" (botão novo no `QueueItem`).
-- Sobem para o bucket `gallery` em `staging/{uuid}/{mobile,tablet,desktop}.webp`.
-- Cada cartão permite: visualizar variantes, **associar a uma obra existente** (select de obras → vira `gallery_piece_images` ou capa), descartar.
-
-**Abaixo — Listagem completa por obra**
-- Agrupada por obra (accordion), mostra capa + cada `gallery_piece_images` + suas 3 variantes (mobile/tablet/desktop) com badges clicáveis.
-- Ações por imagem: **Re-associar** (mover para outra obra), **Definir como capa**, **Remover**, **Reconverter** (regera as 3 variantes a partir da desktop existente).
-- Marcação manual: cada variante tem toggle "ativa/inativa" gravado em nova coluna `variant_overrides jsonb` em `gallery_piece_images` (permite forçar o site a só servir certas larguras).
-
-Para o staging precisamos de uma nova tabela `gallery_staging_images` (id, user_id, desktop_url, desktop_path, mobile_path, tablet_path, original_filename, sizes jsonb, created_at) com RLS admin-only.
-
-### 6. Diagrama de dados
+Após `done`, exibir uma seção nova "Variantes geradas" abaixo do `ComparePanel`:
 
 ```text
-[Conversor avulso] ──► IndexedDB (histórico local, mantido)
-       │
-       ├─► (botão "Enviar p/ galeria") ──► storage gallery/staging/* ──► gallery_staging_images
-       │                                                                       │
-       │                                                                       ▼
-       │                                                              [Aba Galeria - Staging]
-       │                                                                       │ (associar)
-       │                                                                       ▼
-       │                                                              gallery_piece_images
-       │
-       └─► conversion_logs (toda conversão)
+┌──────────┬──────────┬──────────┐
+│ 📱 MOBILE│ 💻 TABLET│ 🖥 DESKTOP│
+│ thumb    │ thumb    │ thumb    │
+│ 480×360  │ 768×576  │ 1200×900 │
+│  18 KB   │  42 KB   │  96 KB   │
+│ [baixar] │ [baixar] │ [baixar] │
+└──────────┴──────────┴──────────┘
+```
 
-[Cadastro de Obra] ──► uploadGalleryImage ──► gallery/{pieceId}/{uuid}/{mobile,tablet,desktop}.webp
-                                          └─► conversion_logs (source=piece_upload)
+Cada thumb usa `URL.createObjectURL(preset[key].blob)`, com cleanup no unmount. Botão "baixar" individual por variante. Quando `responsive=false`, mostra apenas o card "original".
+
+### 3. Aba Galeria — visualização explícita das 3 variantes por imagem
+
+Hoje cada `gallery_piece_images` mostra **uma** thumb (a desktop) e três **badges** de toggle. Vamos transformar em **3 cards lado a lado por dispositivo** dentro do mesmo registro de imagem:
+
+```text
+Imagem #2 (registro lógico)
+┌─ 📱 Mobile ─────┐ ┌─ 💻 Tablet ────┐ ┌─ 🖥 Desktop ───┐
+│ [thumb 480]    │ │ [thumb 768]    │ │ [thumb 1200]   │
+│ ✓ Ativa        │ │ ✓ Ativa        │ │ ✓ Ativa        │
+│ ⭐ Capa Mobile │ │ ⭐ Capa Tablet │ │ ⭐ Capa Desktop│
+│ [↗ mover]  [🗑]│ │ [↗ mover] [🗑] │ │ [↗ mover] [🗑] │
+└────────────────┘ └────────────────┘ └────────────────┘
+                  Remover registro completo: [🗑 Excluir tudo]
+```
+
+Recursos:
+- **Toggle "Ativa"** (mantém comportamento atual de `variant_overrides`).
+- **Botão ⭐ Capa por dispositivo**: troca apenas a variante daquele device como capa da obra (ver §4).
+- **Botão ↗ "Mover para outra obra"**: abre `AssociatePieceDialog` reutilizado, mas opera só sobre o registro lógico (move o trio inteiro).
+- **Fallback de imagem quebrada**: `<img onError>` mostra um placeholder com mensagem "arquivo não encontrado no bucket" (evita o ícone quebrado visto no print).
+- Loading skeleton no `<img>` enquanto carrega (usa `loading="lazy"`).
+
+### 4. Capa por dispositivo
+
+Hoje `gallery_pieces` só tem `cover_url` + `cover_storage_path` (uma capa única — usa desktop). Vamos adicionar capa específica por dispositivo:
+
+**Migration** `add_cover_per_device.sql`:
+```sql
+alter table public.gallery_pieces
+  add column cover_url_mobile text,
+  add column cover_path_mobile text,
+  add column cover_url_tablet text,
+  add column cover_path_tablet text;
+-- desktop continua usando cover_url / cover_storage_path (compat)
+```
+
+**Lógica**:
+- Se `cover_url_mobile` for null, o site faz fallback para `cover_url` (desktop). Sem breaking changes.
+- No `useGalleryData`/`PieceCarousel`: ao montar `<picture>` da capa, usa `cover_url_mobile` para `(max-width: 480px)`, `cover_url_tablet` para `(max-width: 768px)`, `cover_url` (desktop) como default.
+- Botão "⭐ Capa Mobile" no GalleryTab grava em `cover_url_mobile`/`cover_path_mobile` apontando para a variante correta daquele registro (`{folder}/mobile.webp`). Mesma lógica para tablet e desktop.
+
+### 5. Galeria — Staging também por dispositivo
+
+No card de cada item de staging, substituir a única thumb por mini-grid 3×1 igual ao do §3 (sem botões de capa, mas com label `📱 Mobile · 18 KB` por baixo). Mantém os botões "Associar" e "Descartar" globais por registro.
+
+### Diagrama: fluxo de capa por dispositivo
+
+```text
+Galeria por obra → registro de imagem (3 variantes no bucket)
+                                │
+            ┌───────────────────┼────────────────────┐
+            ▼                   ▼                    ▼
+       ⭐ Capa Mobile      ⭐ Capa Tablet       ⭐ Capa Desktop
+            │                   │                    │
+            ▼                   ▼                    ▼
+   gallery_pieces.       gallery_pieces.      gallery_pieces.
+   cover_url_mobile      cover_url_tablet     cover_url
+                                │
+                                ▼
+                  Site público (<picture>)
+                  - <source media="(max-width:480px)" → mobile
+                  - <source media="(max-width:768px)" → tablet
+                  - <img src=desktop> fallback
 ```
 
 ### Detalhes técnicos
 
 **Arquivos novos**
-- `src/lib/converterValidation.ts` — funções `validateFile(file, opts)` retornando `{ ok, errors }`.
-- `src/lib/conversionLogs.ts` — `logConversion({...})` com fallback silencioso (logs nunca quebram upload).
-- `src/lib/galleryStaging.ts` — `uploadStaging`, `listStaging`, `attachStagingToPiece`, `discardStaging`.
-- `src/components/admin/converter/QueueProgressBar.tsx` — barra agregada.
-- `src/components/admin/converter/LogsTable.tsx` — tela de logs com filtros.
-- `src/components/admin/converter/GalleryTab.tsx` — staging + listagem por obra.
-- `src/components/admin/converter/AssociatePieceDialog.tsx`.
+- `src/components/admin/converter/VariantGrid.tsx` — grid 3×1 reutilizável (recebe URLs/sizes/widths e botões opcionais por slot).
+- `src/components/admin/converter/QueueSpeedometer.tsx` — exibe ⚡ velocidade e ⏱ ETA usando `completionTimes[]`.
 
 **Arquivos editados**
-- `src/components/admin/converter/QueueItem.tsx` — refatorar para máquina de estados; adicionar botão "Enviar p/ galeria".
-- `src/components/admin/converter/Dropzone.tsx` — chamar `validateFile`, mostrar erros por arquivo rejeitado.
-- `src/pages/admin/ImageConverter.tsx` — 4 abas: Conversor / Histórico / Galeria / Logs.
-- `src/pages/admin/PiecesManager.tsx` — barra de progresso + status por draft + log no Cloud.
-- `src/lib/galleryUploader.ts` — emitir callbacks de progresso (`onProgress`).
+- `src/components/admin/converter/QueueProgressBar.tsx` — recebe `itemProgress` e `completionTimes`; renderiza `QueueSpeedometer`.
+- `src/components/admin/converter/QueueItem.tsx` — emite `onProgressChange`; renderiza `VariantGrid` quando `done`.
+- `src/pages/admin/ImageConverter.tsx` — mantém `itemProgress` em state; calcula `completionTimes` quando status vira `done|error`.
+- `src/components/admin/converter/GalleryTab.tsx`:
+  - Substitui o card único por `VariantGrid` com botões "Capa Mobile/Tablet/Desktop".
+  - Adiciona `<img onError>` com placeholder quando o arquivo não existe.
+  - Renomeia "Definir como capa" para "Capa Desktop" (consistência).
+  - Atualiza staging cards para usar `VariantGrid` (somente leitura + sizes).
+- `src/components/sections/gallery/PieceCarousel.tsx` (ou onde a capa é renderizada): trocar `<img src=cover_url>` por `<picture>` com sources mobile/tablet/desktop, com fallback para `cover_url` quando colunas novas estão null.
+- `src/integrations/supabase/types.ts` — regenerado automaticamente após a migration.
 
-**Migration `add_conversion_pipeline.sql`**
-```sql
-create table public.conversion_logs (...);
-alter table public.conversion_logs enable row level security;
-create policy "Admins read logs"   on public.conversion_logs for select to authenticated using (has_role(auth.uid(),'admin'));
-create policy "Admins insert logs" on public.conversion_logs for insert to authenticated with check (has_role(auth.uid(),'admin') and user_id = auth.uid());
-create index conversion_logs_created_idx on public.conversion_logs (created_at desc);
+**Migration**
+- `add_cover_per_device.sql`: 4 colunas novas em `gallery_pieces` (todas nullable, sem default — fallback para cover_url).
 
-create table public.gallery_staging_images (...);
-alter table public.gallery_staging_images enable row level security;
--- 4 policies (select/insert/update/delete) restritas a admin
-
-alter table public.gallery_piece_images add column variant_overrides jsonb;
+**Cálculo de ETA (pseudo)**
+```ts
+const completed = completionTimes.length;
+const elapsedMs = Date.now() - completionTimes[0];
+const itemsPerMin = (completed / elapsedMs) * 60_000;
+const remaining = total - completed - failed;
+const etaSec = remaining / itemsPerMin * 60;
 ```
 
-**Larguras**: mantidas em 480 / 768 / 1200 (sem alterações em `imageConverter.ts`).
+**Performance**: thumbs do grid usam `loading="lazy"` + `decoding="async"`; URLs de blob no Conversor são revogados quando o `QueueItem` desmonta.
 
-**Nada de cron / pg_cron** — confirmado.
-
-**Sem mudanças** em `src/integrations/supabase/client.ts` nem em `types.ts` (regenera automático).
+**Sem mudanças** em `imageConverter.ts`, `galleryUploader.ts`, `client.ts`, ou na lógica de upload do PiecesManager — só adicionamos colunas e refinamos a UI.
 
