@@ -1,19 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 import { UploadCloud } from "lucide-react";
 import { ACCEPTED_INPUT_EXT, ACCEPTED_INPUT_MIME } from "@/lib/imageConverter";
+import { validateFiles, VALIDATION_LIMITS } from "@/lib/converterValidation";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface DropzoneProps {
   onFiles: (files: File[]) => void;
   disabled?: boolean;
 }
-
-const filterValid = (files: File[]): File[] =>
-  files.filter((f) => {
-    if (ACCEPTED_INPUT_MIME.includes(f.type)) return true;
-    const lower = f.name.toLowerCase();
-    return ACCEPTED_INPUT_EXT.some((ext) => lower.endsWith(ext));
-  });
 
 export const Dropzone = ({ onFiles, disabled }: DropzoneProps) => {
   const [active, setActive] = useState(false);
@@ -22,7 +17,19 @@ export const Dropzone = ({ onFiles, disabled }: DropzoneProps) => {
   const handle = useCallback(
     (files: FileList | File[] | null) => {
       if (!files) return;
-      const valid = filterValid(Array.from(files));
+      const arr = Array.from(files);
+      if (!arr.length) return;
+      const { valid, errors } = validateFiles(arr);
+      if (errors.length) {
+        toast({
+          title: errors.length === 1 ? "Arquivo rejeitado" : `${errors.length} arquivos rejeitados`,
+          description: errors
+            .slice(0, 4)
+            .map((e) => `${e.file.name}: ${e.reason}`)
+            .join("\n"),
+          variant: "destructive",
+        });
+      }
       if (valid.length) onFiles(valid);
     },
     [onFiles],
@@ -64,7 +71,7 @@ export const Dropzone = ({ onFiles, disabled }: DropzoneProps) => {
         <div>
           <p className="font-display text-xl">Arraste imagens aqui</p>
           <p className="text-xs text-muted-foreground mt-1">
-            JPG, PNG, WebP ou HEIC · conversão local no navegador
+            JPG, PNG, WebP ou HEIC · até {VALIDATION_LIMITS.maxSizeMb} MB · conversão local no navegador
           </p>
         </div>
         <button
