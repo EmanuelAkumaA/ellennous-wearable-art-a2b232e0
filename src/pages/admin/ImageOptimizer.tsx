@@ -738,6 +738,35 @@ const WebpTelemetryCard = () => {
       .slice(0, 3)
       .map(([ua, count]) => ({ ua, count }));
 
+    // --- Impact buckets: aggregate per-session averages of meta.loadMs / originalBytes
+    //     to compare WebP-served sessions vs fallback sessions.
+    const aggregate = (predicate: (r: WebpTelemetryRow) => boolean): ImpactBucket => {
+      const byS = new Map<string, { l: number[]; b: number[] }>();
+      for (const r of rows.filter(predicate)) {
+        const m = r.meta ?? {};
+        const slot = byS.get(r.session_id) ?? { l: [], b: [] };
+        if (typeof m.loadMs === "number" && m.loadMs > 0) slot.l.push(m.loadMs);
+        if (typeof m.originalBytes === "number" && m.originalBytes > 0) slot.b.push(m.originalBytes);
+        byS.set(r.session_id, slot);
+      }
+      const sessLoad: number[] = [];
+      const sessBytes: number[] = [];
+      for (const slot of byS.values()) {
+        if (slot.l.length) sessLoad.push(slot.l.reduce((a, b) => a + b, 0) / slot.l.length);
+        if (slot.b.length) sessBytes.push(slot.b.reduce((a, b) => a + b, 0) / slot.b.length);
+      }
+      const mean = (arr: number[]) =>
+        arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+      return {
+        sessions: byS.size,
+        avgLoadMs: mean(sessLoad),
+        avgBytes: mean(sessBytes),
+      };
+    };
+
+    const impactWebp = aggregate((r) => r.event_type === "webp_served");
+    const impactFallback = aggregate(isFb);
+
     setStats({
       unsupportedSessions7d: uniq((r) => isUn(r) && after7(r)),
       unsupportedSessions30d: uniq(isUn),
@@ -746,6 +775,8 @@ const WebpTelemetryCard = () => {
       topUserAgents,
       totalSessions30d: allSessions30d,
       fallbackPct30d,
+      impactWebp,
+      impactFallback,
     });
     setLoading(false);
     setRefreshing(false);
