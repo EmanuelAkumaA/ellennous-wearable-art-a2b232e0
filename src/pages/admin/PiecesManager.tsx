@@ -24,7 +24,6 @@ import {
   Flame,
   ChevronUp,
   ChevronDown,
-  Library,
 } from "lucide-react";
 import {
   DndContext,
@@ -48,30 +47,24 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useFlipAnimation } from "@/hooks/use-flip-animation";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { uploadToOptimizer, getBestUrlForPiece } from "@/lib/optimizerUpload";
-import { ImagePicker, type PickedImage } from "@/components/admin/optimizer/ImagePicker";
-import type { OptimizedVariant } from "@/lib/imageSnippet";
+import { uploadGalleryImage, removeGalleryVariants } from "@/lib/galleryUploader";
 
 interface Category { id: string; nome: string; }
 interface Image { id: string; url: string; storage_path: string | null; ordem: number; }
 
 // Draft images live in the modal state before the piece is saved (or as new uploads on edit).
 interface DraftImage {
-  optimizedImageId: string;
+  tempId: string;
   name: string;
-  previewUrl: string;          // current best preview (original → variant once ready)
-  status: "processing" | "ready" | "error";
-  variants: OptimizedVariant[];
+  previewUrl: string;          // public URL of the desktop variant
   ordem: number;
-  originalPath: string;
+  desktopPath: string;
 }
 interface DraftCover {
-  optimizedImageId: string;
+  tempId: string;
   name: string;
   previewUrl: string;
-  status: "processing" | "ready" | "error";
-  variants: OptimizedVariant[];
-  originalPath: string;
+  desktopPath: string;
 }
 interface Piece {
   id: string;
@@ -382,11 +375,9 @@ export const PiecesManager = () => {
 
   // Working piece id (a draft uuid for "create" mode, the real id for "edit").
   const [workingPieceId, setWorkingPieceId] = useState<string | null>(null);
-  // Optimizer-backed images uploaded in this modal session (rendered alongside saved ones).
+  // Just-uploaded images that are queued to be persisted on save.
   const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
   const [draftCover, setDraftCover] = useState<DraftCover | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<"gallery" | "cover">("gallery");
 
   const flashMoved = (id: string) => {
     setRecentlyMovedId(null);
@@ -509,51 +500,6 @@ export const PiecesManager = () => {
     return false;
   };
 
-  // Realtime: when an optimized_image used in this modal becomes ready, refresh its preview/variants.
-  useEffect(() => {
-    if (!workingPieceId) return;
-    const ids = new Set<string>();
-    draftImages.forEach((d) => ids.add(d.optimizedImageId));
-    if (draftCover) ids.add(draftCover.optimizedImageId);
-    if (ids.size === 0) return;
-
-    const channel = supabase
-      .channel(`opt_modal_${workingPieceId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "optimized_images" },
-        (payload) => {
-          const row = payload.new as {
-            id: string;
-            status: string;
-            variants: OptimizedVariant[] | null;
-          };
-          if (!ids.has(row.id)) return;
-          const variants = (row.variants ?? []) as OptimizedVariant[];
-          const status = (row.status as DraftImage["status"]) ?? "processing";
-          const bestPreview =
-            variants.find((v) => v.format === "webp" && v.width === 800)?.url ??
-            variants.find((v) => v.format === "jpeg" && v.width === 800)?.url;
-          setDraftImages((prev) =>
-            prev.map((d) =>
-              d.optimizedImageId === row.id
-                ? { ...d, status, variants, previewUrl: bestPreview ?? d.previewUrl }
-                : d,
-            ),
-          );
-          setDraftCover((prev) =>
-            prev && prev.optimizedImageId === row.id
-              ? { ...prev, status, variants, previewUrl: bestPreview ?? prev.previewUrl }
-              : prev,
-          );
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [workingPieceId, draftImages, draftCover]);
-
   const handleSave = async () => {
     if (guardOffline()) return;
     if (!form.nome.trim()) return toast({ title: "Nome obrigatório", variant: "destructive" });
@@ -585,50 +531,34 @@ export const PiecesManager = () => {
           ordem: pieces.length,
         };
         if (draftCover) {
-          insertPayload.cover_url = getBestUrlForPiece(draftCover.variants, draftCover.previewUrl);
-          insertPayload.cover_storage_path = draftCover.originalPath;
+          insertPayload.cover_url = draftCover.previewUrl;
+          insertPayload.cover_storage_path = draftCover.desktopPath;
         }
         const { error } = await supabase.from("gallery_pieces").insert(insertPayload);
         if (error) throw error;
         pieceId = newId;
       }
 
-      // Persist draft cover for edit mode (insert always handled above)
       if (editing && draftCover) {
         await supabase
           .from("gallery_pieces")
           .update({
-            cover_url: getBestUrlForPiece(draftCover.variants, draftCover.previewUrl),
-            cover_storage_path: draftCover.originalPath,
+            cover_url: draftCover.previewUrl,
+            cover_storage_path: draftCover.desktopPath,
           })
           .eq("id", pieceId);
       }
 
-      // Persist draft gallery images
       if (draftImages.length > 0) {
         const baseOrdem = editing?.gallery_piece_images.length ?? 0;
         const rows = draftImages.map((d, idx) => ({
           piece_id: pieceId,
-          url: getBestUrlForPiece(d.variants, d.previewUrl),
-          storage_path: d.originalPath,
+          url: d.previewUrl,
+          storage_path: d.desktopPath,
           ordem: baseOrdem + idx,
         }));
         const { error: imgErr } = await supabase.from("gallery_piece_images").insert(rows);
         if (imgErr) throw imgErr;
-
-        // Make sure piece_id is set on the optimizer rows (in case row was created
-        // before workingPieceId existed — defensive).
-        const optIds = draftImages.map((d) => d.optimizedImageId);
-        await supabase
-          .from("optimized_images")
-          .update({ piece_id: pieceId })
-          .in("id", optIds);
-      }
-      if (draftCover) {
-        await supabase
-          .from("optimized_images")
-          .update({ piece_id: pieceId })
-          .eq("id", draftCover.optimizedImageId);
       }
 
       toast({ title: editing ? "Atualizada" : "Criada" });
@@ -647,9 +577,10 @@ export const PiecesManager = () => {
     if (!confirm("Remover esta obra e todas as imagens?")) return;
     const piece = pieces.find((p) => p.id === id);
     if (piece) {
-      const paths = piece.gallery_piece_images.map((i) => i.storage_path).filter(Boolean) as string[];
-      if (piece.cover_storage_path) paths.push(piece.cover_storage_path);
-      if (paths.length) await supabase.storage.from("gallery").remove(paths);
+      for (const i of piece.gallery_piece_images) {
+        if (i.storage_path) await removeGalleryVariants(i.storage_path);
+      }
+      if (piece.cover_storage_path) await removeGalleryVariants(piece.cover_storage_path);
     }
     const { error } = await supabase.from("gallery_pieces").delete().eq("id", id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -665,21 +596,20 @@ export const PiecesManager = () => {
       let baseOrdem = (editing?.gallery_piece_images.length ?? 0) + draftImages.length;
       const newDrafts: DraftImage[] = [];
       for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) continue;
+        if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) continue;
         try {
-          const result = await uploadToOptimizer({
-            file,
-            pieceId: workingPieceId,
-            role: "gallery",
-          });
+          const result = await uploadGalleryImage({ file, pieceId: workingPieceId });
+          const reduction = Math.max(0, Math.round((1 - result.optimizedSize / result.originalSize) * 100));
           newDrafts.push({
-            optimizedImageId: result.optimizedImageId,
-            name: result.name,
-            previewUrl: result.originalUrl,
-            status: "processing",
-            variants: [],
+            tempId: crypto.randomUUID(),
+            name: file.name,
+            previewUrl: result.desktopUrl,
             ordem: baseOrdem++,
-            originalPath: result.originalPath,
+            desktopPath: result.desktopPath,
+          });
+          toast({
+            title: file.name,
+            description: `Convertida em ${(result.ms / 1000).toFixed(1)}s · −${reduction}%`,
           });
         } catch (e) {
           toast({ title: "Falha no upload", description: (e as Error).message, variant: "destructive" });
@@ -687,10 +617,6 @@ export const PiecesManager = () => {
       }
       if (newDrafts.length > 0) {
         setDraftImages((prev) => [...prev, ...newDrafts]);
-        toast({
-          title: `${newDrafts.length} imagem(ns) enviada(s)`,
-          description: "Otimização rodando em segundo plano…",
-        });
       }
     } finally {
       setUploading(false);
@@ -702,23 +628,22 @@ export const PiecesManager = () => {
     if (guardOffline()) return;
     if (!files || !workingPieceId) return;
     const file = files[0];
-    if (!file || !file.type.startsWith("image/")) return;
+    if (!file) return;
+    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) return;
     setCoverUploading(true);
     try {
-      const result = await uploadToOptimizer({
-        file,
-        pieceId: workingPieceId,
-        role: "cover",
-      });
+      const result = await uploadGalleryImage({ file, pieceId: workingPieceId });
+      const reduction = Math.max(0, Math.round((1 - result.optimizedSize / result.originalSize) * 100));
       setDraftCover({
-        optimizedImageId: result.optimizedImageId,
-        name: result.name,
-        previewUrl: result.originalUrl,
-        status: "processing",
-        variants: [],
-        originalPath: result.originalPath,
+        tempId: crypto.randomUUID(),
+        name: file.name,
+        previewUrl: result.desktopUrl,
+        desktopPath: result.desktopPath,
       });
-      toast({ title: "Capa enviada", description: "Otimização rodando em segundo plano…" });
+      toast({
+        title: "Capa enviada",
+        description: `Convertida em ${(result.ms / 1000).toFixed(1)}s · −${reduction}%`,
+      });
     } catch (err) {
       toast({ title: "Erro no upload da capa", description: err instanceof Error ? err.message : "", variant: "destructive" });
     } finally {
@@ -727,51 +652,11 @@ export const PiecesManager = () => {
     }
   };
 
-  const handlePickerConfirm = (picked: PickedImage[], mode: "gallery" | "cover") => {
-    if (picked.length === 0) return;
-    if (mode === "cover") {
-      const p = picked[0];
-      setDraftCover({
-        optimizedImageId: p.optimizedImageId,
-        name: p.name,
-        previewUrl: p.previewUrl,
-        status: "ready",
-        variants: p.variants,
-        originalPath: p.originalPath,
-      });
-      toast({ title: "Capa adicionada do histórico" });
-      return;
-    }
-    let baseOrdem = (editing?.gallery_piece_images.length ?? 0) + draftImages.length;
-    const newDrafts: DraftImage[] = picked.map((p) => ({
-      optimizedImageId: p.optimizedImageId,
-      name: p.name,
-      previewUrl: p.previewUrl,
-      status: "ready",
-      variants: p.variants,
-      ordem: baseOrdem++,
-      originalPath: p.originalPath,
-    }));
-    setDraftImages((prev) => [...prev, ...newDrafts]);
-    toast({ title: `${picked.length} imagem(ns) adicionada(s) do histórico` });
-  };
-
-  const openPicker = (mode: "gallery" | "cover") => {
-    setPickerMode(mode);
-    setPickerOpen(true);
-  };
-
   const removeCover = async () => {
-    // Draft cover (not yet persisted) — remove optimizer record + storage
     if (draftCover) {
       if (!confirm("Remover capa enviada?")) return;
       try {
-        const folder = draftCover.originalPath.split("/").slice(0, -1).join("/");
-        const { data: list } = await supabase.storage.from("optimized-images").list(folder);
-        if (list?.length) {
-          await supabase.storage.from("optimized-images").remove(list.map((f) => `${folder}/${f.name}`));
-        }
-        await supabase.from("optimized_images").delete().eq("id", draftCover.optimizedImageId);
+        await removeGalleryVariants(draftCover.desktopPath);
       } catch (e) {
         console.warn("Failed to clean draft cover:", e);
       }
@@ -781,9 +666,7 @@ export const PiecesManager = () => {
     if (!editing || !editing.cover_url) return;
     if (!confirm("Remover imagem capa?")) return;
     if (editing.cover_storage_path) {
-      // legacy gallery bucket OR optimized-images path
-      const bucket = editing.cover_storage_path.startsWith("images/") ? "optimized-images" : "gallery";
-      await supabase.storage.from(bucket).remove([editing.cover_storage_path]);
+      await removeGalleryVariants(editing.cover_storage_path);
     }
     const { error } = await supabase
       .from("gallery_pieces")
@@ -826,8 +709,7 @@ export const PiecesManager = () => {
   const removeImage = async (img: Image) => {
     if (!confirm("Remover esta imagem?")) return;
     if (img.storage_path) {
-      const bucket = img.storage_path.startsWith("images/") ? "optimized-images" : "gallery";
-      await supabase.storage.from(bucket).remove([img.storage_path]);
+      await removeGalleryVariants(img.storage_path);
     }
     const { error } = await supabase.from("gallery_piece_images").delete().eq("id", img.id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -839,19 +721,14 @@ export const PiecesManager = () => {
 
   const removeDraftImage = async (draftId: string) => {
     if (!confirm("Remover esta imagem?")) return;
-    const target = draftImages.find((d) => d.optimizedImageId === draftId);
+    const target = draftImages.find((d) => d.tempId === draftId);
     if (!target) return;
     try {
-      const folder = target.originalPath.split("/").slice(0, -1).join("/");
-      const { data: list } = await supabase.storage.from("optimized-images").list(folder);
-      if (list?.length) {
-        await supabase.storage.from("optimized-images").remove(list.map((f) => `${folder}/${f.name}`));
-      }
-      await supabase.from("optimized_images").delete().eq("id", draftId);
+      await removeGalleryVariants(target.desktopPath);
     } catch (e) {
       console.warn("Failed to clean draft image:", e);
     }
-    setDraftImages((prev) => prev.filter((d) => d.optimizedImageId !== draftId));
+    setDraftImages((prev) => prev.filter((d) => d.tempId !== draftId));
   };
 
   const handleImageDragStart = (event: DragStartEvent) => {
