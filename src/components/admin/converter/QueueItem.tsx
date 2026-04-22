@@ -76,19 +76,26 @@ export const QueueItem = forwardRef<QueueItemHandle, QueueItemProps>(({
   onSavedToHistory,
   onStatusChange,
   onStagingSaved,
+  onProgressChange,
 }, ref) => {
   const [meta, setMeta] = useState<{ width: number; height: number; size: number } | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [quality, setQuality] = useState(82);
   const [responsive, setResponsive] = useState(true);
   const [status, setStatus] = useState<QueueStatus>("queued");
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgressState] = useState(0);
   const [converted, setConverted] = useState<ConvertedState | null>(null);
+  const [variantUrls, setVariantUrls] = useState<Partial<Record<VariantKey, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [stagingUploading, setStagingUploading] = useState(false);
   const [stagingDone, setStagingDone] = useState(false);
   const debounceRef = useRef<number | null>(null);
   const startedRef = useRef(false);
+
+  const setProgress = (p: number) => {
+    setProgressState(p);
+    onProgressChange?.(id, p);
+  };
 
   // Build a stable preview URL for the original (works for HEIC too via blob:).
   useEffect(() => {
