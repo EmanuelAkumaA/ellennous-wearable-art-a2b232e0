@@ -898,6 +898,7 @@ const BackfillRow = memo(
     prev.item.progress === next.item.progress &&
     prev.item.error === next.item.error &&
     (prev.item.readyDevices?.length ?? 0) === (next.item.readyDevices?.length ?? 0) &&
+    prev.item.conversionMs === next.item.conversionMs &&
     prev.selected === next.selected &&
     prev.selectable === next.selectable &&
     prev.onToggle === next.onToggle,
