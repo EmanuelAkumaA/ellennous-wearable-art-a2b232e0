@@ -79,16 +79,27 @@ export const uploadToOptimizer = async ({
 
 /**
  * Returns the best URL to use as the gallery_piece_images.url:
- * jpeg 1200w if ready, otherwise the original public URL.
+ * desktop WebP (1600w) from the new pipeline if ready, otherwise the largest
+ * legacy variant, otherwise the original public URL.
  */
 export const getBestUrlForPiece = (
-  variants: Array<{ format: string; width: number; url: string }> | null | undefined,
+  variants:
+    | Array<{ format: string; width: number; url: string; device_label?: string }>
+    | null
+    | undefined,
   fallback: string,
 ): string => {
   if (!variants?.length) return fallback;
-  const jpeg1200 =
-    variants.find((v) => v.format === "jpeg" && v.width === 1200) ??
-    variants.find((v) => v.format === "jpeg" && v.width === 800) ??
-    variants.find((v) => v.format === "jpeg");
-  return jpeg1200?.url ?? fallback;
+  // New pipeline: prefer desktop > tablet > mobile WebP
+  const desktop =
+    variants.find((v) => v.format === "webp" && v.device_label === "desktop") ??
+    variants.find((v) => v.format === "webp" && v.device_label === "tablet") ??
+    variants.find((v) => v.format === "webp" && v.device_label === "mobile");
+  if (desktop) return desktop.url;
+  // Legacy fallback: largest jpeg/webp
+  const legacy =
+    [...variants]
+      .filter((v) => v.format === "jpeg" || v.format === "webp")
+      .sort((a, b) => b.width - a.width)[0];
+  return legacy?.url ?? fallback;
 };
